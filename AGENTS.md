@@ -28,3 +28,5 @@ npm run download-api   # Download VS Code proposed API types (required after vsc
 - Semicolons required (`@stylistic/semi`)
 - Curly braces required (`curly`)
 - Unused vars with `_` prefix are ignored
+- Use `\t` indentation (`@stylistic/indent`)
+- Double quotes for strings (`@stylistic/quotes`)

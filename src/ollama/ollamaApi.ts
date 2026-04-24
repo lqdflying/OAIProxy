@@ -339,8 +339,8 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 						if (chunk.done) {
 							break;
 						}
-					} catch {
-						// Silently ignore malformed JSON lines
+					} catch (e) {
+						console.error("[Ollama Provider] Failed to parse streaming chunk:", e, "data:", line);
 					}
 				}
 			}

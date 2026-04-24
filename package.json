@@ -29,9 +29,6 @@
 	"engines": {
 		"vscode": "^1.104.0"
 	},
-	"extensionDependencies": [
-		"github.copilot-chat"
-	],
 	"categories": [
 		"AI",
 		"Chat"
@@ -199,6 +196,8 @@
 								"type": "string",
 								"default": "medium",
 								"enum": [
+									"max",
+									"xhigh",
 									"high",
 									"medium",
 									"low",
@@ -290,6 +289,8 @@
 										"type": "string",
 										"default": "medium",
 										"enum": [
+											"max",
+											"xhigh",
 											"high",
 											"medium",
 											"low",

@@ -754,8 +754,8 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 						if (parsed.done || parsed.type === "response.completed" || parsed.type === "response.done") {
 							break;
 						}
-					} catch {
-						// Silently ignore malformed SSE lines
+					} catch (e) {
+						console.error("[OpenAI-Responses Provider] Failed to parse SSE chunk:", e, "data:", data);
 					}
 				}
 			}

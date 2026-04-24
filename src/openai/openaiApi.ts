@@ -545,8 +545,8 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 						}
 						// Handle finish reason
 						if (choice.finish_reason) break;
-					} catch {
-						// Silently ignore malformed SSE lines temporarily
+					} catch (e) {
+						console.error("[OpenAI Provider] Failed to parse SSE chunk:", e, "data:", data);
 					}
 				}
 			}
