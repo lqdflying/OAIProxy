@@ -41,7 +41,7 @@ export interface GeminiToolCallMeta {
 	createdAt: number;
 }
 
-const UNSUPPORTED_GEMINI_SCHEMA_KEYS = new Set(["exclusiveMinimum", "exclusiveMaximum"]);
+const UNSUPPORTED_GEMINI_SCHEMA_KEYS = new Set(["exclusiveMinimum", "exclusiveMaximum", "enumDescriptions"]);
 
 function stripUnsupportedGeminiSchemaKeys(value: unknown): number {
 	if (!value) {
@@ -553,9 +553,9 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 		}): boolean => {
 			return Boolean(
 				extracted.toolResults.length > 0 &&
-					!extracted.text &&
-					extracted.imageParts.length === 0 &&
-					extracted.toolCalls.length === 0
+				!extracted.text &&
+				extracted.imageParts.length === 0 &&
+				extracted.toolCalls.length === 0
 			);
 		};
 
