@@ -45,7 +45,8 @@
 	},
 	"license": "MIT",
 	"enabledApiProposals": [
-		"chatProvider"
+		"chatProvider",
+		"languageModelThinkingPart"
 	],
 	"contributes": {
 		"languageModelChatProviders": [

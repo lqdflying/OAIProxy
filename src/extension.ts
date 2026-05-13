@@ -18,7 +18,7 @@ export function activate(context: vscode.ExtensionContext) {
 	const tokenCountStatusBarItem: vscode.StatusBarItem = initStatusBar(context);
 	const provider = new HuggingFaceChatModelProvider(context.secrets, tokenCountStatusBarItem);
 	// Register the Hugging Face provider under the vendor id used in package.json
-	vscode.lm.registerLanguageModelChatProvider("oaicopilot", provider);
+	context.subscriptions.push(vscode.lm.registerLanguageModelChatProvider("oaicopilot", provider));
 
 	// Management command to configure API key
 	context.subscriptions.push(
