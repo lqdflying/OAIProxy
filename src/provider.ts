@@ -28,6 +28,11 @@ import type { GeminiGenerateContentRequest } from "./gemini/geminiTypes";
 import { CommonApi } from "./commonApi";
 import { logger } from "./logger";
 
+interface ChatInformationOptions {
+	readonly silent?: boolean;
+	readonly configuration?: Readonly<Record<string, unknown>>;
+}
+
 /**
  * VS Code Chat provider backed by Hugging Face Inference Providers.
  */
@@ -56,10 +61,11 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 	 * @returns A promise that resolves to the list of available language models
 	 */
 	async provideLanguageModelChatInformation(
-		options: { silent: boolean },
+		options: ChatInformationOptions,
 		_token: CancellationToken
 	): Promise<LanguageModelChatInformation[]> {
-		return prepareLanguageModelChatInformation({ silent: options.silent ?? false }, _token, this.secrets);
+		const silent = options.silent ?? true;
+		return prepareLanguageModelChatInformation({ silent }, _token, this.secrets);
 	}
 
 	/**
@@ -564,7 +570,10 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 	}
 }
 
-type OpenAIResponsesStatefulMarkerLocation = { marker: string; index: number };
+interface OpenAIResponsesStatefulMarkerLocation {
+	marker: string;
+	index: number;
+}
 
 function createOpenAIResponsesStatefulMarkerPart(modelId: string, marker: string): vscode.LanguageModelDataPart {
 	const payload = `${modelId}\\${marker}`;
