@@ -4,13 +4,13 @@ import {
 	LanguageModelChatRequestMessage,
 	LanguageModelToolCallPart,
 	LanguageModelResponsePart2,
-	LanguageModelThinkingPart,
 	Progress,
 	CancellationToken,
 } from "vscode";
 import { HFModelItem } from "./types";
 import { tryParseJSONObject } from "./utils";
 import { VersionManager } from "./versionManager";
+import { createLanguageModelThinkingPart } from "./vscodeCompat";
 
 export abstract class CommonApi<TMessage, TRequestBody> {
 	/** Buffer for assembling streamed tool calls by index. */
@@ -210,7 +210,7 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 		try {
 			this.flushThinkingBuffer(progress);
 			// End the current thinking sequence with empty content and same ID
-			progress.report(new LanguageModelThinkingPart("", this._currentThinkingId));
+			progress.report(createLanguageModelThinkingPart("", this._currentThinkingId));
 		} catch (e) {
 			console.error("[OAI Compatible Model Provider] Failed to end thinking sequence:", e);
 		}
@@ -268,7 +268,7 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 		if (this._thinkingBuffer && this._currentThinkingId) {
 			const text = this._thinkingBuffer;
 			this._thinkingBuffer = "";
-			progress.report(new LanguageModelThinkingPart(text, this._currentThinkingId));
+			progress.report(createLanguageModelThinkingPart(text, this._currentThinkingId));
 		}
 	}
 

@@ -27,11 +27,20 @@
 	},
 	"version": "0.3.6",
 	"engines": {
-		"vscode": "^1.104.0"
+		"vscode": "^1.120.0"
 	},
 	"categories": [
 		"AI",
 		"Chat"
+	],
+	"activationEvents": [
+		"onStartupFinished",
+		"onLanguageModelChatProvider:oaicopilot",
+		"onCommand:oaicopilot.setApikey",
+		"onCommand:oaicopilot.setProviderApikey",
+		"onCommand:oaicopilot.openConfig",
+		"onCommand:oaicopilot.generateGitCommitMessage",
+		"onCommand:oaicopilot.abortGitCommitMessage"
 	],
 	"badges": [
 		{
@@ -44,10 +53,6 @@
 		"url": "https://github.com/JohnnyZ93/oai-compatible-copilot/issues"
 	},
 	"license": "MIT",
-	"enabledApiProposals": [
-		"chatProvider",
-		"languageModelThinkingPart"
-	],
 	"contributes": {
 		"languageModelChatProviders": [
 			{
@@ -205,6 +210,22 @@
 									"minimal"
 								],
 								"description": "Reasoning effort level (OpenAI reasoning configuration)"
+							},
+							"supports_reasoning_effort": {
+								"type": "boolean",
+								"default": false,
+								"description": "Expose VS Code's per-model Thinking Effort control for this model."
+							},
+							"supported_reasoning_efforts": {
+								"type": "array",
+								"description": "Supported values for VS Code's per-model Thinking Effort control. Defaults to minimal, low, medium, high, xhigh, max.",
+								"items": {
+									"type": "string"
+								}
+							},
+							"default_reasoning_effort": {
+								"type": "string",
+								"description": "Default value for VS Code's per-model Thinking Effort control. If not set, reasoning_effort is used."
 							},
 							"thinking": {
 								"type": "object",

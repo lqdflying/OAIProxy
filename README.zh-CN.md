@@ -27,7 +27,7 @@
 - **工具优化**：优化 agent `read_file` 工具处理，避免对大文件读取小片段。
 
 ## 环境要求
-- VS Code 1.104.0 或更高版本。
+- VS Code 1.120.0 或更高版本。
 - OpenAI 兼容供应商的 API 密钥。
 
 ## ⚡ 快速开始
@@ -450,6 +450,9 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 - `thinking`：Zai 供应商的思维链配置
   - `type`：设为 'enabled' 开启思维链，'disabled' 关闭思维链
 - `reasoning_effort`：推理力度级别（OpenAI 推理配置）
+- `supports_reasoning_effort`：为此模型显示 VS Code 的按模型 Thinking Effort 控件。配置了 `reasoning_effort`、`reasoning.effort`、`default_reasoning_effort` 或 `supported_reasoning_efforts` 的模型也会自动显示该控件。
+- `supported_reasoning_efforts`：支持的 Thinking Effort 取值。默认为 `minimal`、`low`、`medium`、`high`、`xhigh`、`max`。
+- `default_reasoning_effort`：默认 Thinking Effort 值。未设置时使用 `reasoning_effort` 或 `reasoning.effort`。
 - `headers`：发送到此模型供应商的自定义 HTTP 请求头（如 `{"X-API-Version": "v1", "X-Custom-Header": "value"}`）。将与默认请求头（Authorization、Content-Type、User-Agent）合并
 - `extra`：额外请求体参数。
 - `include_reasoning_in_request`：是否在发送给 API 的 assistant 消息中包含 reasoning_content。支持 deepseek-v3.2 及类似模型。

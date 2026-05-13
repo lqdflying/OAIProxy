@@ -36,9 +36,12 @@ interface ChatInformationOptions {
 /**
  * VS Code Chat provider backed by Hugging Face Inference Providers.
  */
-export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
+export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, vscode.Disposable {
 	/** Track last request completion time for delay calculation. */
 	private _lastRequestTime: number | null = null;
+
+	private readonly _onDidChangeLanguageModelChatInformation = new vscode.EventEmitter<void>();
+	readonly onDidChangeLanguageModelChatInformation = this._onDidChangeLanguageModelChatInformation.event;
 
 	private readonly _geminiToolCallMetaByCallId = new Map<string, GeminiToolCallMeta>();
 	private readonly _openaiResponsesPreviousResponseIdUnsupportedBaseUrls = new Set<string>();
@@ -53,6 +56,14 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 		private readonly secrets: vscode.SecretStorage,
 		private readonly statusBarItem: vscode.StatusBarItem
 	) {}
+
+	refreshLanguageModelChatInformation(): void {
+		this._onDidChangeLanguageModelChatInformation.fire();
+	}
+
+	dispose(): void {
+		this._onDidChangeLanguageModelChatInformation.dispose();
+	}
 
 	/**
 	 * Get the list of available language models contributed by this provider
@@ -135,6 +146,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 			if (!um) {
 				um = userModels.find((um) => um.id === parsedModelId.baseId);
 			}
+			um = applyModelConfiguration(um, options.modelConfiguration);
 
 			// Check if using Ollama native API mode
 			const apiMode = um?.apiMode ?? "openai";
@@ -573,6 +585,39 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider {
 interface OpenAIResponsesStatefulMarkerLocation {
 	marker: string;
 	index: number;
+}
+
+function applyModelConfiguration(
+	model: HFModelItem | undefined,
+	configuration: ProvideLanguageModelChatResponseOptions["modelConfiguration"] | undefined
+): HFModelItem | undefined {
+	if (!model || !configuration) {
+		return model;
+	}
+
+	const reasoningEffort = getStringConfiguration(configuration, "reasoningEffort", "reasoning_effort");
+	if (!reasoningEffort) {
+		return model;
+	}
+
+	const next: HFModelItem = { ...model };
+	if (model.reasoning !== undefined && model.reasoning_effort === undefined) {
+		next.reasoning = { ...model.reasoning, effort: reasoningEffort };
+	} else {
+		next.reasoning_effort = reasoningEffort;
+	}
+
+	return next;
+}
+
+function getStringConfiguration(configuration: Readonly<Record<string, unknown>>, ...keys: string[]): string | undefined {
+	for (const key of keys) {
+		const value = configuration[key];
+		if (typeof value === "string" && value.trim() !== "") {
+			return value.trim();
+		}
+	}
+	return undefined;
 }
 
 function createOpenAIResponsesStatefulMarkerPart(modelId: string, marker: string): vscode.LanguageModelDataPart {

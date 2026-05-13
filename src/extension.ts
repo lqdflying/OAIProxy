@@ -8,6 +8,8 @@ import { normalizeUserModels } from "./utils";
 import { abortCommitGeneration, generateCommitMsg } from "./gitCommit/commitMessageGenerator";
 import { TokenizerManager } from "./tokenizer/tokenizerManager";
 
+const LANGUAGE_MODEL_VENDOR = "oaicopilot";
+
 export function activate(context: vscode.ExtensionContext) {
 	// Initialize logger
 	logger.init();
@@ -17,8 +19,11 @@ export function activate(context: vscode.ExtensionContext) {
 
 	const tokenCountStatusBarItem: vscode.StatusBarItem = initStatusBar(context);
 	const provider = new HuggingFaceChatModelProvider(context.secrets, tokenCountStatusBarItem);
+	context.subscriptions.push(provider);
 	// Register the Hugging Face provider under the vendor id used in package.json
-	context.subscriptions.push(vscode.lm.registerLanguageModelChatProvider("oaicopilot", provider));
+	context.subscriptions.push(vscode.lm.registerLanguageModelChatProvider(LANGUAGE_MODEL_VENDOR, provider));
+	refreshLanguageModels(provider);
+	scheduleLanguageModelWarmup(context);
 
 	// Management command to configure API key
 	context.subscriptions.push(
@@ -36,10 +41,12 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 			if (!apiKey.trim()) {
 				await context.secrets.delete("oaicopilot.apiKey");
+				refreshLanguageModels(provider);
 				vscode.window.showInformationMessage("OAI Compatible API key cleared.");
 				return;
 			}
 			await context.secrets.store("oaicopilot.apiKey", apiKey.trim());
+			refreshLanguageModels(provider);
 			vscode.window.showInformationMessage("OAI Compatible API key saved.");
 		})
 	);
@@ -92,11 +99,13 @@ export function activate(context: vscode.ExtensionContext) {
 
 			if (!apiKey.trim()) {
 				await context.secrets.delete(providerKey);
+				refreshLanguageModels(provider);
 				vscode.window.showInformationMessage(`API key for ${selectedProvider} cleared.`);
 				return;
 			}
 
 			await context.secrets.store(providerKey, apiKey.trim());
+			refreshLanguageModels(provider);
 			vscode.window.showInformationMessage(`API key for ${selectedProvider} saved.`);
 		})
 	);
@@ -123,8 +132,36 @@ export function activate(context: vscode.ExtensionContext) {
 			if (e.affectsConfiguration("oaicopilot.logLevel")) {
 				logger.reloadConfig();
 			}
+			if (e.affectsConfiguration("oaicopilot.models") || e.affectsConfiguration("oaicopilot.baseUrl")) {
+				refreshLanguageModels(provider);
+			}
 		})
 	);
 }
 
 export function deactivate() {}
+
+function refreshLanguageModels(provider: HuggingFaceChatModelProvider): void {
+	provider.refreshLanguageModelChatInformation();
+	void warmLanguageModelCache();
+}
+
+function scheduleLanguageModelWarmup(context: vscode.ExtensionContext): void {
+	for (const delayMs of [250, 1000, 3000]) {
+		const timeout = setTimeout(() => {
+			void warmLanguageModelCache();
+		}, delayMs);
+		context.subscriptions.push({ dispose: () => clearTimeout(timeout) });
+	}
+}
+
+async function warmLanguageModelCache(): Promise<void> {
+	try {
+		const models = await vscode.lm.selectChatModels({ vendor: LANGUAGE_MODEL_VENDOR });
+		logger.info("models.warmed", { count: models.length });
+	} catch (e) {
+		logger.warn("models.warm.failed", {
+			error: e instanceof Error ? { name: e.name, message: e.message } : String(e),
+		});
+	}
+}

@@ -21,6 +21,7 @@ import {
 
 import { CommonApi } from "../commonApi";
 import { logger } from "../logger";
+import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "../vscodeCompat";
 
 export interface ResponsesInputMessage {
 	role: "user" | "assistant" | "system";
@@ -110,9 +111,8 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 					const callId = (part as { callId?: string }).callId ?? "";
 					const content = collectToolResultText(part as { content?: ReadonlyArray<unknown> });
 					toolResults.push({ callId, content });
-				} else if (part instanceof vscode.LanguageModelThinkingPart && modelConfig.includeReasoningInRequest) {
-					const content = Array.isArray(part.value) ? part.value.join("") : part.value;
-					thinkingParts.push(content);
+				} else if (isLanguageModelThinkingPart(part) && modelConfig.includeReasoningInRequest) {
+					thinkingParts.push(getLanguageModelThinkingText(part));
 				}
 			}
 

@@ -11,6 +11,8 @@ import { logger } from "./logger";
 const DEFAULT_CONTEXT_LENGTH = 128000;
 const DEFAULT_MAX_TOKENS = 4096;
 const EXTENSION_LABEL = "OAICopilot";
+const MODEL_PICKER_CATEGORY = { label: "OAI Compatible", order: 100 };
+const DEFAULT_REASONING_EFFORTS = ["minimal", "low", "medium", "high", "xhigh", "max"];
 
 /**
  * Get the list of available language models contributed by this provider
@@ -49,12 +51,15 @@ export async function prepareLanguageModelChatInformation(
 					tooltip: detail,
 					family: m.family ?? EXTENSION_LABEL,
 					version: "1.0.0",
+					isUserSelectable: true,
+					category: MODEL_PICKER_CATEGORY,
 					maxInputTokens: maxInput,
 					maxOutputTokens: maxOutput,
 					capabilities: {
 						toolCalling: true,
 						imageInput: m?.vision ?? false,
 					},
+					configurationSchema: createModelConfigurationSchema(m),
 				} satisfies LanguageModelChatInformation;
 			});
 	} else {
@@ -96,6 +101,8 @@ export async function prepareLanguageModelChatInformation(
 					tooltip: detail,
 					family: m.family ?? EXTENSION_LABEL,
 					version: "1.0.0",
+					isUserSelectable: true,
+					category: MODEL_PICKER_CATEGORY,
 					maxInputTokens: maxInput,
 					maxOutputTokens: maxOutput,
 					capabilities: {
@@ -117,6 +124,8 @@ export async function prepareLanguageModelChatInformation(
 					tooltip: EXTENSION_LABEL,
 					family: m.family ?? EXTENSION_LABEL,
 					version: "1.0.0",
+					isUserSelectable: true,
+					category: MODEL_PICKER_CATEGORY,
 					maxInputTokens: maxInput,
 					maxOutputTokens: maxOutput,
 					capabilities: {
@@ -132,6 +141,63 @@ export async function prepareLanguageModelChatInformation(
 
 	logger.info("models.loaded", { count: infos.length, source: userModels && userModels.length > 0 ? "config" : "api" });
 	return infos;
+}
+
+function createModelConfigurationSchema(model: HFModelItem): vscode.LanguageModelConfigurationSchema | undefined {
+	if (!shouldExposeReasoningEffort(model)) {
+		return undefined;
+	}
+
+	const enumValues = getReasoningEfforts(model);
+	const defaultValue = getDefaultReasoningEffort(model, enumValues);
+
+	return {
+		properties: {
+			reasoningEffort: {
+				type: "string",
+				title: "Thinking Effort",
+				description: "Controls how much reasoning the model should use before answering.",
+				enum: enumValues,
+				enumItemLabels: enumValues.map(formatReasoningEffortLabel),
+				group: "navigation",
+				...(defaultValue ? { default: defaultValue } : {}),
+			},
+		},
+	};
+}
+
+function shouldExposeReasoningEffort(model: HFModelItem): boolean {
+	return (
+		model.supports_reasoning_effort === true ||
+		hasValues(model.supported_reasoning_efforts) ||
+		typeof model.default_reasoning_effort === "string" ||
+		typeof model.reasoning_effort === "string" ||
+		typeof model.reasoning?.effort === "string"
+	);
+}
+
+function getReasoningEfforts(model: HFModelItem): string[] {
+	if (hasValues(model.supported_reasoning_efforts)) {
+		const values = model.supported_reasoning_efforts.map((value) => value.trim()).filter(Boolean);
+		return values.filter((value, index) => values.indexOf(value) === index);
+	}
+	return DEFAULT_REASONING_EFFORTS;
+}
+
+function getDefaultReasoningEffort(model: HFModelItem, enumValues: string[]): string | undefined {
+	const configured = model.default_reasoning_effort ?? model.reasoning_effort ?? model.reasoning?.effort;
+	if (configured && enumValues.includes(configured)) {
+		return configured;
+	}
+	return undefined;
+}
+
+function hasValues(value: string[] | undefined): value is string[] {
+	return Array.isArray(value) && value.some((item) => item.trim() !== "");
+}
+
+function formatReasoningEffortLabel(value: string): string {
+	return value.length > 0 ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
 }
 
 /**

@@ -1,5 +1,21 @@
 # Change Log
 
+## 0.3.9 (2026-05-13)
+
+- Fix: Warm VS Code's language model cache after provider registration so OAI Compatible models appear in Copilot Chat without first opening the Language Models view.
+
+## 0.3.8 (2026-05-13)
+
+- Fix: Mark contributed models as user-selectable and group them for VS Code's model picker.
+- Fix: Refresh the registered model list when model configuration, base URL, or API keys change.
+- Fix: Activate after startup so Copilot Chat can discover the provider before opening the model picker.
+
+## 0.3.7 (2026-05-13)
+
+- Fix: Support VS Code 1.120 stable model provider registration without requiring proposed API launch flags.
+- Feat: Add VS Code 1.120 per-model Thinking Effort configuration support.
+- Fix: Preserve unknown model configuration fields when editing models in the configuration UI.
+
 ## 0.3.6 (2026-04-24)
 
 - Feat: Add `xhigh` and `max` reasoning effort options for DeepSeek-V4.

@@ -29,6 +29,7 @@ import {
 
 import { CommonApi } from "../commonApi";
 import { logger } from "../logger";
+import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "../vscodeCompat";
 
 export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unknown>> {
 	constructor(modelId: string) {
@@ -72,9 +73,8 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 					const callId = (part as { callId?: string }).callId ?? "";
 					const content = collectToolResultText(part as { content?: ReadonlyArray<unknown> });
 					toolResults.push({ callId, content });
-				} else if (part instanceof vscode.LanguageModelThinkingPart) {
-					const content = Array.isArray(part.value) ? part.value.join("") : part.value;
-					reasoningParts.push(content);
+				} else if (isLanguageModelThinkingPart(part)) {
+					reasoningParts.push(getLanguageModelThinkingText(part));
 				}
 			}
 

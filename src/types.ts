@@ -33,6 +33,9 @@ export interface HFModelItem {
 	// OpenAI new standard parameter
 	max_completion_tokens?: number;
 	reasoning_effort?: string;
+	supports_reasoning_effort?: boolean;
+	supported_reasoning_efforts?: string[];
+	default_reasoning_effort?: string;
 	enable_thinking?: boolean;
 	thinking_budget?: number;
 	// New thinking configuration for Zai provider

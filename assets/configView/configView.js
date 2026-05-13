@@ -579,8 +579,10 @@ function resetModelForm() {
 // Collect model form data
 function collectModelFormData() {
 	const isEditing = modelIdInput.hasAttribute("data-editing");
+	const originalModel = isEditing ? getOriginalEditingModel() : {};
 
 	return {
+		...originalModel,
 		id: modelIdInput.value.trim(),
 		owned_by: modelProviderInput.value.trim(),
 		displayName: modelDisplayNameInput.value.trim() || undefined,
@@ -621,6 +623,18 @@ function collectModelFormData() {
 		originalModelId: isEditing ? modelIdInput.getAttribute("data-original-id") : undefined,
 		originalConfigId: isEditing ? modelIdInput.getAttribute("data-original-configId") : undefined,
 	};
+}
+
+function getOriginalEditingModel() {
+	const originalId = modelIdInput.getAttribute("data-original-id") || "";
+	const originalConfigId = modelIdInput.getAttribute("data-original-configId") || "";
+	return (
+		state.models.find(
+			(m) =>
+				m.id === originalId &&
+				((originalConfigId && m.configId === originalConfigId) || (!originalConfigId && !m.configId))
+		) || {}
+	);
 }
 
 // Build reasoning configuration object from form fields

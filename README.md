@@ -27,7 +27,7 @@ English | [简体中文](README.zh-CN.md)
 - **Tools optimization**: Optimize agent `read_file` tool handling, avoid to read small chunks for large file.
 
 ## Requirements
-- VS Code 1.104.0 or higher.
+- VS Code 1.120.0 or higher.
 - OpenAI-compatible provider API key.
 
 ## ⚡ Quick Start
@@ -450,6 +450,9 @@ All parameters support individual configuration for different models, providing 
 - `thinking`: Thinking configuration for Zai provider
   - `type`: Set to 'enabled' to enable thinking, 'disabled' to disable thinking
 - `reasoning_effort`: Reasoning effort level (OpenAI reasoning configuration)
+- `supports_reasoning_effort`: Expose VS Code's per-model Thinking Effort control for this model. Models with `reasoning_effort`, `reasoning.effort`, `default_reasoning_effort`, or `supported_reasoning_efforts` also expose it automatically.
+- `supported_reasoning_efforts`: Supported Thinking Effort values. Defaults to `minimal`, `low`, `medium`, `high`, `xhigh`, `max`.
+- `default_reasoning_effort`: Default Thinking Effort value. If not set, `reasoning_effort` or `reasoning.effort` is used.
 - `headers`: Custom HTTP headers to be sent with every request to this model's provider (e.g., `{"X-API-Version": "v1", "X-Custom-Header": "value"}`). These headers will be merged with the default headers (Authorization, Content-Type, User-Agent)
 - `extra`: Extra request body parameters.
 - `include_reasoning_in_request`: Whether to include reasoning_content in assistant messages sent to the API. Supports deepseek-v3.2 and similar models.

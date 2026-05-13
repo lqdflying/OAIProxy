@@ -15,6 +15,7 @@ import { isToolResultPart, collectToolResultText, convertToolsToOpenAI, mapRole 
 
 import { CommonApi } from "../commonApi";
 import { logger } from "../logger";
+import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "../vscodeCompat";
 
 export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 	constructor(modelId: string) {
@@ -49,10 +50,9 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 						const base64Data = Buffer.from(part.data).toString("base64");
 						imageParts.push(base64Data);
 					}
-				} else if (part instanceof vscode.LanguageModelThinkingPart) {
+				} else if (isLanguageModelThinkingPart(part)) {
 					// Capture thinking content
-					const content = Array.isArray(part.value) ? part.value.join("") : part.value;
-					thinkingContent += content;
+					thinkingContent += getLanguageModelThinkingText(part);
 				} else if (part instanceof vscode.LanguageModelToolCallPart) {
 					// Capture tool calls from assistant
 					toolCalls.push({

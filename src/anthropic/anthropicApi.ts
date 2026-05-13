@@ -22,6 +22,7 @@ import { isImageMimeType, isToolResultPart, collectToolResultText, convertToolsT
 
 import { CommonApi } from "../commonApi";
 import { logger } from "../logger";
+import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "../vscodeCompat";
 
 export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBody> {
 	constructor(modelId: string) {
@@ -69,9 +70,8 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 						tool_use_id: callId,
 						content,
 					});
-				} else if (part instanceof vscode.LanguageModelThinkingPart) {
-					const content = Array.isArray(part.value) ? part.value.join("") : part.value;
-					thinkingParts.push(content);
+				} else if (isLanguageModelThinkingPart(part)) {
+					thinkingParts.push(getLanguageModelThinkingText(part));
 				}
 			}
 
