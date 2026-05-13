@@ -588,7 +588,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 				this._toolCallBuffers.set(idx, buf);
 
 				await this.tryEmitBufferedToolCall(idx, progress);
-				if (eventType == "response.output_item.done") {
+				if (eventType === "response.output_item.done") {
 					await this.flushToolCallBuffers(progress, true);
 				}
 				return;

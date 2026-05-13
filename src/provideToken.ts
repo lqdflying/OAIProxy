@@ -4,6 +4,7 @@ import { tokenizerManager } from "./tokenizer/tokenizerManager";
 import { getImageDimensions } from "./tokenizer/imageUtils";
 import { createDataUrl } from "./utils";
 import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "./vscodeCompat";
+import { logger } from "./logger";
 
 /*
  * Each message comes with 3 tokens per message due to special characters
@@ -61,7 +62,13 @@ export async function countMessageTokens(
 export async function textTokenLength(text: string): Promise<number> {
 	try {
 		return tokenizerManager.countTokens(text);
-	} catch {
+	} catch (err) {
+		// Returning 0 silently produces wildly wrong status-bar counts and budget math,
+		// so leave a breadcrumb when the tokenizer falls over.
+		logger.debug("tokenizer.error", {
+			errorMessage: err instanceof Error ? err.message : String(err),
+			textLength: text.length,
+		});
 		return 0;
 	}
 }

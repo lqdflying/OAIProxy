@@ -124,6 +124,8 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			},
 		};
 		const requestStartTime = Date.now();
+		const abortController = new AbortController();
+		const cancellationListener = token.onCancellationRequested(() => abortController.abort());
 		try {
 			// get model config from user settings
 			const config = vscode.workspace.getConfiguration();
@@ -204,8 +206,18 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 
 			// send chat request
 			const BASE_URL = baseUrl;
-			if (!BASE_URL || !BASE_URL.startsWith("http")) {
-				throw new Error(`Invalid base URL configuration.`);
+			if (!BASE_URL) {
+				throw new Error(`Invalid base URL configuration: baseUrl is empty.`);
+			}
+			try {
+				const parsed = new URL(BASE_URL);
+				if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+					throw new Error("protocol must be http or https");
+				}
+			} catch (e) {
+				throw new Error(
+					`Invalid base URL configuration: ${BASE_URL} (${e instanceof Error ? e.message : String(e)})`
+				);
 			}
 
 			// get retry config
@@ -242,6 +254,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 						method: "POST",
 						headers: requestHeaders,
 						body: JSON.stringify(ollamaRequestBody),
+						signal: abortController.signal,
 					});
 
 					if (!res.ok) {
@@ -285,6 +298,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 						method: "POST",
 						headers: requestHeaders,
 						body: JSON.stringify(requestBody),
+						signal: abortController.signal,
 					});
 
 					if (!res.ok) {
@@ -362,6 +376,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 							method: "POST",
 							headers: requestHeaders,
 							body: JSON.stringify(body),
+							signal: abortController.signal,
 						});
 
 						if (!res.ok) {
@@ -456,6 +471,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 						method: "POST",
 						headers: requestHeaders,
 						body: JSON.stringify(requestBody),
+						signal: abortController.signal,
 					});
 
 					if (!res.ok) {
@@ -495,6 +511,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 						method: "POST",
 						headers: requestHeaders,
 						body: JSON.stringify(requestBody),
+						signal: abortController.signal,
 					});
 
 					if (!res.ok) {
@@ -513,6 +530,9 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				}
 				await openaiApi.processStreamingResponse(response.body, trackingProgress, token);
 			}
+			// Only advance the throttle clock when the request completed without throwing,
+			// so a failing request doesn't artificially extend the wait before the next one.
+			this._lastRequestTime = Date.now();
 		} catch (err) {
 			console.error("[OAI Compatible Model Provider] Chat request failed", {
 				modelId: model.id,
@@ -527,10 +547,9 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			});
 			throw err;
 		} finally {
+			cancellationListener.dispose();
 			const durationMs = Date.now() - requestStartTime;
 			logger.info("request.end", { modelId: model.id, durationMs });
-			// Update last request time after successful completion
-			this._lastRequestTime = Date.now();
 		}
 	}
 
