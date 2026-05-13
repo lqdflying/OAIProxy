@@ -29,6 +29,7 @@ export default tseslint.config(
 		},
 		rules: {
 			'curly': 'warn',
+			'eqeqeq': ['warn', 'always', { 'null': 'ignore' }],
 			'@stylistic/semi': ['warn', 'always'],
 			'@typescript-eslint/no-empty-function': 'off',
 			'@typescript-eslint/array-type': 'off',

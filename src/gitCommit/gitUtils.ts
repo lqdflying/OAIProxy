@@ -1,8 +1,18 @@
-import { exec } from "child_process";
+import { exec, execFile } from "child_process";
 import { promisify } from "util";
 
 const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const GIT_OUTPUT_LINE_LIMIT = 500;
+
+// Reject anything that isn't a plain hex commit-ish (full or short SHA, up to 64 chars for SHA-256).
+const COMMIT_HASH_PATTERN = /^[0-9a-f]{4,64}$/i;
+
+function assertCommitHash(hash: string): void {
+	if (!COMMIT_HASH_PATTERN.test(hash)) {
+		throw new Error(`Invalid commit hash: ${JSON.stringify(hash)}`);
+	}
+}
 
 export interface GitCommit {
 	hash: string;
@@ -59,17 +69,29 @@ export async function searchCommits(query: string, cwd: string): Promise<GitComm
 			return [];
 		}
 
-		// Search commits by hash or message, limiting to 10 results
-		const { stdout } = await execAsync(
-			`git log -n 10 --format="%H%n%h%n%s%n%an%n%ad" --date=short ` + `--grep="${query}" --regexp-ignore-case`,
+		// Search commits by hash or message, limiting to 10 results.
+		// Use execFile + argv so `query` cannot escape into the shell.
+		const { stdout } = await execFileAsync(
+			"git",
+			[
+				"log",
+				"-n",
+				"10",
+				"--format=%H%n%h%n%s%n%an%n%ad",
+				"--date=short",
+				`--grep=${query}`,
+				"--regexp-ignore-case",
+			],
 			{ cwd }
 		);
 
 		let output = stdout;
-		if (!output.trim() && /^[a-f0-9]+$/i.test(query)) {
-			// If no results from grep search and query looks like a hash, try searching by hash
-			const { stdout: hashStdout } = await execAsync(
-				`git log -n 10 --format="%H%n%h%n%s%n%an%n%ad" --date=short ` + `--author-date-order ${query}`,
+		if (!output.trim() && COMMIT_HASH_PATTERN.test(query)) {
+			// If no results from grep search and query looks like a hash, try searching by hash.
+			// Use execFile + argv to avoid shell interpolation of the user-supplied query.
+			const { stdout: hashStdout } = await execFileAsync(
+				"git",
+				["log", "-n", "10", "--format=%H%n%h%n%s%n%an%n%ad", "--date=short", "--author-date-order", query],
 				{ cwd }
 			).catch(() => ({ stdout: "" }));
 
@@ -120,15 +142,21 @@ export async function getCommitInfo(hash: string, cwd: string): Promise<string> 
 			return "Repository has no commits yet";
 		}
 
-		// Get commit info, stats, and diff separately
-		const { stdout: info } = await execAsync(`git show --format="%H%n%h%n%s%n%an%n%ad%n%b" --no-patch ${hash}`, {
-			cwd,
-		});
+		// Validate the hash before invoking git so an attacker can't smuggle shell metacharacters
+		// through this exported helper.
+		assertCommitHash(hash);
+
+		// Get commit info, stats, and diff separately. Use execFile + argv to bypass the shell.
+		const { stdout: info } = await execFileAsync(
+			"git",
+			["show", "--format=%H%n%h%n%s%n%an%n%ad%n%b", "--no-patch", hash],
+			{ cwd }
+		);
 		const [fullHash, shortHash, subject, author, date, body] = info.trim().split("\n");
 
-		const { stdout: stats } = await execAsync(`git show --stat --format="" ${hash}`, { cwd });
+		const { stdout: stats } = await execFileAsync("git", ["show", "--stat", "--format=", hash], { cwd });
 
-		const { stdout: diff } = await execAsync(`git show --format="" ${hash}`, { cwd });
+		const { stdout: diff } = await execFileAsync("git", ["show", "--format=", hash], { cwd });
 
 		const summary = [
 			`Commit: ${shortHash} (${fullHash})`,

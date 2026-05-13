@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { randomBytes } from "crypto";
 import type { HFApiMode, HFModelItem } from "../types";
 import { normalizeUserModels, parseModelId } from "../utils";
 import { fetchModels } from "../provideModel";
@@ -366,7 +367,7 @@ export class ConfigViewPanel {
 	}
 
 	private getNonce() {
-		return Array.from({ length: 16 }, () => Math.floor(Math.random() * 36).toString(36)).join("");
+		return randomBytes(16).toString("hex");
 	}
 
 	private async addProvider(
