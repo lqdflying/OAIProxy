@@ -349,13 +349,22 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 			if (!this._xmlThinkActive) {
 				const startIdx = data.indexOf(THINK_START);
 				if (startIdx === -1) {
-					data = "";
+					// Remaining data is plain text -- emit it
+					if (emittedAny) {
+						this.reportEndThinking(progress);
+						progress.report(new vscode.LanguageModelTextPart(data));
+					}
 					break;
+				}
+
+				// Emit any visible text that precedes the <think> tag
+				if (startIdx > 0) {
+					this.reportEndThinking(progress);
+					progress.report(new vscode.LanguageModelTextPart(data.slice(0, startIdx)));
 				}
 
 				emittedAny = true;
 				this._xmlThinkActive = true;
-
 				data = data.slice(startIdx + THINK_START.length);
 				continue;
 			}
@@ -373,7 +382,6 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 			const thinkContent = data.slice(0, endIdx);
 			this.bufferThinkingContent(thinkContent, progress);
 
-			// Mark end tag as processed and reset state
 			emittedAny = true;
 			this._xmlThinkActive = false;
 			data = data.slice(endIdx + THINK_END.length);
