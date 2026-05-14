@@ -241,7 +241,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			let workingMessages: readonly LanguageModelChatRequestMessage[] = messages;
 			if (um?.vision === false && messagesContainImages(messages)) {
 				try {
-					workingMessages = await processMessagesForVision(messages, parsedModelId.baseId, token);
+					workingMessages = await processMessagesForVision(messages, model.id, token);
 					if (token.isCancellationRequested) {
 						return;
 					}

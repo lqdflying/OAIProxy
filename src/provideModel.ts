@@ -3,6 +3,7 @@ import { CancellationToken, LanguageModelChatInformation } from "vscode";
 
 import type { HFApiMode, HFModelItem, HFModelsResponse } from "./types";
 import { normalizeUserModels, getStringConfiguration } from "./utils";
+import { hasVisionModelAvailable } from "./visionBridge";
 import { VersionManager } from "./versionManager";
 import { fetchGeminiModels } from "./gemini/geminiApi";
 import { fetchOllamaModels } from "./ollama/ollamaApi";
@@ -44,6 +45,11 @@ export async function prepareLanguageModelChatInformation(
 				const modelName = m.displayName || (m.configId ? `${m.id}::${m.configId}` : `${m.id}`);
 				const detail = m.owned_by ? `${m.owned_by} (${EXTENSION_LABEL})` : EXTENSION_LABEL;
 
+				// Advertise imageInput even for vision:false models when a
+				// vision-capable model is available for the bridge.
+				const nativeVision = m?.vision ?? false;
+				const bridgedVision =
+					!nativeVision && m?.vision === false && hasVisionModelAvailable(userModels, modelId);
 				return {
 					id: modelId,
 					name: modelName,
@@ -57,7 +63,7 @@ export async function prepareLanguageModelChatInformation(
 					maxOutputTokens: maxOutput,
 					capabilities: {
 						toolCalling: m.toolCalling ?? true,
-						imageInput: m?.vision ?? false,
+						imageInput: nativeVision || bridgedVision,
 					},
 					configurationSchema: createModelConfigurationSchema(m, options.configuration),
 				} satisfies LanguageModelChatInformation;

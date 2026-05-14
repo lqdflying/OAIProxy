@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import * as crypto from "crypto";
+import type { HFModelItem } from "./types";
 import { isImageMimeType, normalizeUserModels } from "./utils";
 import { logger } from "./logger";
 
@@ -84,11 +85,28 @@ export function messagesContainImages(messages: readonly vscode.LanguageModelCha
 // Vision model discovery
 // ---------------------------------------------------------------------------
 
-async function findVisionModel(excludeModelId: string): Promise<vscode.LanguageModelChat> {
+function fullModelId(m: HFModelItem): string {
+	return m.configId ? `${m.id}::${m.configId}` : m.id;
+}
+
+/**
+ * Check whether any user-configured model has `vision: true`, excluding
+ * a given model by its full ID (`baseId` or `baseId::configId`).
+ * Used by provideModel to decide whether to advertise imageInput for
+ * bridge-eligible models.
+ */
+export function hasVisionModelAvailable(userModels: HFModelItem[], excludeFullId: string): boolean {
+	return userModels.some((m) => m.vision === true && fullModelId(m) !== excludeFullId);
+}
+
+async function findVisionModel(excludeFullId: string): Promise<vscode.LanguageModelChat> {
 	const config = vscode.workspace.getConfiguration();
 	const userModels = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
 
-	const visionModelConfigs = userModels.filter((m) => m.vision === true && m.id !== excludeModelId);
+	// Exclude by full ID so multi-config setups (foo::text, foo::vision) work.
+	const visionModelConfigs = userModels.filter(
+		(m) => m.vision === true && fullModelId(m) !== excludeFullId
+	);
 
 	if (visionModelConfigs.length === 0) {
 		throw new Error(
@@ -100,8 +118,12 @@ async function findVisionModel(excludeModelId: string): Promise<vscode.LanguageM
 	const availableModels = await vscode.lm.selectChatModels({ vendor: LANGUAGE_MODEL_VENDOR });
 
 	for (const vmc of visionModelConfigs) {
-		const fullId = vmc.configId ? `${vmc.id}::${vmc.configId}` : vmc.id;
-		const chatModel = availableModels.find((m) => m.id === fullId || m.id === vmc.id);
+		const vmcFullId = fullModelId(vmc);
+		// Prefer exact full-ID match; only fall back to base-ID when the
+		// candidate has no configId (avoids picking the wrong config variant).
+		const chatModel = availableModels.find(
+			(m) => m.id === vmcFullId || (!vmc.configId && m.id === vmc.id)
+		);
 		if (chatModel) {
 			return chatModel;
 		}
@@ -214,7 +236,7 @@ export async function processMessagesForVision(
 		for (const part of content) {
 			if (part instanceof vscode.LanguageModelDataPart && isImageMimeType(part.mimeType)) {
 				const description = await describeImage(part, visionModel, token);
-				newContent.push(new vscode.LanguageModelTextPart(`[Image description: ${description}]`));
+				newContent.push(new vscode.LanguageModelTextPart(`\n[Image description: ${description}]\n`));
 				convertedCount++;
 			} else {
 				newContent.push(part);
