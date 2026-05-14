@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.0.7 (2026-05-14)
+
+- Fix XML `<think>` block streaming so visible text before and after thinking tags is preserved.
+- Fix OpenAI Responses API duplicate final text handling when deltas and done events both include output content.
+- Fix provider edge cases across Anthropic, Ollama, retry handling, logging, token estimates, and Git commit utilities.
+- Harden user model normalization and shared configuration parsing.
+
 ## 0.0.6 (2026-05-14)
 
 - Update packaged MIT license copyright attribution for OAIProxy.
