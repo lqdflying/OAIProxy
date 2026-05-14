@@ -70,6 +70,7 @@ export type ResponsesInputItem =
 
 export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<string, unknown>> {
 	private _responseId: string | null = null;
+	private _sawOutputTextDelta = false;
 
 	constructor(modelId: string) {
 		super(modelId);
@@ -432,6 +433,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			// Output text delta events
 			case "response.output_text.delta":
 			case "response.refusal.delta": {
+				this._sawOutputTextDelta = true;
 				const delta = this.coerceText(event.delta);
 				this.processOutputTextChunk(delta, progress);
 				return;
@@ -440,7 +442,8 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			// Output text done events
 			case "response.output_text.done": {
 				// Some gateways only emit a final "done" payload (no deltas).
-				if (this._hasEmittedText) {
+				if (this._sawOutputTextDelta) {
+					this._sawOutputTextDelta = false;
 					this._hasEmittedText = false;
 					return;
 				}
