@@ -14,6 +14,7 @@ import type { HFModelItem } from "./types";
 import type { OllamaRequestBody } from "./ollama/ollamaTypes";
 
 import { parseModelId, createRetryConfig, executeWithRetry, normalizeUserModels, getStringConfiguration } from "./utils";
+import { messagesContainImages, processMessagesForVision } from "./visionBridge";
 
 import { prepareLanguageModelChatInformation } from "./provideModel";
 import { countMessageTokens } from "./provideToken";
@@ -234,11 +235,31 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			if (token.isCancellationRequested) {
 				return;
 			}
+
+			// Vision bridge: for non-vision models, replace images with text descriptions
+			// obtained from a configured vision-capable model.
+			let workingMessages: readonly LanguageModelChatRequestMessage[] = messages;
+			if (um?.vision === false && messagesContainImages(messages)) {
+				try {
+					workingMessages = await processMessagesForVision(messages, parsedModelId.baseId, token);
+					if (token.isCancellationRequested) {
+						return;
+					}
+				} catch (err) {
+					if (token.isCancellationRequested || isAbortError(err)) {
+						return;
+					}
+					throw new Error(
+						`Failed to describe image for text-only model: ${err instanceof Error ? err.message : String(err)}`
+					);
+				}
+			}
+
 			this._lastRequestTime = Date.now();
 			if (apiMode === "ollama") {
 				// Ollama native API mode
 				const ollamaApi = new OllamaApi(model.id);
-				const ollamaMessages = ollamaApi.convertMessages(messages, modelConfig);
+				const ollamaMessages = ollamaApi.convertMessages(workingMessages, modelConfig);
 
 				let ollamaRequestBody: OllamaRequestBody = {
 					model: parsedModelId.baseId,
@@ -279,7 +300,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			} else if (apiMode === "anthropic") {
 				// Anthropic API mode
 				const anthropicApi = new AnthropicApi(model.id);
-				const anthropicMessages = anthropicApi.convertMessages(messages, modelConfig);
+				const anthropicMessages = anthropicApi.convertMessages(workingMessages, modelConfig);
 
 				// requestBody
 				let requestBody: AnthropicRequestBody = {
@@ -327,12 +348,12 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				const statefulModelId = parsedModelId.baseId;
 
 				// Convert full history once (also extracts system `instructions`).
-				const fullInput = openaiResponsesApi.convertMessages(messages, modelConfig);
+				const fullInput = openaiResponsesApi.convertMessages(workingMessages, modelConfig);
 
-				const marker = findLastOpenAIResponsesStatefulMarker(statefulModelId, messages);
+				const marker = findLastOpenAIResponsesStatefulMarker(statefulModelId, workingMessages);
 				let deltaInput: unknown[] | null = null;
-				if (marker && marker.index >= 0 && marker.index < messages.length - 1) {
-					const deltaMessages = messages.slice(marker.index + 1);
+				if (marker && marker.index >= 0 && marker.index < workingMessages.length - 1) {
+					const deltaMessages = workingMessages.slice(marker.index + 1);
 					const converted = openaiResponsesApi.convertMessages(deltaMessages, modelConfig);
 					if (converted.length > 0) {
 						deltaInput = converted;
@@ -434,7 +455,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			} else if (apiMode === "gemini") {
 				// Gemini native API mode
 				const geminiApi = new GeminiApi(model.id, this._geminiToolCallMetaByCallId);
-				const geminiMessages = geminiApi.convertMessages(messages, modelConfig);
+				const geminiMessages = geminiApi.convertMessages(workingMessages, modelConfig);
 
 				const systemParts: string[] = [];
 				const contents: GeminiGenerateContentRequest["contents"] = [];
@@ -496,7 +517,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			} else {
 				// OpenAI compatible API mode (default)
 				const openaiApi = new OpenaiApi(model.id);
-				const openaiMessages = openaiApi.convertMessages(messages, modelConfig);
+				const openaiMessages = openaiApi.convertMessages(workingMessages, modelConfig);
 
 				// requestBody
 				let requestBody: Record<string, unknown> = {
