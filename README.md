@@ -22,9 +22,9 @@ English | [简体中文](README.zh-CN.md)
 - **Visual configuration UI**: Intuitive interface for managing providers and models
 - **Auto-retry**: Handles API errors (429, 500, 502, 503, 504) with exponential backoff
 - **Token usage**: Real-time token counting and provider API key management from status bar
-- **Git integration**: Generate commit messages directly from source control
+- **Git integration**: Generate commit messages directly from source control with OpenAI/OpenAI Responses/Ollama/Anthropic models
 - **Import/export**: Easily share and backup configurations
-- **Tools optimization**: Optimize agent `read_file` tool handling, avoid to read small chunks for large file.
+- **Tools optimization**: Optimize agent `read_file` tool handling for supported streamed tool calls, avoiding small chunks for large files.
 
 ## Requirements
 - VS Code 1.120.0 or higher.
@@ -144,7 +144,7 @@ The extension supports five different API protocols to work with various model p
 
 3. **`ollama`** - Ollama native API
    - Endpoint: `/api/chat`
-   - Header: `Authorization: Bearer <apiKey>` (or no header for local Ollama)
+   - Header: `Authorization: Bearer <apiKey>` (omitted when the stored API key is exactly `ollama`)
    - Use for: Local Ollama instances
 
 4. **`anthropic`** - Anthropic Claude API
@@ -186,7 +186,7 @@ Mixed configuration with multiple API modes:
 
 ### Important Notes
 - The `apiMode` parameter defaults to `"openai"` if not specified.
-- When using `ollama` mode, you can omit the API key (`ollama` by default) or set it to any string.
+- When using `ollama` mode, OAIProxy still needs a stored API key value. Use `ollama` as a placeholder for local Ollama if you do not want an `Authorization` header to be sent; any other value is sent as a bearer token.
 - Each API mode uses different message conversion logic internally to match provider-specific formats (tools, images, thinking).
 
 </details>
@@ -272,7 +272,7 @@ To use this feature:
 ]
 ```
 
-In this example, you'll have three different configurations of the glm-4.6 model available in VS Code:
+In this example, you'll have two different configurations of the glm-4.6 model available in VS Code:
 - `glm-4.6::thinking` - use GLM-4.6 with thinking
 - `glm-4.6::no-thinking` - use GLM-4.6 without thinking
 

@@ -114,6 +114,7 @@ export class ConfigViewPanel {
 				localResourceRoots: [vscode.Uri.joinPath(extensionUri, "out"), vscode.Uri.joinPath(extensionUri, "assets")],
 			}
 		);
+		panel.iconPath = vscode.Uri.joinPath(extensionUri, "assets", "icon.png");
 
 		ConfigViewPanel.currentPanel = new ConfigViewPanel(panel, extensionUri, secrets);
 	}
@@ -349,6 +350,7 @@ export class ConfigViewPanel {
 		const templatePath = vscode.Uri.joinPath(assetsRoot, "configView.html");
 		const cssUri = webview.asWebviewUri(vscode.Uri.joinPath(assetsRoot, "configView.css"));
 		const jsUri = webview.asWebviewUri(vscode.Uri.joinPath(assetsRoot, "configView.js"));
+		const logoUri = webview.asWebviewUri(vscode.Uri.joinPath(this.extensionUri, "assets", "logo.png"));
 		const csp = [
 			`default-src 'none'`,
 			`img-src ${webview.cspSource} https:`,
@@ -361,6 +363,7 @@ export class ConfigViewPanel {
 		html = html
 			.replaceAll("%CSP_SOURCE%", csp)
 			.replaceAll("%NONCE%", nonce)
+			.replace("%LOGO_URI%", logoUri.toString())
 			.replace("%CSS_URI%", cssUri.toString())
 			.replace("%SCRIPT_URI%", jsUri.toString());
 		return html;

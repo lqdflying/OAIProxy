@@ -4,6 +4,34 @@ body {
 	color: var(--vscode-foreground);
 	background: linear-gradient(180deg, rgba(255, 255, 255, 0.03) 0%, rgba(0, 0, 0, 0.04) 100%);
 }
+.brand-header {
+	display: flex;
+	align-items: center;
+	gap: 12px;
+	margin: 4px 0 16px;
+	padding: 4px 2px;
+}
+.brand-logo {
+	width: 44px;
+	height: 44px;
+	flex: 0 0 44px;
+	object-fit: contain;
+}
+.brand-copy {
+	min-width: 0;
+}
+.brand-copy h1 {
+	margin: 0;
+	font-size: 22px;
+	line-height: 1.2;
+	font-weight: 700;
+}
+.brand-subtitle {
+	margin-top: 2px;
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+	line-height: 1.3;
+}
 h2 {
 	margin-top: 12px;
 	margin-bottom: 8px;

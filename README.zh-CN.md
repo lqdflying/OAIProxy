@@ -22,9 +22,9 @@
 - **可视化配置界面**：直观的界面管理供应商和模型
 - **自动重试**：处理 API 错误（429、500、502、503、504），支持指数退避
 - **Token 用量**：状态栏实时显示 token 计数和供应商 API 密钥管理
-- **Git 集成**：直接从源代码管理生成提交信息
+- **Git 集成**：使用 OpenAI/OpenAI Responses/Ollama/Anthropic 模型直接从源代码管理生成提交信息
 - **导入/导出**：轻松分享和备份配置
-- **工具优化**：优化 agent `read_file` 工具处理，避免对大文件读取小片段。
+- **工具优化**：对支持的流式工具调用优化 agent `read_file` 工具处理，避免对大文件读取小片段。
 
 ## 环境要求
 - VS Code 1.120.0 或更高版本。
@@ -144,7 +144,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 
 3. **`ollama`** - Ollama 原生 API
    - 端点：`/api/chat`
-   - 请求头：`Authorization: Bearer <apiKey>`（本地 Ollama 可省略）
+   - 请求头：`Authorization: Bearer <apiKey>`（当存储的 API Key 恰好为 `ollama` 时省略）
    - 适用：本地 Ollama 实例
 
 4. **`anthropic`** - Anthropic Claude API
@@ -186,7 +186,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 
 ### 重要说明
 - 未指定 `apiMode` 时默认为 `"openai"`。
-- 使用 `ollama` 模式时，可以不填 API 密钥（默认用 `ollama`）或填任意字符串。
+- 使用 `ollama` 模式时，OAIProxy 仍需要保存一个 API Key 值。如果本地 Ollama 不需要认证，请使用 `ollama` 作为占位值，这样不会发送 `Authorization` 请求头；其他任意值都会作为 bearer token 发送。
 - 每种 API 模式内部使用不同的消息转换逻辑，以匹配各自供应商的格式（工具、图像、思维链）。
 
 </details>
