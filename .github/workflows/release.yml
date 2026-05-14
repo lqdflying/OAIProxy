@@ -35,21 +35,3 @@ jobs:
         with:
           name: vsix
           path: extension.vsix
-
-  publish:
-    runs-on: ubuntu-latest
-    needs: [package]
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: vsix
-          path: .
-
-      - name: Publish to VS Code Marketplace
-        run: npx @vscode/vsce publish --allow-proposed-apis chatProvider --pat ${{ secrets.MARKETPLACE_TOKEN }} --packagePath ./extension.vsix

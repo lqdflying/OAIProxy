@@ -23,6 +23,7 @@ npm run download-api   # Download VS Code proposed API types (required after vsc
 - API keys stored via `vscode.SecretStorage` with keys `oaicopilot.apiKey` or `oaicopilot.apiKey.{provider}`
 - Model config via `oaicopilot.models` setting (see `src/types.ts` for `HFModelItem`)
 - Supports multi-provider: same model can have different `configId` for different settings
+- Release automation should build/package VSIX artifacts only. Do not publish to the VS Code Marketplace from agent actions; the maintainer publishes manually.
 
 ## Code Style (from eslint.config.mjs)
 - Semicolons required (`@stylistic/semi`)
