@@ -8,7 +8,7 @@ export function initStatusBar(context: vscode.ExtensionContext): vscode.StatusBa
 	tokenCountStatusBarItem.name = "Token Count";
 	tokenCountStatusBarItem.text = "$(symbol-numeric) Ready";
 	tokenCountStatusBarItem.tooltip = "Current model token usage - Click to Open Configuration UI";
-	tokenCountStatusBarItem.command = "oaicopilot.openConfig";
+	tokenCountStatusBarItem.command = "oaiproxy.openConfig";
 	context.subscriptions.push(tokenCountStatusBarItem);
 	// Show the status bar item initially
 	tokenCountStatusBarItem.show();

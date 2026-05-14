@@ -1,8 +1,8 @@
 {
-	"name": "oai-compatible-copilot",
-	"publisher": "johnny-zhao",
-	"displayName": "OAI Compatible Provider for Copilot",
-	"description": "An extension that integrates OpenAI/Ollama/Anthropic/Gemini API Providers into GitHub Copilot Chat",
+	"name": "oaiproxy",
+	"publisher": "lqdflying",
+	"displayName": "OAIProxy",
+	"description": "A self-maintained OpenAI/Ollama/Anthropic/Gemini-compatible provider for GitHub Copilot Chat",
 	"icon": "assets/logo.png",
 	"keywords": [
 		"ai",
@@ -23,9 +23,9 @@
 	],
 	"repository": {
 		"type": "git",
-		"url": "https://github.com/JohnnyZ93/oai-compatible-copilot"
+		"url": "https://github.com/lqdflying/OAIProxy"
 	},
-	"version": "0.3.6",
+	"version": "0.0.1",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -35,101 +35,101 @@
 	],
 	"activationEvents": [
 		"onStartupFinished",
-		"onLanguageModelChatProvider:oaicopilot",
-		"onCommand:oaicopilot.setApikey",
-		"onCommand:oaicopilot.setProviderApikey",
-		"onCommand:oaicopilot.openConfig",
-		"onCommand:oaicopilot.generateGitCommitMessage",
-		"onCommand:oaicopilot.abortGitCommitMessage"
+		"onLanguageModelChatProvider:oaiproxy",
+		"onCommand:oaiproxy.setApikey",
+		"onCommand:oaiproxy.setProviderApikey",
+		"onCommand:oaiproxy.openConfig",
+		"onCommand:oaiproxy.generateGitCommitMessage",
+		"onCommand:oaiproxy.abortGitCommitMessage"
 	],
 	"badges": [
 		{
-			"url": "https://img.shields.io/github/stars/JohnnyZ93/oai-compatible-copilot?style=social",
-			"description": "Star oai-compatible-copilot on Github",
-			"href": "https://github.com/JohnnyZ93/oai-compatible-copilot"
+			"url": "https://img.shields.io/github/stars/lqdflying/OAIProxy?style=social",
+			"description": "Star OAIProxy on Github",
+			"href": "https://github.com/lqdflying/OAIProxy"
 		}
 	],
 	"bugs": {
-		"url": "https://github.com/JohnnyZ93/oai-compatible-copilot/issues"
+		"url": "https://github.com/lqdflying/OAIProxy/issues"
 	},
 	"license": "MIT",
 	"contributes": {
 		"languageModelChatProviders": [
 			{
-				"vendor": "oaicopilot",
-				"displayName": "OAI Compatible",
-				"managementCommand": "oaicopilot.setApikey"
+				"vendor": "oaiproxy",
+				"displayName": "OAIProxy",
+				"managementCommand": "oaiproxy.setApikey"
 			}
 		],
 		"commands": [
 			{
-				"command": "oaicopilot.setApikey",
-				"category": "OAICopilot",
-				"title": "Set OAI Compatible Apikey"
+				"command": "oaiproxy.setApikey",
+				"category": "OAIProxy",
+				"title": "Set OAIProxy API Key"
 			},
 			{
-				"command": "oaicopilot.setProviderApikey",
-				"category": "OAICopilot",
-				"title": "Set OAI Compatible Multi-Provider Apikey"
+				"command": "oaiproxy.setProviderApikey",
+				"category": "OAIProxy",
+				"title": "Set OAIProxy Multi-Provider API Key"
 			},
 			{
-				"command": "oaicopilot.openConfig",
-				"category": "OAICopilot",
+				"command": "oaiproxy.openConfig",
+				"category": "OAIProxy",
 				"title": "Open Configuration UI"
 			},
 			{
-				"command": "oaicopilot.generateGitCommitMessage",
-				"title": "Generate Commit Message with OAICopilot",
-				"category": "OAICopilot",
+				"command": "oaiproxy.generateGitCommitMessage",
+				"title": "Generate Commit Message with OAIProxy",
+				"category": "OAIProxy",
 				"icon": "$(wand)"
 			},
 			{
-				"command": "oaicopilot.abortGitCommitMessage",
-				"title": "Generate Commit Message with OAICopilot - Stop",
-				"category": "OAICopilot",
+				"command": "oaiproxy.abortGitCommitMessage",
+				"title": "Generate Commit Message with OAIProxy - Stop",
+				"category": "OAIProxy",
 				"icon": "$(debug-stop)"
 			}
 		],
 		"menus": {
 			"scm/title": [
 				{
-					"command": "oaicopilot.generateGitCommitMessage",
+					"command": "oaiproxy.generateGitCommitMessage",
 					"group": "navigation",
-					"when": "config.git.enabled && scmProvider == git && !oaicopilot.isGeneratingCommit"
+					"when": "config.git.enabled && scmProvider == git && !oaiproxy.isGeneratingCommit"
 				},
 				{
-					"command": "oaicopilot.abortGitCommitMessage",
+					"command": "oaiproxy.abortGitCommitMessage",
 					"group": "navigation",
-					"when": "config.git.enabled && scmProvider == git && oaicopilot.isGeneratingCommit"
+					"when": "config.git.enabled && scmProvider == git && oaiproxy.isGeneratingCommit"
 				}
 			],
 			"commandPalette": [
 				{
-					"command": "oaicopilot.generateGitCommitMessage",
-					"when": "config.git.enabled && !oaicopilot.isGeneratingCommit"
+					"command": "oaiproxy.generateGitCommitMessage",
+					"when": "config.git.enabled && !oaiproxy.isGeneratingCommit"
 				},
 				{
-					"command": "oaicopilot.abortGitCommitMessage",
-					"when": "config.git.enabled && oaicopilot.isGeneratingCommit"
+					"command": "oaiproxy.abortGitCommitMessage",
+					"when": "config.git.enabled && oaiproxy.isGeneratingCommit"
 				}
 			]
 		},
 		"configuration": {
-			"title": "OAI Compatible Copilot",
+			"title": "OAIProxy",
 			"properties": {
 				"oaicopilot.logLevel": {
-				"type": "string",
-				"default": "off",
-				"enum": [
-					"off",
-					"debug",
-					"info",
-					"warn",
-					"error"
-				],
-				"description": "Debug log level. Logs are written to ~/.copilot/oaicopilot/logs/ as JSON lines. Default is 'off' (no logging)."
-			},
-			"oaicopilot.baseUrl": {
+					"type": "string",
+					"default": "off",
+					"enum": [
+						"off",
+						"debug",
+						"info",
+						"warn",
+						"error"
+					],
+					"description": "Debug log level. Logs are written to ~/.copilot/oaiproxy/logs/ as JSON lines. Default is 'off' (no logging)."
+				},
+				"oaicopilot.baseUrl": {
 					"type": "string",
 					"default": "https://router.huggingface.co/v1",
 					"description": "The base URL for the Openai Compatible Inference API. Default value is Hugging Face."
@@ -184,6 +184,11 @@
 								"default": false,
 								"description": "Model support vision. Default is false."
 							},
+							"toolCalling": {
+								"type": "boolean",
+								"default": true,
+								"description": "Advertise tool calling support to VS Code. Set false to avoid Agent optimized tool selection latency for this model."
+							},
 							"max_tokens": {
 								"type": "number",
 								"default": 4096,
@@ -218,7 +223,7 @@
 							},
 							"supported_reasoning_efforts": {
 								"type": "array",
-								"description": "Supported values for VS Code's per-model Thinking Effort control. Defaults to minimal, low, medium, high, xhigh, max.",
+								"description": "Supported values for VS Code's per-model Thinking Effort control. DeepSeek defaults to high, max. Other models default to minimal, low, medium, high, xhigh, max.",
 								"items": {
 									"type": "string"
 								}
@@ -490,7 +495,7 @@
 		"format": "prettier --write .",
 		"watch": "tsc -watch -p ./",
 		"test": "npm run compile && vscode-test",
-		"build": "npx @vscode/vsce package -o extension.vsix"
+		"build": "/usr/bin/env PATH=/usr/bin:/bin:/usr/sbin:/sbin:/home/opc/.local/bin:/home/opc/.bun/bin /usr/bin/npx --yes @vscode/vsce package -o oaiproxy-${npm_package_version}.vsix"
 	},
 	"dependencies": {
 		"@microsoft/tiktokenizer": "^1.0.10"

@@ -105,8 +105,8 @@ export class ConfigViewPanel {
 		}
 
 		const panel = vscode.window.createWebviewPanel(
-			"oaicopilot.config",
-			"OAICopilot Configuration",
+			"oaiproxy.config",
+			"OAIProxy Configuration",
 			column || vscode.ViewColumn.One,
 			{
 				enableScripts: true,
@@ -130,7 +130,7 @@ export class ConfigViewPanel {
 		this.panel.webview.onDidReceiveMessage(
 			async (message) => {
 				this.handleMessage(message).catch((err) => {
-					console.error("[oaicopilot] handleMessage failed", err);
+					console.error("[oaiproxy] handleMessage failed", err);
 					vscode.window.showErrorMessage(
 						err instanceof Error
 							? err.message
@@ -185,7 +185,7 @@ export class ConfigViewPanel {
 					const { models } = await fetchModels(message.baseUrl, message.apiKey, message.apiMode, message.headers);
 					this.panel.webview.postMessage({ type: "modelsFetched", models });
 				} catch (err) {
-					console.error("[oaicopilot] fetchModels failed", err);
+					console.error("[oaiproxy] fetchModels failed", err);
 					const errorMessage = err instanceof Error ? err.message : String(err);
 					this.panel.webview.postMessage({ type: "modelsFetchError", error: errorMessage });
 				}
@@ -337,7 +337,7 @@ export class ConfigViewPanel {
 		}
 
 		vscode.window.showInformationMessage(
-			"OAI Compatible base URL, Delay, Retry and API Key have been saved to global settings."
+			"OAIProxy base URL, Delay, Retry and API Key have been saved to global settings."
 		);
 		// Send refresh signal to frontend
 		await this.sendInit();
@@ -605,9 +605,9 @@ export class ConfigViewPanel {
 			};
 
 			const uri = await vscode.window.showSaveDialog({
-				defaultUri: vscode.Uri.file(`oaicopilot-config-${new Date().toISOString().split("T")[0]}.json`),
+				defaultUri: vscode.Uri.file(`oaiproxy-config-${new Date().toISOString().split("T")[0]}.json`),
 				filters: { "JSON Files": ["json"] },
-				title: "Export OAICopilot Configuration",
+				title: "Export OAIProxy Configuration",
 			});
 
 			if (!uri) {
@@ -632,7 +632,7 @@ export class ConfigViewPanel {
 				canSelectFolders: false,
 				canSelectMany: false,
 				filters: { "JSON Files": ["json"] },
-				title: "Import OAICopilot Configuration",
+				title: "Import OAIProxy Configuration",
 			});
 
 			if (!uri || uri.length === 0) {

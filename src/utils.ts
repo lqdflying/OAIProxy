@@ -126,7 +126,7 @@ export function convertToolsToOpenAI(options?: vscode.ProvideLanguageModelChatRe
 	let tool_choice: "auto" | { type: "function"; function: { name: string } } = "auto";
 	if (options?.toolMode === vscode.LanguageModelChatToolMode.Required) {
 		if (tools.length !== 1) {
-			console.error("[OAI Compatible Model Provider] ToolMode.Required but multiple tools:", tools.length);
+			console.error("[OAIProxy Model Provider] ToolMode.Required but multiple tools:", tools.length);
 			throw new Error("LanguageModelChatToolMode.Required is not supported with more than one tool");
 		}
 		tool_choice = { type: "function", function: { name: tools[0].name } };
@@ -322,7 +322,7 @@ export async function executeWithRetry<T>(fn: () => Promise<T>, retryConfig: Ret
 			});
 
 			console.error(
-				`[OAI Compatible Model Provider] Retryable error detected, retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxAttempts}). Error:`,
+				`[OAIProxy Model Provider] Retryable error detected, retrying in ${delayMs}ms (attempt ${attempt + 1}/${maxAttempts}). Error:`,
 				lastError instanceof Error ? { name: lastError.name, message: lastError.message } : String(lastError)
 			);
 

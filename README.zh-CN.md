@@ -1,17 +1,17 @@
 <div align="center">
 
-<img src="assets/logo.png" alt="OAICopilot Logo" width="120" height="120">
+<img src="assets/logo.png" alt="OAIProxy Logo" width="120" height="120">
 
-# OAI Compatible Provider for Copilot
+# OAIProxy
 
-**在 VS Code 的 GitHub Copilot Chat 中使用任意 OpenAI/Ollama/Anthropic/Gemini API兼容供应商** 🔥
+**自维护的 VS Code 扩展，用于在 GitHub Copilot Chat 中使用 OpenAI/Ollama/Anthropic/Gemini API 兼容供应商** 🔥
 
 [English](README.md) | 简体中文
 
 </div>
 
-[![CI](https://github.com/JohnnyZ93/oai-compatible-copilot/actions/workflows/release.yml/badge.svg)](https://github.com/JohnnyZ93/oai-compatible-copilot/actions)
-[![License](https://img.shields.io/github/license/JohnnyZ93/oai-compatible-copilot?color=orange&label=License)](https://github.com/JohnnyZ93/oai-compatible-copilot/blob/main/LICENSE)
+[![CI](https://github.com/lqdflying/OAIProxy/actions/workflows/release.yml/badge.svg)](https://github.com/lqdflying/OAIProxy/actions)
+[![License](https://img.shields.io/github/license/lqdflying/OAIProxy?color=orange&label=License)](https://github.com/lqdflying/OAIProxy/blob/main/LICENSE)
 
 ## ✨ 特性
 - **多 API 支持**：OpenAI/Ollama/Anthropic/Gemini API（ModelScope、SiliconFlow、DeepSeek 等）
@@ -31,13 +31,15 @@
 - OpenAI 兼容供应商的 API 密钥。
 
 ## ⚡ 快速开始
-1. [在此处](https://marketplace.visualstudio.com/items?itemName=johnny-zhao.oai-compatible-copilot)安装 OAI Compatible Provider for Copilot 扩展。
+1. 安装 OAIProxy VSIX 包（`lqdflying.oaiproxy`）。
 2. 打开 VS Code 设置，配置 `oaicopilot.baseUrl` 和 `oaicopilot.models`。
 3. 打开 GitHub Copilot Chat 界面。
 4. 点击模型选择器，选择 "Manage Models..."。
-5. 选择 "OAI Compatible" 供应商。
+5. 选择 "OAIProxy" 供应商。
 6. 输入你的 API 密钥——它将保存在本地。
 7. 选择你想添加到模型选择器中的模型。
+
+> 兼容性说明：OAIProxy 仍使用现有的 `oaicopilot.*` 设置键，因此已有 JSON 模型配置可以继续使用。由于扩展 ID 已改为 `lqdflying.oaiproxy`，VS Code 可能需要你在新扩展下重新输入一次 API Key。
 
 ### 配置示例
 
@@ -65,11 +67,11 @@
 
 1. **通过命令面板**：
    - 按 `Ctrl+Shift+P`（macOS 上按 `Cmd+Shift+P`）
-   - 搜索 "OAICopilot: Open Configuration UI"
+   - 搜索 "OAIProxy: Open Configuration UI"
    - 选择该命令打开配置面板
 
 2. **通过状态栏**：
-   - 点击 VS Code 右下角的 "OAICopilot" 状态栏项
+   - 点击 VS Code 右下角的 OAIProxy 状态栏项
 
 <details>
 <summary>点击展开详情</summary>
@@ -95,7 +97,7 @@
    - 打开 GitHub Copilot Chat（`Ctrl+Shift+I` 或 `Cmd+Shift+I`）
    - 点击对话输入框的模型选择器
    - 选择 "Manage Models..."
-   - 选择 "OAI Compatible" 供应商
+   - 选择 "OAIProxy" 供应商
    - 选择已配置的模型
    - 开始与模型对话！
 
@@ -194,10 +196,10 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 > 模型配置中的 `owned_by`（别名：`provider` / `provide`）用于分组供应商特定的 API 密钥。存储键为 `oaicopilot.apiKey.<providerId小写>`。
 
 1. 打开 VS Code 设置，配置 `oaicopilot.models`。
-2. 打开命令中心（Ctrl+Shift+P），搜索 "OAICopilot: Set OAI Compatible Multi-Provider API Key" 来配置各供应商的 API 密钥。
+2. 打开命令中心（Ctrl+Shift+P），搜索 "OAIProxy: Set OAIProxy Multi-Provider API Key" 来配置各供应商的 API 密钥。
 3. 打开 GitHub Copilot Chat 界面。
 4. 点击模型选择器，选择 "Manage Models..."。
-5. 选择 "OAI Compatible" 供应商。
+5. 选择 "OAIProxy" 供应商。
 6. 选择你想添加到模型选择器中的模型。
 
 <details>
@@ -451,8 +453,9 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
   - `type`：设为 'enabled' 开启思维链，'disabled' 关闭思维链
 - `reasoning_effort`：推理力度级别（OpenAI 推理配置）
 - `supports_reasoning_effort`：为此模型显示 VS Code 的按模型 Thinking Effort 控件。配置了 `reasoning_effort`、`reasoning.effort`、`default_reasoning_effort` 或 `supported_reasoning_efforts` 的模型也会自动显示该控件。
-- `supported_reasoning_efforts`：支持的 Thinking Effort 取值。默认为 `minimal`、`low`、`medium`、`high`、`xhigh`、`max`。
+- `supported_reasoning_efforts`：支持的 Thinking Effort 取值。DeepSeek 默认使用 `high`、`max`；其他模型默认使用 `minimal`、`low`、`medium`、`high`、`xhigh`、`max`。
 - `default_reasoning_effort`：默认 Thinking Effort 值。未设置时使用 `reasoning_effort` 或 `reasoning.effort`。
+- `toolCalling`：是否向 VS Code 声明此模型支持工具调用。Agent 模式需要保持 `true` 才会显示该模型。仅在非 Agent 聊天中想跳过 Agent optimized tool selection 时设为 `false`。
 - `headers`：发送到此模型供应商的自定义 HTTP 请求头（如 `{"X-API-Version": "v1", "X-Custom-Header": "value"}`）。将与默认请求头（Authorization、Content-Type、User-Agent）合并
 - `extra`：额外请求体参数。
 - `include_reasoning_in_request`：是否在发送给 API 的 assistant 消息中包含 reasoning_content。支持 deepseek-v3.2 及类似模型。
@@ -464,10 +467,10 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 
 感谢所有贡献者。
 
-- [贡献者](https://github.com/JohnnyZ93/oai-compatible-copilot/graphs/contributors)
+- [贡献者](https://github.com/lqdflying/OAIProxy/graphs/contributors)
 - [Hugging Face Chat 扩展](https://github.com/huggingface/huggingface-vscode-chat)
 - [VS Code Chat Provider API](https://code.visualstudio.com/api/extension-guides/ai/language-model-chat-provider)
 
 ## 支持 & 许可证
-- 提交 Issue：https://github.com/JohnnyZ93/oai-compatible-copilot/issues
+- 提交 Issue：https://github.com/lqdflying/OAIProxy/issues
 - 许可证：MIT License Copyright (c) 2025 Johnny Zhao

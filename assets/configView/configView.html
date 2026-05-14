@@ -4,7 +4,7 @@
 		<meta charset="UTF-8" />
 		<meta http-equiv="Content-Security-Policy" content="%CSP_SOURCE%" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>OAI Copilot Configuration</title>
+		<title>OAIProxy Configuration</title>
 		<link rel="stylesheet" href="%CSS_URI%" />
 	</head>
 	<body>
@@ -178,6 +178,15 @@
 							<div class="field-description">Model support vision.</div>
 							<select id="modelVision" class="model-input">
 								<option value="">Default (False)</option>
+								<option value="true">True</option>
+								<option value="false">False</option>
+							</select>
+						</div>
+						<div class="field">
+							<label for="modelToolCalling">Tool Calling</label>
+							<div class="field-description">Advertise tools to VS Code. Disable to skip Agent tool selection.</div>
+							<select id="modelToolCalling" class="model-input">
+								<option value="">Default (True)</option>
 								<option value="true">True</option>
 								<option value="false">False</option>
 							</select>

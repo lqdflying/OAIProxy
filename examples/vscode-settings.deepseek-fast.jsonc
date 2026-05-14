@@ -1,0 +1,56 @@
+{
+	// Set your own global base URL in VS Code settings, or configure per-model/provider baseUrl separately.
+	// "oaicopilot.baseUrl": "https://your-openai-compatible-endpoint/v1",
+	"oaicopilot.models": [
+		{
+			"id": "vscodeproxy/deepseek-v4-pro",
+			"owned_by": "deepseek",
+			"vision": true,
+			"context_length": 1048576,
+			"max_tokens": 65536,
+			"reasoning_effort": "high",
+			"supported_reasoning_efforts": ["high", "max"],
+			"default_reasoning_effort": "high",
+			// Keep true if you want this model to appear in Agent mode.
+			// Set false only for non-Agent chat if you want to avoid Agent optimized tool selection latency.
+			"toolCalling": true,
+			"apiMode": "openai",
+		},
+		{
+			"id": "vscodeproxy/kimi-k2.6",
+			"owned_by": "moonshot",
+			"vision": true,
+			"context_length": 262144,
+			"max_tokens": 65536,
+			"apiMode": "openai",
+		},
+		{
+			"id": "vscodeproxy/minimax-m2.7",
+			"owned_by": "minimax",
+			"vision": true,
+			"context_length": 196608,
+			"max_tokens": 65536,
+			"apiMode": "openai",
+		},
+		{
+			"id": "vscodeproxy/gpt-general",
+			"owned_by": "openai",
+			"context_length": 1050000,
+			"max_tokens": 128000,
+			"vision": true,
+			"apiMode": "openai",
+			"reasoning_effort": "xhigh",
+			"supported_reasoning_efforts": ["minimal", "low", "medium", "high", "xhigh"],
+			"default_reasoning_effort": "xhigh",
+		},
+		{
+			"id": "vscodeproxy/gpt-5.3-codex",
+			"owned_by": "openai",
+			"vision": true,
+			"context_length": 400000,
+			"max_tokens": 128000,
+			"reasoning_effort": "high",
+			"apiMode": "openai",
+		},
+	],
+}

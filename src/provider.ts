@@ -27,6 +27,7 @@ import { GeminiApi, buildGeminiGenerateContentUrl, type GeminiToolCallMeta } fro
 import type { GeminiGenerateContentRequest } from "./gemini/geminiTypes";
 import { CommonApi } from "./commonApi";
 import { logger } from "./logger";
+import { normalizeReasoningEffortForModel } from "./reasoningEffort";
 
 interface ChatInformationOptions {
 	readonly silent?: boolean;
@@ -37,7 +38,7 @@ interface ChatInformationOptions {
  * VS Code Chat provider backed by Hugging Face Inference Providers.
  */
 export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, vscode.Disposable {
-	/** Track last request completion time for delay calculation. */
+	/** Track last outbound API attempt time for delay calculation. */
 	private _lastRequestTime: number | null = null;
 
 	private readonly _onDidChangeLanguageModelChatInformation = new vscode.EventEmitter<void>();
@@ -46,7 +47,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 	private readonly _geminiToolCallMetaByCallId = new Map<string, GeminiToolCallMeta>();
 	private readonly _openaiResponsesPreviousResponseIdUnsupportedBaseUrls = new Set<string>();
 
-	static readonly OPENAI_RESPONSES_STATEFUL_MARKER_MIME = "application/vnd.oaicopilot.stateful-marker";
+	static readonly OPENAI_RESPONSES_STATEFUL_MARKER_MIME = "application/vnd.oaiproxy.stateful-marker";
 
 	/**
 	 * Create a provider using the given secret storage for the API key.
@@ -76,7 +77,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 		_token: CancellationToken
 	): Promise<LanguageModelChatInformation[]> {
 		const silent = options.silent ?? true;
-		return prepareLanguageModelChatInformation({ silent }, _token, this.secrets);
+		return prepareLanguageModelChatInformation({ silent, configuration: options.configuration }, _token, this.secrets);
 	}
 
 	/**
@@ -116,7 +117,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				try {
 					progress.report(part);
 				} catch (e) {
-					console.error("[OAI Compatible Model Provider] Progress.report failed", {
+					console.error("[OAIProxy Model Provider] Progress.report failed", {
 						modelId: model.id,
 						error: e instanceof Error ? { name: e.name, message: e.message } : String(e),
 					});
@@ -126,6 +127,9 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 		const requestStartTime = Date.now();
 		const abortController = new AbortController();
 		const cancellationListener = token.onCancellationRequested(() => abortController.abort());
+		if (token.isCancellationRequested) {
+			abortController.abort();
+		}
 		try {
 			// get model config from user settings
 			const config = vscode.workspace.getConfiguration();
@@ -183,12 +187,10 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 						elapsed,
 						remainingDelay,
 					});
-					await new Promise<void>((resolve) => {
-						const timeout = setTimeout(() => {
-							clearTimeout(timeout);
-							resolve();
-						}, remainingDelay);
-					});
+					await waitForDelayOrCancellation(remainingDelay, token);
+					if (token.isCancellationRequested) {
+						return;
+					}
 				}
 			}
 
@@ -201,7 +203,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					provider: provider ?? "",
 					useGenericKey,
 				});
-				throw new Error("OAI Compatible API key not found");
+				throw new Error("OAIProxy API key not found");
 			}
 
 			// send chat request
@@ -215,9 +217,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					throw new Error("protocol must be http or https");
 				}
 			} catch (e) {
-				throw new Error(
-					`Invalid base URL configuration: ${BASE_URL} (${e instanceof Error ? e.message : String(e)})`
-				);
+				throw new Error(`Invalid base URL configuration: ${BASE_URL} (${e instanceof Error ? e.message : String(e)})`);
 			}
 
 			// get retry config
@@ -231,6 +231,10 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			logger.debug("request.messages.origin", {
 				messages: messages,
 			});
+			if (token.isCancellationRequested) {
+				return;
+			}
+			this._lastRequestTime = Date.now();
 			if (apiMode === "ollama") {
 				// Ollama native API mode
 				const ollamaApi = new OllamaApi(model.id);
@@ -355,7 +359,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				// Add prompt_cache_key to enable OpenAI prompt caching.
 				// Without this parameter, cached_tokens is always 0 even with identical requests.
 				if (!requestBody.prompt_cache_key) {
-					requestBody.prompt_cache_key = `oaicopilot-${parsedModelId.baseId}`;
+					requestBody.prompt_cache_key = `oaiproxy-${parsedModelId.baseId}`;
 				}
 				// send Responses API request with retry
 				const url = `${normalizedBaseUrl}/responses`;
@@ -516,9 +520,9 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 
 					if (!res.ok) {
 						const errorText = await res.text();
-						console.error("[OAI Compatible Model Provider] OAI Compatible API error response", errorText);
+						console.error("[OAIProxy Model Provider] OAIProxy API error response", errorText);
 						throw new Error(
-							`OAI Compatible API error: [${res.status}] ${res.statusText}${errorText ? `\n${errorText}` : ""}\nURL: ${url}`
+							`OAIProxy API error: [${res.status}] ${res.statusText}${errorText ? `\n${errorText}` : ""}\nURL: ${url}`
 						);
 					}
 
@@ -526,15 +530,16 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				}, retryConfig);
 
 				if (!response.body) {
-					throw new Error("No response body from OAI Compatible API");
+					throw new Error("No response body from OAIProxy API");
 				}
 				await openaiApi.processStreamingResponse(response.body, trackingProgress, token);
 			}
-			// Only advance the throttle clock when the request completed without throwing,
-			// so a failing request doesn't artificially extend the wait before the next one.
-			this._lastRequestTime = Date.now();
 		} catch (err) {
-			console.error("[OAI Compatible Model Provider] Chat request failed", {
+			if (token.isCancellationRequested || isAbortError(err)) {
+				logger.info("request.cancelled", { modelId: model.id });
+				return;
+			}
+			console.error("[OAIProxy Model Provider] Chat request failed", {
 				modelId: model.id,
 				messageCount: messages.length,
 				error: err instanceof Error ? { name: err.name, message: err.message } : String(err),
@@ -568,8 +573,8 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 
 			if (!apiKey && !useGenericKey) {
 				const entered = await vscode.window.showInputBox({
-					title: `OAI Compatible API Key for ${normalizedProvider}`,
-					prompt: `Enter your OAI Compatible API key for ${normalizedProvider}`,
+					title: `OAIProxy API Key for ${normalizedProvider}`,
+					prompt: `Enter your OAIProxy API key for ${normalizedProvider}`,
 					ignoreFocusOut: true,
 					password: true,
 				});
@@ -587,8 +592,8 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 
 		if (!apiKey && useGenericKey) {
 			const entered = await vscode.window.showInputBox({
-				title: "OAI Compatible API Key",
-				prompt: "Enter your OAI Compatible API key",
+				title: "OAIProxy API Key",
+				prompt: "Enter your OAIProxy API key",
 				ignoreFocusOut: true,
 				password: true,
 			});
@@ -614,7 +619,10 @@ function applyModelConfiguration(
 		return model;
 	}
 
-	const reasoningEffort = getStringConfiguration(configuration, "reasoningEffort", "reasoning_effort");
+	const reasoningEffort = normalizeReasoningEffortForModel(
+		model,
+		getStringConfiguration(configuration, "reasoningEffort", "reasoning_effort")
+	);
 	if (!reasoningEffort) {
 		return model;
 	}
@@ -629,7 +637,10 @@ function applyModelConfiguration(
 	return next;
 }
 
-function getStringConfiguration(configuration: Readonly<Record<string, unknown>>, ...keys: string[]): string | undefined {
+function getStringConfiguration(
+	configuration: Readonly<Record<string, unknown>>,
+	...keys: string[]
+): string | undefined {
 	for (const key of keys) {
 		const value = configuration[key];
 		if (typeof value === "string" && value.trim() !== "") {
@@ -637,6 +648,31 @@ function getStringConfiguration(configuration: Readonly<Record<string, unknown>>
 		}
 	}
 	return undefined;
+}
+
+function waitForDelayOrCancellation(delayMs: number, token: CancellationToken): Promise<void> {
+	if (delayMs <= 0 || token.isCancellationRequested) {
+		return Promise.resolve();
+	}
+
+	return new Promise<void>((resolve) => {
+		const disposables: vscode.Disposable[] = [];
+		const timeout = setTimeout(() => {
+			disposables.pop()?.dispose();
+			resolve();
+		}, delayMs);
+		disposables.push(
+			token.onCancellationRequested(() => {
+				clearTimeout(timeout);
+				disposables.pop()?.dispose();
+				resolve();
+			})
+		);
+	});
+}
+
+function isAbortError(error: unknown): boolean {
+	return !!error && typeof error === "object" && (error as { name?: unknown }).name === "AbortError";
 }
 
 function createOpenAIResponsesStatefulMarkerPart(modelId: string, marker: string): vscode.LanguageModelDataPart {

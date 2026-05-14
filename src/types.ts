@@ -29,6 +29,11 @@ export interface HFModelItem {
 	architecture?: HFArchitecture;
 	context_length?: number;
 	vision?: boolean;
+	/**
+	 * Whether VS Code should advertise tool calling for this model.
+	 * Set false for providers/models where Agent tool selection adds too much latency.
+	 */
+	toolCalling?: boolean;
 	max_tokens?: number;
 	// OpenAI new standard parameter
 	max_completion_tokens?: number;

@@ -1,5 +1,15 @@
 # Change Log
 
+## 0.0.1 (2026-05-14)
+
+- Rebrand extension identity to OAIProxy (`lqdflying.oaiproxy`) with `oaiproxy` language model provider and command IDs.
+- Keep existing `oaicopilot.*` settings keys for configuration compatibility.
+- Add configurable tool-calling capability per model to avoid Agent optimized tool selection latency for non-Agent chat models.
+- Fix DeepSeek reasoning effort visibility by defaulting DeepSeek models to `high` and `max`.
+- Fix request cancellation handling so stopped requests do not report as failed chat requests.
+
+The entries below are inherited from upstream before the OAIProxy fork.
+
 ## 0.3.6 (2026-04-24)
 
 - Feat: Add `xhigh` and `max` reasoning effort options for DeepSeek-V4.

@@ -40,6 +40,7 @@ const modelFamilyInput = document.getElementById("modelFamily");
 const modelContextLengthInput = document.getElementById("modelContextLength");
 const modelMaxTokensInput = document.getElementById("modelMaxTokens");
 const modelVisionInput = document.getElementById("modelVision");
+const modelToolCallingInput = document.getElementById("modelToolCalling");
 const modelApiModeInput = document.getElementById("modelApiMode");
 const modelTemperatureInput = document.getElementById("modelTemperature");
 const modelTopPInput = document.getElementById("modelTopP");
@@ -315,7 +316,7 @@ window.addEventListener("message", (event) => {
 			// Handle error from fetchModels
 			dropdownHeader.textContent = "Error fetching models";
 			dropdownContent.innerHTML = `<div class="dropdown-option error">Failed to fetch models. Check the Developer Console for details.</div>`;
-			console.error("[oaicopilot] Failed to fetch models:", message.error);
+			console.error("[oaiproxy] Failed to fetch models:", message.error);
 			break;
 		case "confirmResponse":
 			// Handle confirmation responses
@@ -542,6 +543,7 @@ function resetModelForm() {
 	modelContextLengthInput.value = 128000;
 	modelMaxTokensInput.value = 4096;
 	modelVisionInput.value = "";
+	modelToolCallingInput.value = "";
 	modelApiModeInput.value = "openai";
 	modelTemperatureInput.value = 0;
 	modelTopPInput.value = "";
@@ -592,6 +594,7 @@ function collectModelFormData() {
 		context_length: modelContextLengthInput.value ? parseInt(modelContextLengthInput.value) : undefined,
 		max_tokens: modelMaxTokensInput.value ? parseInt(modelMaxTokensInput.value) : undefined,
 		vision: modelVisionInput.value ? modelVisionInput.value === "true" : undefined,
+		toolCalling: modelToolCallingInput.value ? modelToolCallingInput.value === "true" : undefined,
 		apiMode: modelApiModeInput.value || undefined,
 		temperature: modelTemperatureInput.value !== "" ? parseFloat(modelTemperatureInput.value) : undefined,
 		top_p: modelTopPInput.value !== "" ? parseFloat(modelTopPInput.value) : undefined,
@@ -913,6 +916,7 @@ function populateModelForm(model) {
 	modelContextLengthInput.value = model.context_length || "";
 	modelMaxTokensInput.value = model.max_tokens || "";
 	modelVisionInput.value = model.vision !== undefined ? String(model.vision) : "";
+	modelToolCallingInput.value = model.toolCalling !== undefined ? String(model.toolCalling) : "";
 	modelApiModeInput.value = model.apiMode || "openai";
 	modelTemperatureInput.value = model.temperature !== undefined && model.temperature !== null ? model.temperature : "";
 	modelTopPInput.value = model.top_p !== undefined && model.top_p !== null ? model.top_p : "";

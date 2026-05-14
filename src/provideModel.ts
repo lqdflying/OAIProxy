@@ -7,12 +7,12 @@ import { VersionManager } from "./versionManager";
 import { fetchGeminiModels } from "./gemini/geminiApi";
 import { fetchOllamaModels } from "./ollama/ollamaApi";
 import { logger } from "./logger";
+import { getDefaultReasoningEffort, getReasoningEfforts, shouldExposeReasoningEffort } from "./reasoningEffort";
 
 const DEFAULT_CONTEXT_LENGTH = 128000;
 const DEFAULT_MAX_TOKENS = 4096;
-const EXTENSION_LABEL = "OAICopilot";
-const MODEL_PICKER_CATEGORY = { label: "OAI Compatible", order: 100 };
-const DEFAULT_REASONING_EFFORTS = ["minimal", "low", "medium", "high", "xhigh", "max"];
+const EXTENSION_LABEL = "OAIProxy";
+const MODEL_PICKER_CATEGORY = { label: "OAIProxy", order: 100 };
 
 /**
  * Get the list of available language models contributed by this provider
@@ -21,7 +21,7 @@ const DEFAULT_REASONING_EFFORTS = ["minimal", "low", "medium", "high", "xhigh", 
  * @returns A promise that resolves to the list of available language models
  */
 export async function prepareLanguageModelChatInformation(
-	options: { silent: boolean },
+	options: { silent: boolean; configuration?: Readonly<Record<string, unknown>> },
 	_token: CancellationToken,
 	secrets: vscode.SecretStorage
 ): Promise<LanguageModelChatInformation[]> {
@@ -56,10 +56,10 @@ export async function prepareLanguageModelChatInformation(
 					maxInputTokens: maxInput,
 					maxOutputTokens: maxOutput,
 					capabilities: {
-						toolCalling: true,
+						toolCalling: m.toolCalling ?? true,
 						imageInput: m?.vision ?? false,
 					},
-					configurationSchema: createModelConfigurationSchema(m),
+					configurationSchema: createModelConfigurationSchema(m, options.configuration),
 				} satisfies LanguageModelChatInformation;
 			});
 	} else {
@@ -69,7 +69,7 @@ export async function prepareLanguageModelChatInformation(
 			if (options.silent) {
 				return [];
 			} else {
-				throw new Error("OAI Compatible API key not found");
+				throw new Error("OAIProxy API key not found");
 			}
 		}
 
@@ -143,12 +143,16 @@ export async function prepareLanguageModelChatInformation(
 	return infos;
 }
 
-function createModelConfigurationSchema(model: HFModelItem): vscode.LanguageModelConfigurationSchema | undefined {
+function createModelConfigurationSchema(
+	model: HFModelItem,
+	configuration?: Readonly<Record<string, unknown>>
+): vscode.LanguageModelConfigurationSchema | undefined {
 	if (!shouldExposeReasoningEffort(model)) {
 		return undefined;
 	}
 
-	const enumValues = getReasoningEfforts(model);
+	const selectedEffort = getStringConfiguration(configuration, "reasoningEffort", "reasoning_effort");
+	const enumValues = getReasoningEfforts(model, selectedEffort);
 	const defaultValue = getDefaultReasoningEffort(model, enumValues);
 
 	return {
@@ -166,38 +170,21 @@ function createModelConfigurationSchema(model: HFModelItem): vscode.LanguageMode
 	};
 }
 
-function shouldExposeReasoningEffort(model: HFModelItem): boolean {
-	return (
-		model.supports_reasoning_effort === true ||
-		hasValues(model.supported_reasoning_efforts) ||
-		typeof model.default_reasoning_effort === "string" ||
-		typeof model.reasoning_effort === "string" ||
-		typeof model.reasoning?.effort === "string"
-	);
-}
-
-function getReasoningEfforts(model: HFModelItem): string[] {
-	if (hasValues(model.supported_reasoning_efforts)) {
-		const values = model.supported_reasoning_efforts.map((value) => value.trim()).filter(Boolean);
-		return values.filter((value, index) => values.indexOf(value) === index);
-	}
-	return DEFAULT_REASONING_EFFORTS;
-}
-
-function getDefaultReasoningEffort(model: HFModelItem, enumValues: string[]): string | undefined {
-	const configured = model.default_reasoning_effort ?? model.reasoning_effort ?? model.reasoning?.effort;
-	if (configured && enumValues.includes(configured)) {
-		return configured;
-	}
-	return undefined;
-}
-
-function hasValues(value: string[] | undefined): value is string[] {
-	return Array.isArray(value) && value.some((item) => item.trim() !== "");
-}
-
 function formatReasoningEffortLabel(value: string): string {
 	return value.length > 0 ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
+}
+
+function getStringConfiguration(configuration: Readonly<Record<string, unknown>> | undefined, ...keys: string[]) {
+	if (!configuration) {
+		return undefined;
+	}
+	for (const key of keys) {
+		const value = configuration[key];
+		if (typeof value === "string" && value.trim() !== "") {
+			return value.trim();
+		}
+	}
+	return undefined;
 }
 
 /**
@@ -233,12 +220,12 @@ export async function fetchModels(
 			try {
 				text = await resp.text();
 			} catch (error) {
-				console.error("[OAI Compatible Model Provider] Failed to read response text", error);
+				console.error("[OAIProxy Model Provider] Failed to read response text", error);
 			}
 			const err = new Error(
-				`Failed to fetch OAI Compatible models: ${resp.status} ${resp.statusText}${text ? `\n${text}` : ""}`
+				`Failed to fetch OAIProxy models: ${resp.status} ${resp.statusText}${text ? `\n${text}` : ""}`
 			);
-			console.error("[OAI Compatible Model Provider] Failed to fetch OAI Compatible models", err);
+			console.error("[OAIProxy Model Provider] Failed to fetch OAIProxy models", err);
 			throw err;
 		}
 		const parsed = (await resp.json()) as HFModelsResponse;
@@ -250,7 +237,7 @@ export async function fetchModels(
 		return { models };
 	} catch (err) {
 		const errorObj = err instanceof Error ? err : new Error(String(err));
-		console.error("[OAI Compatible Model Provider] Failed to fetch OAI Compatible models", err);
+		console.error("[OAIProxy Model Provider] Failed to fetch OAIProxy models", err);
 		logger.error("models.fetch.error", { baseUrl, error: errorObj.message });
 		throw err;
 	}
@@ -267,8 +254,8 @@ async function ensureApiKey(silent: boolean, secrets: vscode.SecretStorage): Pro
 
 	if (!apiKey && !silent) {
 		const entered = await vscode.window.showInputBox({
-			title: "OAI Compatible API Key",
-			prompt: "Enter your OAI Compatible API key",
+			title: "OAIProxy API Key",
+			prompt: "Enter your OAIProxy API key",
 			ignoreFocusOut: true,
 			password: true,
 		});

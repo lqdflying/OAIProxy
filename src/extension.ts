@@ -8,7 +8,7 @@ import { normalizeUserModels } from "./utils";
 import { abortCommitGeneration, generateCommitMsg } from "./gitCommit/commitMessageGenerator";
 import { TokenizerManager } from "./tokenizer/tokenizerManager";
 
-const LANGUAGE_MODEL_VENDOR = "oaicopilot";
+const LANGUAGE_MODEL_VENDOR = "oaiproxy";
 
 export function activate(context: vscode.ExtensionContext) {
 	// Initialize logger
@@ -20,18 +20,18 @@ export function activate(context: vscode.ExtensionContext) {
 	const tokenCountStatusBarItem: vscode.StatusBarItem = initStatusBar(context);
 	const provider = new HuggingFaceChatModelProvider(context.secrets, tokenCountStatusBarItem);
 	context.subscriptions.push(provider);
-	// Register the Hugging Face provider under the vendor id used in package.json
+	// Register the provider under the vendor id used in package.json.
 	context.subscriptions.push(vscode.lm.registerLanguageModelChatProvider(LANGUAGE_MODEL_VENDOR, provider));
 	refreshLanguageModels(provider);
 	scheduleLanguageModelWarmup(context);
 
 	// Management command to configure API key
 	context.subscriptions.push(
-		vscode.commands.registerCommand("oaicopilot.setApikey", async () => {
+		vscode.commands.registerCommand("oaiproxy.setApikey", async () => {
 			const existing = await context.secrets.get("oaicopilot.apiKey");
 			const apiKey = await vscode.window.showInputBox({
-				title: "OAI Compatible Provider API Key",
-				prompt: existing ? "Update your OAI Compatible API key" : "Enter your OAI Compatible API key",
+				title: "OAIProxy API Key",
+				prompt: existing ? "Update your OAIProxy API key" : "Enter your OAIProxy API key",
 				ignoreFocusOut: true,
 				password: true,
 				value: existing ?? "",
@@ -42,18 +42,18 @@ export function activate(context: vscode.ExtensionContext) {
 			if (!apiKey.trim()) {
 				await context.secrets.delete("oaicopilot.apiKey");
 				refreshLanguageModels(provider);
-				vscode.window.showInformationMessage("OAI Compatible API key cleared.");
+				vscode.window.showInformationMessage("OAIProxy API key cleared.");
 				return;
 			}
 			await context.secrets.store("oaicopilot.apiKey", apiKey.trim());
 			refreshLanguageModels(provider);
-			vscode.window.showInformationMessage("OAI Compatible API key saved.");
+			vscode.window.showInformationMessage("OAIProxy API key saved.");
 		})
 	);
 
 	// Management command to configure provider-specific API keys
 	context.subscriptions.push(
-		vscode.commands.registerCommand("oaicopilot.setProviderApikey", async () => {
+		vscode.commands.registerCommand("oaiproxy.setProviderApikey", async () => {
 			// Get provider list from configuration
 			const config = vscode.workspace.getConfiguration();
 			const userModels = normalizeUserModels(config.get<HFModelItem[]>("oaicopilot.models", []));
@@ -86,7 +86,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 			// Prompt for API key
 			const apiKey = await vscode.window.showInputBox({
-				title: `OAI Compatible API Key for ${selectedProvider}`,
+				title: `OAIProxy API Key for ${selectedProvider}`,
 				prompt: existing ? `Update API key for ${selectedProvider}` : `Enter API key for ${selectedProvider}`,
 				ignoreFocusOut: true,
 				password: true,
@@ -111,17 +111,17 @@ export function activate(context: vscode.ExtensionContext) {
 	);
 
 	context.subscriptions.push(
-		vscode.commands.registerCommand("oaicopilot.openConfig", async () => {
+		vscode.commands.registerCommand("oaiproxy.openConfig", async () => {
 			ConfigViewPanel.openPanel(context.extensionUri, context.secrets);
 		})
 	);
 
 	// Register the generateGitCommitMessage command handler
 	context.subscriptions.push(
-		vscode.commands.registerCommand("oaicopilot.generateGitCommitMessage", async (scm) => {
+		vscode.commands.registerCommand("oaiproxy.generateGitCommitMessage", async (scm) => {
 			generateCommitMsg(context.secrets, scm);
 		}),
-		vscode.commands.registerCommand("oaicopilot.abortGitCommitMessage", () => {
+		vscode.commands.registerCommand("oaiproxy.abortGitCommitMessage", () => {
 			abortCommitGeneration();
 		})
 	);

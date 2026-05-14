@@ -148,7 +148,7 @@ async function performCommitMsgGeneration(secrets: vscode.SecretStorage, gitDiff
 	const startTime = Date.now();
 	let modelId: string | undefined;
 	try {
-		vscode.commands.executeCommand("setContext", "oaicopilot.isGeneratingCommit", true);
+		vscode.commands.executeCommand("setContext", "oaiproxy.isGeneratingCommit", true);
 		const config = vscode.workspace.getConfiguration();
 
 		// Get custom prompts or use defaults
@@ -190,7 +190,7 @@ async function performCommitMsgGeneration(secrets: vscode.SecretStorage, gitDiff
 		// Get API key for the model's provider
 		const apiKey = await ensureApiKey(secrets, selectedModel.owned_by);
 		if (!apiKey) {
-			throw new Error("OAI Compatible API key not found");
+			throw new Error("OAIProxy API key not found");
 		}
 
 		// Get base URL for the model
@@ -247,13 +247,13 @@ async function performCommitMsgGeneration(secrets: vscode.SecretStorage, gitDiff
 		logger.error("commit.error", { modelId: modelId ?? "unknown", error: errorMessage });
 		vscode.window.showErrorMessage(`Failed to generate commit message: ${errorMessage}`);
 	} finally {
-		vscode.commands.executeCommand("setContext", "oaicopilot.isGeneratingCommit", false);
+		vscode.commands.executeCommand("setContext", "oaiproxy.isGeneratingCommit", false);
 	}
 }
 
 export function abortCommitGeneration() {
 	commitGenerationAbortController?.abort();
-	vscode.commands.executeCommand("setContext", "oaicopilot.isGeneratingCommit", false);
+	vscode.commands.executeCommand("setContext", "oaiproxy.isGeneratingCommit", false);
 }
 
 /**
