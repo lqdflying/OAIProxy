@@ -9,6 +9,20 @@ import { normalizeUserModels } from "../utils";
 import { logger } from "../logger";
 import type { HFModelItem } from "../types";
 
+interface GitInputBox {
+	value: string;
+}
+
+interface GitRepository {
+	rootUri: vscode.Uri;
+	inputBox: GitInputBox;
+}
+
+interface GitAPI {
+	repositories: GitRepository[];
+	getRepository(uri: vscode.Uri): GitRepository | null;
+}
+
 /**
  * Git commit message generator module
  */
@@ -28,13 +42,16 @@ export async function generateCommitMsg(secrets: vscode.SecretStorage, scm?: vsc
 			throw new Error("Git extension not found");
 		}
 
-		const git = gitExtension.getAPI(1);
+		const git: GitAPI = gitExtension.getAPI(1);
 		if (git.repositories.length === 0) {
 			throw new Error("No Git repositories available");
 		}
 
 		// If scm is provided, then the user specified one repository by clicking the "Source Control" menu button
 		if (scm) {
+			if (!scm.rootUri) {
+				throw new Error("Source control has no root URI");
+			}
 			const repository = git.getRepository(scm.rootUri);
 
 			if (!repository) {
@@ -52,7 +69,7 @@ export async function generateCommitMsg(secrets: vscode.SecretStorage, scm?: vsc
 	}
 }
 
-async function orchestrateWorkspaceCommitMsgGeneration(secrets: vscode.SecretStorage, repos: any[]) {
+async function orchestrateWorkspaceCommitMsgGeneration(secrets: vscode.SecretStorage, repos: GitRepository[]) {
 	const reposWithChanges = await filterForReposWithChanges(repos);
 
 	if (reposWithChanges.length === 0) {
@@ -89,7 +106,7 @@ async function orchestrateWorkspaceCommitMsgGeneration(secrets: vscode.SecretSto
 	}
 }
 
-async function filterForReposWithChanges(repos: any[]) {
+async function filterForReposWithChanges(repos: GitRepository[]) {
 	const reposWithChanges = [];
 
 	// Check which repositories have changes
@@ -106,9 +123,9 @@ async function filterForReposWithChanges(repos: any[]) {
 	return reposWithChanges;
 }
 
-async function promptRepoSelection(repos: any[]) {
+async function promptRepoSelection(repos: GitRepository[]) {
 	// Multiple repos with changes - ask user to choose
-	const repoItems = repos.map((repo) => ({
+	const repoItems: { label: string; description: string; repo: GitRepository | null }[] = repos.map((repo) => ({
 		label: repo.rootUri.fsPath.split(path.sep).pop() || repo.rootUri.fsPath,
 		description: repo.rootUri.fsPath,
 		repo: repo,
@@ -117,7 +134,7 @@ async function promptRepoSelection(repos: any[]) {
 	repoItems.unshift({
 		label: "$(git-commit) Generate for all repositories with changes",
 		description: `Generate commit messages for ${repos.length} repositories`,
-		repo: null as any,
+		repo: null,
 	});
 
 	return await vscode.window.showQuickPick(repoItems, {
@@ -125,7 +142,7 @@ async function promptRepoSelection(repos: any[]) {
 	});
 }
 
-async function generateCommitMsgForRepository(secrets: vscode.SecretStorage, repository: any) {
+async function generateCommitMsgForRepository(secrets: vscode.SecretStorage, repository: GitRepository) {
 	const inputBox = repository.inputBox;
 	const repoPath = repository.rootUri.fsPath;
 	const gitDiff = await getGitDiff(repoPath);
@@ -144,7 +161,7 @@ async function generateCommitMsgForRepository(secrets: vscode.SecretStorage, rep
 	);
 }
 
-async function performCommitMsgGeneration(secrets: vscode.SecretStorage, gitDiff: string, inputBox: any) {
+async function performCommitMsgGeneration(secrets: vscode.SecretStorage, gitDiff: string, inputBox: GitInputBox) {
 	const startTime = Date.now();
 	let modelId: string | undefined;
 	try {

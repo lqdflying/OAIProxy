@@ -259,11 +259,11 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 
 		// Process regular content
 		if (message.content) {
-			// If we have thinking content and now receiving regular content, end thinking first
-			this.reportEndThinking(progress);
-
-			// Emit text content
-			progress.report(new vscode.LanguageModelTextPart(message.content));
+			const xmlRes = this.processXmlThinkBlocks(message.content, progress);
+			if (!xmlRes.emittedAny) {
+				this.reportEndThinking(progress);
+				progress.report(new vscode.LanguageModelTextPart(message.content));
+			}
 		}
 	}
 

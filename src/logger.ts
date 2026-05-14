@@ -1,4 +1,5 @@
 import * as fs from "fs";
+import * as fsp from "fs/promises";
 import * as path from "path";
 import * as os from "os";
 import * as vscode from "vscode";
@@ -14,6 +15,7 @@ const LOG_LEVEL_PRIORITY: Record<LogLevel, number> = {
 };
 
 const LOG_RETENTION_DAYS = 7;
+const LOG_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const SENSITIVE_HEADER_KEYS = ["Authorization", "x-api-key", "x-goog-api-key"];
 
 class Logger {
@@ -21,6 +23,7 @@ class Logger {
 	private _logDir = "";
 	private _initialized = false;
 	private _outputChannel: vscode.OutputChannel | undefined;
+	private _lastCleanupTime = 0;
 
 	/**
 	 * Initialize the logger: read config, ensure log directory exists.
@@ -164,44 +167,43 @@ class Logger {
 		const line = JSON.stringify(logEntry) + "\n";
 		const filePath = this.getLogFilePath();
 
-		try {
-			fs.appendFileSync(filePath, line, "utf8");
-			this.cleanOldLogs();
-		} catch (e) {
+		fsp.appendFile(filePath, line, "utf8").catch((e) => {
 			console.error("[OAIProxy Logger] Failed to write log:", e);
+		});
+
+		const now = Date.now();
+		if (now - this._lastCleanupTime > LOG_CLEANUP_INTERVAL_MS) {
+			this._lastCleanupTime = now;
+			this.cleanOldLogs();
 		}
 	}
 
 	private cleanOldLogs(): void {
-		try {
-			if (!fs.existsSync(this._logDir)) {
-				return;
-			}
-
-			const files = fs.readdirSync(this._logDir);
+		fsp.readdir(this._logDir).then((files) => {
 			const now = new Date();
 			const cutoffTime = now.getTime() - LOG_RETENTION_DAYS * 24 * 60 * 60 * 1000;
 
 			for (const file of files) {
-				// Extract date from filename: oaiproxy-YYYYMMDD.log
 				const match = file.match(/^oaiproxy-(\d{4})(\d{2})(\d{2})\.log$/);
 				if (!match) {
 					continue;
 				}
 
 				const year = parseInt(match[1], 10);
-				const month = parseInt(match[2], 10) - 1; // JS months are 0-indexed
+				const month = parseInt(match[2], 10) - 1;
 				const day = parseInt(match[3], 10);
 				const fileDate = new Date(year, month, day);
 
 				if (fileDate.getTime() < cutoffTime) {
 					const filePath = path.join(this._logDir, file);
-					fs.unlinkSync(filePath);
+					fsp.unlink(filePath).catch((e) => {
+						console.error("[OAIProxy Logger] Failed to delete old log:", e);
+					});
 				}
 			}
-		} catch (e) {
+		}).catch((e) => {
 			console.error("[OAIProxy Logger] Failed to clean old logs:", e);
-		}
+		});
 	}
 }
 

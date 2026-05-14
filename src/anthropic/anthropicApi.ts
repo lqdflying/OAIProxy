@@ -155,10 +155,8 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		um: HFModelItem | undefined,
 		options?: ProvideLanguageModelChatResponseOptions
 	): AnthropicRequestBody {
-		// Set max_tokens (required for Anthropic)
-		if (um?.max_tokens !== undefined) {
-			rb.max_tokens = um.max_tokens;
-		}
+		// max_tokens is required for Anthropic API
+		rb.max_tokens = um?.max_tokens ?? rb.max_tokens ?? 4096;
 
 		// Add system content if we extracted it
 		if (this._systemContent) {
@@ -403,7 +401,7 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		};
 		requestBody = this.prepareRequestBody(requestBody, model, undefined);
 
-		const headers = CommonApi.prepareHeaders(apiKey, model.apiMode ?? "openai", model.headers);
+		const headers = CommonApi.prepareHeaders(apiKey, model.apiMode ?? "anthropic", model.headers);
 
 		const normalizedBaseUrl = baseUrl.replace(/\/+$/, "");
 		// Some providers require configuring the baseUrl with a version suffix (e.g. .../v1).

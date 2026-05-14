@@ -63,13 +63,11 @@ export async function textTokenLength(text: string): Promise<number> {
 	try {
 		return tokenizerManager.countTokens(text);
 	} catch (err) {
-		// Returning 0 silently produces wildly wrong status-bar counts and budget math,
-		// so leave a breadcrumb when the tokenizer falls over.
 		logger.debug("tokenizer.error", {
 			errorMessage: err instanceof Error ? err.message : String(err),
 			textLength: text.length,
 		});
-		return 0;
+		return Math.ceil(text.length / 4);
 	}
 }
 

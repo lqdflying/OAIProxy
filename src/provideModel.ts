@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { CancellationToken, LanguageModelChatInformation } from "vscode";
 
 import type { HFApiMode, HFModelItem, HFModelsResponse } from "./types";
-import { normalizeUserModels } from "./utils";
+import { normalizeUserModels, getStringConfiguration } from "./utils";
 import { VersionManager } from "./versionManager";
 import { fetchGeminiModels } from "./gemini/geminiApi";
 import { fetchOllamaModels } from "./ollama/ollamaApi";
@@ -172,19 +172,6 @@ function createModelConfigurationSchema(
 
 function formatReasoningEffortLabel(value: string): string {
 	return value.length > 0 ? `${value[0].toUpperCase()}${value.slice(1)}` : value;
-}
-
-function getStringConfiguration(configuration: Readonly<Record<string, unknown>> | undefined, ...keys: string[]) {
-	if (!configuration) {
-		return undefined;
-	}
-	for (const key of keys) {
-		const value = configuration[key];
-		if (typeof value === "string" && value.trim() !== "") {
-			return value.trim();
-		}
-	}
-	return undefined;
 }
 
 /**

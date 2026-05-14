@@ -13,7 +13,7 @@ import type { HFModelItem } from "./types";
 
 import type { OllamaRequestBody } from "./ollama/ollamaTypes";
 
-import { parseModelId, createRetryConfig, executeWithRetry, normalizeUserModels } from "./utils";
+import { parseModelId, createRetryConfig, executeWithRetry, normalizeUserModels, getStringConfiguration } from "./utils";
 
 import { prepareLanguageModelChatInformation } from "./provideModel";
 import { countMessageTokens } from "./provideToken";
@@ -635,19 +635,6 @@ function applyModelConfiguration(
 	}
 
 	return next;
-}
-
-function getStringConfiguration(
-	configuration: Readonly<Record<string, unknown>>,
-	...keys: string[]
-): string | undefined {
-	for (const key of keys) {
-		const value = configuration[key];
-		if (typeof value === "string" && value.trim() !== "") {
-			return value.trim();
-		}
-	}
-	return undefined;
 }
 
 function waitForDelayOrCancellation(delayMs: number, token: CancellationToken): Promise<void> {

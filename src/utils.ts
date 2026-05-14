@@ -54,10 +54,30 @@ export function normalizeUserModels(models: unknown): HFModelItem[] {
 		if (!item || typeof item !== "object") {
 			continue;
 		}
+		const obj = item as Record<string, unknown>;
+		if (typeof obj.id !== "string" || !obj.id.trim()) {
+			continue;
+		}
 		const provider = getModelProviderId(item);
 		out.push({ ...(item as HFModelItem), owned_by: provider });
 	}
 	return out;
+}
+
+export function getStringConfiguration(
+	configuration: Readonly<Record<string, unknown>> | undefined,
+	...keys: string[]
+): string | undefined {
+	if (!configuration) {
+		return undefined;
+	}
+	for (const key of keys) {
+		const value = configuration[key];
+		if (typeof value === "string" && value.trim() !== "") {
+			return value.trim();
+		}
+	}
+	return undefined;
 }
 
 /**
@@ -294,7 +314,7 @@ export async function executeWithRetry<T>(fn: () => Promise<T>, retryConfig: Ret
 		: RETRYABLE_STATUS_CODES;
 	let lastError: Error | undefined;
 
-	for (let attempt = 0; attempt <= maxAttempts; attempt++) {
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
 		try {
 			return await fn();
 		} catch (error) {
@@ -306,7 +326,7 @@ export async function executeWithRetry<T>(fn: () => Promise<T>, retryConfig: Ret
 			const isRetryableNetworkError = networkErrorPatterns.some((pattern) => lastError?.message.includes(pattern));
 			const isRetryableError = isRetryableStatusError || isRetryableNetworkError;
 
-			if (!isRetryableError || attempt === maxAttempts) {
+			if (!isRetryableError || attempt === maxAttempts - 1) {
 				throw lastError;
 			}
 

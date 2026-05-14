@@ -36,7 +36,6 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 
 	// XML think block parsing state
 	protected _xmlThinkActive = false;
-	protected _xmlThinkDetectionAttempted = false;
 
 	// Thinking content state management
 	protected _currentThinkingId: string | null = null;
@@ -335,33 +334,28 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 		input: string,
 		progress: Progress<LanguageModelResponsePart2>
 	): { emittedAny: boolean } {
-		// If we've already attempted detection and found no THINK_START, skip processing
-		if (this._xmlThinkDetectionAttempted && !this._xmlThinkActive) {
-			return { emittedAny: false };
-		}
-
 		const THINK_START = "<think>";
 		const THINK_END = "</think>";
+
+		// Fast path: if we're not inside a think block and the chunk has no start tag, skip
+		if (!this._xmlThinkActive && !input.includes(THINK_START)) {
+			return { emittedAny: false };
+		}
 
 		let data = input;
 		let emittedAny = false;
 
 		while (data.length > 0) {
 			if (!this._xmlThinkActive) {
-				// Look for think start tag
 				const startIdx = data.indexOf(THINK_START);
 				if (startIdx === -1) {
-					// No think start found, mark detection as attempted and skip future processing
-					this._xmlThinkDetectionAttempted = true;
 					data = "";
 					break;
 				}
 
-				// Found think start tag - mark that we processed XML tags
 				emittedAny = true;
 				this._xmlThinkActive = true;
 
-				// Skip the start tag and continue processing
 				data = data.slice(startIdx + THINK_START.length);
 				continue;
 			}
