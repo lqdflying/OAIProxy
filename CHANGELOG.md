@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.0.6 (2026-05-14)
+
+- Update packaged MIT license copyright attribution for OAIProxy.
+
 ## 0.0.2 (2026-05-14)
 
 - Log extension lifecycle events to the OAIProxy VS Code Output channel on install, update, and activation.

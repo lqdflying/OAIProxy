@@ -485,4 +485,5 @@ Thanks to all the people who contribute.
 
 ## Support & License
 - Open issues: https://github.com/lqdflying/OAIProxy/issues
-- License: MIT. Original upstream copyright (c) 2025 Johnny Zhao; OAIProxy changes copyright (c) 2026 lqdflying.
+- License: MIT.
+- Original upstream copyright (c) 2025 Johnny Zhao; OAIProxy changes copyright (c) 2026 lqdflying.
