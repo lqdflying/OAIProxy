@@ -463,6 +463,18 @@ All parameters support individual configuration for different models, providing 
 - `delay`: Model-specific delay in milliseconds between consecutive requests. If not specified, falls back to global `oaicopilot.delay` configuration.
 - `useForCommitGeneration`: Whether to be used for Git commit message generation. Not supports gemini apiMode.
 
+## Logging
+
+OAIProxy always writes extension lifecycle events to the VS Code Output panel. Open `Output: Show Output` and select `OAIProxy`.
+
+For request/debug logs, add this to VS Code User Settings JSON:
+
+```json
+"oaicopilot.logLevel": "debug"
+```
+
+Valid values are `off`, `debug`, `info`, `warn`, and `error`. File logs are written to `~/.copilot/oaiproxy/logs/`.
+
 ## Thanks to
 
 Thanks to all the people who contribute.

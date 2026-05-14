@@ -463,6 +463,18 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 - `delay`：连续请求之间的模型专属延迟（毫秒）。未指定时回退到全局 `oaicopilot.delay` 配置。
 - `useForCommitGeneration`：是否用于 Git 提交信息生成。不支持 gemini apiMode。
 
+## 日志
+
+OAIProxy 会始终把扩展生命周期事件写入 VS Code Output 面板。打开 `Output: Show Output`，然后选择 `OAIProxy`。
+
+如需请求和调试日志，在 VS Code 用户 Settings JSON 中添加：
+
+```json
+"oaicopilot.logLevel": "debug"
+```
+
+可选值为 `off`、`debug`、`info`、`warn`、`error`。文件日志写入 `~/.copilot/oaiproxy/logs/`。
+
 ## 致谢
 
 感谢所有贡献者。
