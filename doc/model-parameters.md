@@ -10,7 +10,7 @@ All parameters support individual configuration for different models, providing 
 | `owned_by` | yes | `string` | — | Model provider (alias: `provider`, `provide`) |
 | `displayName` | no | `string` | — | Display name shown in the Copilot interface |
 | `configId` | no | `string` | — | Configuration ID for multi-config setups (e.g. `glm-4.6::thinking`) |
-| `family` | no | `string` | `oai-compatible` | Model family for system prompt selection |
+| `family` | no | `string` | `OAIProxy` | Model family for system prompt selection |
 | `baseUrl` | no | `string` | global `oaicopilot.baseUrl` | Model-specific base URL |
 | `context_length` | no | `number` | `128000` | Context length supported by the model |
 | `max_tokens` | no | `number` | `4096` | Max tokens to generate (range: [1, context_length]) |

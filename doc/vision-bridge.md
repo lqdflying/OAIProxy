@@ -1,6 +1,8 @@
 # Vision Bridge
 
-OAIProxy can automatically describe images for text-only models. When a model has `"vision": false` (the default), any images in chat messages are automatically sent to a separately configured vision-capable model first, and the resulting text description is forwarded in place of the image.
+OAIProxy can automatically describe images for text-only models. When a model has `"vision": false` set explicitly, any images in chat messages are automatically sent to a separately configured vision-capable model first, and the resulting text description is forwarded in place of the image.
+
+> **Note**: You must explicitly set `"vision": false` to enable the bridge. Omitting the `vision` field will not trigger the bridge.
 
 This means you can use images with models that don't natively support vision — useful when your preferred coding model lacks vision capabilities but you still want to share screenshots or diagrams.
 

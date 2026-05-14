@@ -10,7 +10,7 @@
 | `owned_by` | 是 | `string` | — | 模型供应商（别名：`provider`、`provide`） |
 | `displayName` | 否 | `string` | — | 在 Copilot 界面中显示的名称 |
 | `configId` | 否 | `string` | — | 多配置场景的配置 ID（如 `glm-4.6::thinking`） |
-| `family` | 否 | `string` | `oai-compatible` | 模型家族，用于系统提示词选择 |
+| `family` | 否 | `string` | `OAIProxy` | 模型家族，用于系统提示词选择 |
 | `baseUrl` | 否 | `string` | 全局 `oaicopilot.baseUrl` | 模型专属 Base URL |
 | `context_length` | 否 | `number` | `128000` | 模型支持的上下文长度 |
 | `max_tokens` | 否 | `number` | `4096` | 最大生成 token 数（范围：[1, context_length]） |
