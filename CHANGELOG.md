@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.0.2 (2026-05-14)
+
+- Log extension lifecycle events to the OAIProxy VS Code Output channel on install, update, and activation.
+
 ## 0.0.1 (2026-05-14)
 
 - Rebrand extension identity to OAIProxy (`lqdflying.oaiproxy`) with `oaiproxy` language model provider and command IDs.
