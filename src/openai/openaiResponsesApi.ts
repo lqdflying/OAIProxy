@@ -432,7 +432,6 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			// Output text delta events
 			case "response.output_text.delta":
 			case "response.refusal.delta": {
-				this._hasEmittedText = false;
 				const delta = this.coerceText(event.delta);
 				this.processOutputTextChunk(delta, progress);
 				return;
