@@ -20,15 +20,23 @@ class Logger {
 	private _level: LogLevel = "off";
 	private _logDir = "";
 	private _initialized = false;
+	private _outputChannel: vscode.OutputChannel | undefined;
 
 	/**
 	 * Initialize the logger: read config, ensure log directory exists.
 	 */
 	init(): void {
 		this._logDir = path.join(os.homedir(), ".copilot", "oaiproxy", "logs");
+		this._outputChannel ??= vscode.window.createOutputChannel("OAIProxy");
 		this.reloadConfig();
 		this.ensureLogDir();
 		this._initialized = true;
+	}
+
+	dispose(): void {
+		this._outputChannel?.dispose();
+		this._outputChannel = undefined;
+		this._initialized = false;
 	}
 
 	/**
@@ -65,6 +73,18 @@ class Logger {
 			return;
 		}
 		this.write("error", tag, data);
+	}
+
+	lifecycle(tag: string, data: Record<string, unknown>): void {
+		if (!this._initialized) {
+			return;
+		}
+
+		const sanitizedData = this.sanitizeData(data);
+		this.writeOutput("info", tag, sanitizedData);
+		if (this._level !== "off" && LOG_LEVEL_PRIORITY[this._level] <= LOG_LEVEL_PRIORITY.info) {
+			this.writeFile("info", tag, sanitizedData);
+		}
 	}
 
 	/**
@@ -125,11 +145,20 @@ class Logger {
 		}
 
 		const sanitizedData = this.sanitizeData(data);
+		this.writeOutput(level, tag, sanitizedData);
+		this.writeFile(level, tag, sanitizedData);
+	}
+
+	private writeOutput(level: string, tag: string, data: Record<string, unknown>): void {
+		this._outputChannel?.appendLine(`[${new Date().toISOString()}] ${level.toUpperCase()} ${tag} ${JSON.stringify(data)}`);
+	}
+
+	private writeFile(level: string, tag: string, data: Record<string, unknown>): void {
 		const logEntry = {
 			ts: new Date().toISOString(),
 			level,
 			tag,
-			data: sanitizedData,
+			data,
 		};
 
 		const line = JSON.stringify(logEntry) + "\n";

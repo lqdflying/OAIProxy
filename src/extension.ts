@@ -7,12 +7,16 @@ import { logger } from "./logger";
 import { normalizeUserModels } from "./utils";
 import { abortCommitGeneration, generateCommitMsg } from "./gitCommit/commitMessageGenerator";
 import { TokenizerManager } from "./tokenizer/tokenizerManager";
+import { VersionManager } from "./versionManager";
 
 const LANGUAGE_MODEL_VENDOR = "oaiproxy";
+const LAST_ACTIVATED_VERSION_KEY = "oaiproxy.lastActivatedVersion";
 
 export function activate(context: vscode.ExtensionContext) {
 	// Initialize logger
 	logger.init();
+	context.subscriptions.push({ dispose: () => logger.dispose() });
+	recordExtensionLifecycle(context);
 
 	// Initialize TokenizerManager with extension path
 	TokenizerManager.initialize(context.extensionPath);
@@ -140,6 +144,46 @@ export function activate(context: vscode.ExtensionContext) {
 }
 
 export function deactivate() {}
+
+function recordExtensionLifecycle(context: vscode.ExtensionContext): void {
+	const version = VersionManager.getVersion();
+	const previousVersion = context.globalState.get<string>(LAST_ACTIVATED_VERSION_KEY);
+	const event = previousVersion === undefined ? "install" : previousVersion === version ? "activate" : "update";
+
+	logger.lifecycle("extension.lifecycle", {
+		event,
+		extensionId: context.extension.id,
+		version,
+		previousVersion: previousVersion ?? null,
+		vscodeVersion: vscode.version,
+		extensionMode: getExtensionModeName(context.extensionMode),
+		uiKind: getUiKindName(vscode.env.uiKind),
+		language: vscode.env.language,
+	});
+
+	if (previousVersion !== version) {
+		void context.globalState.update(LAST_ACTIVATED_VERSION_KEY, version).then(undefined, (error) => {
+			logger.warn("extension.lifecycle.persist.failed", {
+				error: error instanceof Error ? error.message : String(error),
+			});
+		});
+	}
+}
+
+function getExtensionModeName(mode: vscode.ExtensionMode): string {
+	switch (mode) {
+		case vscode.ExtensionMode.Development:
+			return "development";
+		case vscode.ExtensionMode.Test:
+			return "test";
+		default:
+			return "production";
+	}
+}
+
+function getUiKindName(uiKind: vscode.UIKind): string {
+	return uiKind === vscode.UIKind.Web ? "web" : "desktop";
+}
 
 function refreshLanguageModels(provider: HuggingFaceChatModelProvider): void {
 	provider.refreshLanguageModelChatInformation();
