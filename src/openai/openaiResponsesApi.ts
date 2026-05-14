@@ -396,11 +396,13 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 		}
 		// Process XML think blocks or text content (mutually exclusive)
 		const xmlRes = this.processXmlThinkBlocks(text, progress);
+		if (xmlRes.emittedText) {
+			this._hasEmittedAssistantText = true;
+			this._hasEmittedText = true;
+		}
 		if (!xmlRes.emittedAny) {
-			// If there's an active thinking sequence, end it first
 			this.reportEndThinking(progress);
 
-			// Only process text content if no XML think blocks were emitted
 			const res = this.processTextContent(text, progress);
 			if (res.emittedAny) {
 				this._hasEmittedAssistantText = true;

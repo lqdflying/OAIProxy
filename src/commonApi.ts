@@ -333,17 +333,18 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 	protected processXmlThinkBlocks(
 		input: string,
 		progress: Progress<LanguageModelResponsePart2>
-	): { emittedAny: boolean } {
+	): { emittedAny: boolean; emittedText: boolean } {
 		const THINK_START = "<think>";
 		const THINK_END = "</think>";
 
 		// Fast path: if we're not inside a think block and the chunk has no start tag, skip
 		if (!this._xmlThinkActive && !input.includes(THINK_START)) {
-			return { emittedAny: false };
+			return { emittedAny: false, emittedText: false };
 		}
 
 		let data = input;
 		let emittedAny = false;
+		let emittedText = false;
 
 		while (data.length > 0) {
 			if (!this._xmlThinkActive) {
@@ -353,6 +354,7 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 					if (emittedAny) {
 						this.reportEndThinking(progress);
 						progress.report(new vscode.LanguageModelTextPart(data));
+						emittedText = true;
 					}
 					break;
 				}
@@ -361,6 +363,7 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 				if (startIdx > 0) {
 					this.reportEndThinking(progress);
 					progress.report(new vscode.LanguageModelTextPart(data.slice(0, startIdx)));
+					emittedText = true;
 				}
 
 				emittedAny = true;
@@ -387,6 +390,6 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 			data = data.slice(endIdx + THINK_END.length);
 		}
 
-		return { emittedAny };
+		return { emittedAny, emittedText };
 	}
 }
