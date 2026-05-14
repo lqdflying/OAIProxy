@@ -10,7 +10,6 @@
 
 </div>
 
-[![CI](https://github.com/lqdflying/OAIProxy/actions/workflows/release.yml/badge.svg)](https://github.com/lqdflying/OAIProxy/actions)
 [![License](https://img.shields.io/github/license/lqdflying/OAIProxy?color=orange&label=License)](https://github.com/lqdflying/OAIProxy/blob/main/LICENSE)
 
 ## ✨ 特性
