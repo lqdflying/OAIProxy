@@ -2,7 +2,7 @@
 	"name": "oaiproxy",
 	"publisher": "lqdflying",
 	"displayName": "OAIProxy",
-	"description": "A self-maintained OpenAI/Ollama/Anthropic/Gemini-compatible provider for GitHub Copilot Chat",
+	"description": "OpenAI/Ollama/Anthropic/Gemini provider for Copilot Chat, with Kimi, DeepSeek, and MiniMax presets",
 	"icon": "assets/icon.png",
 	"keywords": [
 		"ai",
@@ -12,6 +12,10 @@
 		"language-model",
 		"llm",
 		"openai",
+		"kimi",
+		"moonshot",
+		"deepseek",
+		"minimax",
 		"ollama",
 		"anthropic",
 		"claude",
@@ -154,15 +158,15 @@
 							},
 							"owned_by": {
 								"type": "string",
-								"description": "Model provider (e.g., 'zai', 'openai')."
+								"description": "Model provider (e.g., 'zai', 'openai', 'kimi', 'deepseek', 'minimax')."
 							},
 							"provider": {
 								"type": "string",
-								"description": "(Alias of owned_by) Model provider (e.g., 'zai', 'openai')."
+								"description": "(Alias of owned_by) Model provider (e.g., 'zai', 'openai', 'kimi', 'deepseek', 'minimax')."
 							},
 							"provide": {
 								"type": "string",
-								"description": "(Alias of owned_by) Model provider (e.g., 'zai', 'openai')."
+								"description": "(Alias of owned_by) Model provider (e.g., 'zai', 'openai', 'kimi', 'deepseek', 'minimax')."
 							},
 							"family": {
 								"type": "string",

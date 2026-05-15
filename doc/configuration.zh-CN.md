@@ -20,8 +20,9 @@
 
 1. **添加供应商**：
    - 在供应商管理中点击 "Add Provider"
-   - 输入供应商 ID："modelscope"
-   - 输入 Base URL："https://api-inference.modelscope.cn/v1"
+   - 可选：选择 "Kimi (Moonshot AI)"、"DeepSeek" 或 "MiniMax" 等预设
+   - 如果不使用预设，输入供应商 ID："modelscope"
+   - 手动供应商请输入 Base URL："https://api-inference.modelscope.cn/v1"
    - 输入 API Key：你的 ModelScope API 密钥
    - 选择 API 模式："openai"
    - 点击 "Save"
@@ -44,7 +45,7 @@
 ### 提示与最佳实践
 
 - **重要**：如果使用配置界面，全局 baseURL 和 API 密钥将失效。
-- **供应商 ID**：使用与服务匹配的描述性名称（如 "modelscope"、"iflow"、"anthropic"）
+- **供应商 ID**：使用与服务匹配的描述性名称（如 "modelscope"、"iflow"、"anthropic"、"kimi"、"deepseek"、"minimax"）
 - **模型 ID**：使用供应商文档中的确切模型标识符
 - **配置 ID**：多个配置使用有意义的名称，如 "thinking"、"no-thinking"、"fast"、"accurate"
 - **Base URL 覆盖**：当同一供应商的不同模型来自不同端点时，设置模型专属 Base URL
@@ -75,7 +76,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 1. **`openai`**（默认）- OpenAI Chat Completions API
    - 端点：`/chat/completions`
    - 请求头：`Authorization: Bearer <apiKey>`
-   - 适用：大多数 OpenAI 兼容供应商（ModelScope、SiliconFlow 等）
+   - 适用：大多数 OpenAI 兼容供应商（Kimi、DeepSeek、MiniMax、ModelScope、SiliconFlow 等）
 
 2. **`openai-responses`** - OpenAI Responses API
    - 端点：`/responses`
@@ -125,6 +126,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 ### 重要说明
 
 - 未指定 `apiMode` 时默认为 `"openai"`。
+- Kimi、DeepSeek 和 MiniMax 通过其 OpenAI 兼容的 Chat Completions API 使用 `apiMode: "openai"`。
 - 使用 `ollama` 模式时，OAIProxy 仍需要保存一个 API Key 值。如果本地 Ollama 不需要认证，请使用 `ollama` 作为占位值，这样不会发送 `Authorization` 请求头；其他任意值都会作为 bearer token 发送。
 - 每种 API 模式内部使用不同的消息转换逻辑，以匹配各自供应商的格式（工具、图像、思维链）。
 
@@ -140,6 +142,16 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 4. 点击模型选择器，选择 "Manage Models..."。
 5. 选择 "OAIProxy" 供应商。
 6. 选择你想添加到模型选择器中的模型。
+
+### 供应商预设
+
+配置界面可以为 Kimi、DeepSeek 和 MiniMax 预填 OpenAI 兼容供应商设置。预设只填入供应商 ID、Base URL 和 API 模式；具体模型 ID 请另行按需添加。
+
+| 供应商 | 供应商 ID | Base URL | API 模式 |
+|---|---|---|---|
+| Kimi (Moonshot AI) | `kimi` | `https://api.moonshot.ai/v1` | `openai` |
+| DeepSeek | `deepseek` | `https://api.deepseek.com` | `openai` |
+| MiniMax | `minimax` | `https://api.minimax.io/v1` | `openai` |
 
 ### 配置示例
 
@@ -158,6 +170,12 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
         "baseUrl": "https://apis.iflow.cn/v1",
         "context_length": 256000,
         "max_tokens": 8192
+    },
+    {
+        "id": "deepseek-v4-pro",
+        "owned_by": "deepseek",
+        "baseUrl": "https://api.deepseek.com",
+        "apiMode": "openai"
     }
 ]
 ```

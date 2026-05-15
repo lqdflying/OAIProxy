@@ -4,7 +4,7 @@
 
 # OAIProxy
 
-**A self-maintained VS Code extension to use OpenAI/Ollama/Anthropic/Gemini API providers in GitHub Copilot Chat** 🔥
+**A self-maintained VS Code extension to use OpenAI/Ollama/Anthropic/Gemini API providers in GitHub Copilot Chat, with presets for Kimi, DeepSeek, and MiniMax** 🔥
 
 English | [简体中文](README.zh-CN.md)
 
@@ -13,7 +13,7 @@ English | [简体中文](README.zh-CN.md)
 [![License](https://img.shields.io/github/license/lqdflying/OAIProxy?color=orange&label=License)](https://github.com/lqdflying/OAIProxy/blob/main/LICENSE)
 
 ## Features
-- **Multi-API support**: OpenAI/Ollama/Anthropic/Gemini APIs (ModelScope, SiliconFlow, DeepSeek...)
+- **Multi-API support**: OpenAI/Ollama/Anthropic/Gemini APIs, with OpenAI-compatible presets for Kimi, DeepSeek, MiniMax, ModelScope, SiliconFlow, and more
 - **Vision models**: Full support for image understanding capabilities
 - **Vision Bridge**: Use images in chat with text-only models — OAIProxy automatically describes images via a configured vision model with LRU caching
 - **Think tag support**: Seamless display of model thinking/reasoning blocks across all providers (OpenAI, Ollama, Gemini, Anthropic)
@@ -63,11 +63,15 @@ English | [简体中文](README.zh-CN.md)
 
 The extension provides a visual configuration interface for managing providers, models, and API keys without editing JSON files manually. Open via the Command Palette (`OAIProxy: Open Configuration UI`) or click the OAIProxy status bar item.
 
+The Provider Management form includes presets for Kimi, DeepSeek, and MiniMax. Selecting a preset fills the provider ID, base URL, and `openai` API mode; you still choose the model ID from the provider's current documentation or model list.
+
 → [Full Configuration Guide](doc/configuration.md)
 
 ## Multi-API Mode
 
 Supports five API protocols: `openai` (Chat Completions), `openai-responses` (Responses), `ollama`, `anthropic`, and `gemini`. Specify per-model via the `apiMode` parameter.
+
+Kimi, DeepSeek, and MiniMax use the existing `openai` mode because their hosted APIs are OpenAI-compatible.
 
 → [Full Multi-API Guide](doc/configuration.md#multi-api-mode)
 

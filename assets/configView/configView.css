@@ -261,7 +261,8 @@ tr:hover {
 }
 
 .model-input,
-.provider-input {
+.provider-input,
+.provider-preset-select {
 	width: 100%;
 	padding: 6px 8px;
 	border: 1px solid var(--vscode-editorWidget-border);
@@ -271,8 +272,13 @@ tr:hover {
 	box-sizing: border-box;
 }
 
+.provider-preset-select {
+	margin-bottom: 6px;
+}
+
 .model-input:focus,
-.provider-input:focus {
+.provider-input:focus,
+.provider-preset-select:focus {
 	outline: 1px solid var(--vscode-focusBorder);
 }
 

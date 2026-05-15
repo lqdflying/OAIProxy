@@ -71,7 +71,7 @@ Zai 供应商的思维链配置：
 ### `apiMode`
 
 此模型使用的 API 协议：
-- `"openai"`（默认）：`/chat/completions`，使用 `Authorization: Bearer` 请求头
+- `"openai"`（默认）：`/chat/completions`，使用 `Authorization: Bearer` 请求头。适用于 Kimi、DeepSeek、MiniMax 等 OpenAI 兼容供应商。
 - `"openai-responses"`：`/responses`，使用 `Authorization: Bearer` 请求头
 - `"ollama"`：`/api/chat`，可选 `Authorization: Bearer` 请求头
 - `"anthropic"`：`/v1/messages`，使用 `x-api-key` 请求头

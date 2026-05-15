@@ -20,8 +20,9 @@ There are two ways to open the configuration interface:
 
 1. **Add a Provider**:
    - Click "Add Provider" in the Provider Management section
-   - Enter Provider ID: "modelscope"
-   - Enter Base URL: "https://api-inference.modelscope.cn/v1"
+   - Optionally choose a preset such as "Kimi (Moonshot AI)", "DeepSeek", or "MiniMax"
+   - If you do not use a preset, enter Provider ID: "modelscope"
+   - For a manual provider, enter Base URL: "https://api-inference.modelscope.cn/v1"
    - Enter API Key: Your ModelScope API key
    - Select API Mode: "openai"
    - Click "Save"
@@ -44,7 +45,7 @@ There are two ways to open the configuration interface:
 ### Tips & Best Practices
 
 - **Important**: If you use the configuration UI, the global baseURL and API key become invalid.
-- **Provider IDs**: Use descriptive names that match the service (e.g., "modelscope", "iflow", "anthropic")
+- **Provider IDs**: Use descriptive names that match the service (e.g., "modelscope", "iflow", "anthropic", "kimi", "deepseek", "minimax")
 - **Model IDs**: Use the exact model identifier from the provider's documentation
 - **Config IDs**: Use meaningful names like "thinking", "no-thinking", "fast", "accurate" for multiple configurations
 - **Base URL Overrides**: Set model-specific base URLs when using models from different endpoints of the same provider
@@ -75,7 +76,7 @@ The extension supports five different API protocols to work with various model p
 1. **`openai`** (default) - OpenAI Chat Completions API
    - Endpoint: `/chat/completions`
    - Header: `Authorization: Bearer <apiKey>`
-   - Use for: Most OpenAI-compatible providers (ModelScope, SiliconFlow, etc.)
+   - Use for: Most OpenAI-compatible providers (Kimi, DeepSeek, MiniMax, ModelScope, SiliconFlow, etc.)
 
 2. **`openai-responses`** - OpenAI Responses API
    - Endpoint: `/responses`
@@ -124,6 +125,7 @@ Mixed configuration with multiple API modes:
 
 ### Important Notes
 - The `apiMode` parameter defaults to `"openai"` if not specified.
+- Kimi, DeepSeek, and MiniMax use `apiMode: "openai"` through their OpenAI-compatible chat completions APIs.
 - When using `ollama` mode, OAIProxy still needs a stored API key value. Use `ollama` as a placeholder for local Ollama if you do not want an `Authorization` header to be sent; any other value is sent as a bearer token.
 - Each API mode uses different message conversion logic internally to match provider-specific formats (tools, images, thinking).
 
@@ -139,6 +141,16 @@ Mixed configuration with multiple API modes:
 4. Click the model picker and select "Manage Models...".
 5. Choose "OAIProxy" provider.
 6. Select the models you want to add to the model picker.
+
+### Provider Presets
+
+The configuration UI can prefill OpenAI-compatible provider settings for Kimi, DeepSeek, and MiniMax. Presets fill only the provider ID, base URL, and API mode; add the exact model IDs you want to use separately.
+
+| Provider | Provider ID | Base URL | API Mode |
+|---|---|---|---|
+| Kimi (Moonshot AI) | `kimi` | `https://api.moonshot.ai/v1` | `openai` |
+| DeepSeek | `deepseek` | `https://api.deepseek.com` | `openai` |
+| MiniMax | `minimax` | `https://api.minimax.io/v1` | `openai` |
 
 ### Settings Example
 
@@ -157,6 +169,12 @@ Mixed configuration with multiple API modes:
         "baseUrl": "https://apis.iflow.cn/v1",
         "context_length": 256000,
         "max_tokens": 8192
+    },
+    {
+        "id": "deepseek-v4-pro",
+        "owned_by": "deepseek",
+        "baseUrl": "https://api.deepseek.com",
+        "apiMode": "openai"
     }
 ]
 ```

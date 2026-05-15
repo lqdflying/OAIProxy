@@ -71,7 +71,7 @@ Default Thinking Effort value pre-selected in the model picker. If not set, `rea
 ### `apiMode`
 
 API protocol to use for this model:
-- `"openai"` (default): `/chat/completions` with `Authorization: Bearer` header
+- `"openai"` (default): `/chat/completions` with `Authorization: Bearer` header. Use this for OpenAI-compatible providers such as Kimi, DeepSeek, and MiniMax.
 - `"openai-responses"`: `/responses` with `Authorization: Bearer` header
 - `"ollama"`: `/api/chat` with optional `Authorization: Bearer` header
 - `"anthropic"`: `/v1/messages` with `x-api-key` header

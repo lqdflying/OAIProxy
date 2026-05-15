@@ -4,7 +4,7 @@
 
 # OAIProxy
 
-**自维护的 VS Code 扩展，用于在 GitHub Copilot Chat 中使用 OpenAI/Ollama/Anthropic/Gemini API 兼容供应商** 🔥
+**自维护的 VS Code 扩展，用于在 GitHub Copilot Chat 中使用 OpenAI/Ollama/Anthropic/Gemini API 兼容供应商，并内置 Kimi、DeepSeek、MiniMax 预设** 🔥
 
 [English](README.md) | 简体中文
 
@@ -13,7 +13,7 @@
 [![License](https://img.shields.io/github/license/lqdflying/OAIProxy?color=orange&label=License)](https://github.com/lqdflying/OAIProxy/blob/main/LICENSE)
 
 ## 特性
-- **多 API 支持**：OpenAI/Ollama/Anthropic/Gemini API（ModelScope、SiliconFlow、DeepSeek 等）
+- **多 API 支持**：OpenAI/Ollama/Anthropic/Gemini API，并内置 Kimi、DeepSeek、MiniMax、ModelScope、SiliconFlow 等 OpenAI 兼容供应商预设
 - **视觉模型**：完整支持图像理解能力
 - **视觉桥接**：在纯文本模型中使用图像 — OAIProxy 通过配置的视觉模型自动描述图像，并采用 LRU 缓存
 - **思维链标签支持**：在所有供应商（OpenAI、Ollama、Gemini、Anthropic）中无缝显示模型思维/推理模块
@@ -63,11 +63,15 @@
 
 本扩展提供可视化配置界面，用于管理供应商、模型和 API 密钥，无需手动编辑 JSON 文件。可通过命令面板（`OAIProxy: Open Configuration UI`）打开，或点击 OAIProxy 状态栏项。
 
+供应商管理表单内置 Kimi、DeepSeek、MiniMax 预设。选择预设会填入供应商 ID、Base URL 和 `openai` API 模式；模型 ID 仍以供应商当前文档或模型列表为准。
+
 → [完整配置指南](doc/configuration.zh-CN.md)
 
 ## 多 API 模式
 
 支持五种 API 协议：`openai`（Chat Completions）、`openai-responses`（Responses）、`ollama`、`anthropic` 和 `gemini`。通过 `apiMode` 参数为每个模型指定。
+
+Kimi、DeepSeek 和 MiniMax 使用现有 `openai` 模式，因为它们的托管 API 与 OpenAI 格式兼容。
 
 → [完整多 API 指南](doc/configuration.zh-CN.md#多-api-模式)
 

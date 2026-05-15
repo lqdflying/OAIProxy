@@ -4,6 +4,7 @@ import type { HFApiMode, HFModelItem } from "../types";
 import { normalizeUserModels, parseModelId } from "../utils";
 import { fetchModels } from "../provideModel";
 import { VersionManager } from "../versionManager";
+import { PROVIDER_PRESETS, type ProviderPreset } from "../providerPresets";
 
 interface InitPayload {
 	baseUrl: string;
@@ -20,6 +21,7 @@ interface InitPayload {
 	commitLanguage: string;
 	models: HFModelItem[];
 	providerKeys: Record<string, string>;
+	providerPresets: readonly ProviderPreset[];
 }
 
 interface ExportConfig {
@@ -295,6 +297,7 @@ export class ConfigViewPanel {
 			commitLanguage,
 			models,
 			providerKeys,
+			providerPresets: PROVIDER_PRESETS,
 		};
 		this.panel.webview.postMessage({ type: "init", payload });
 	}
@@ -330,7 +333,8 @@ export class ConfigViewPanel {
 				if (fullModelId === commitModel) {
 					return { ...model, useForCommitGeneration: true };
 				} else {
-					const { useForCommitGeneration: _useForCommitGeneration, ...rest } = model;
+					const rest = { ...model };
+					delete rest.useForCommitGeneration;
 					return rest;
 				}
 			});
@@ -449,7 +453,8 @@ export class ConfigViewPanel {
 
 		const updatedModels = models.map((model) => {
 			if (model.owned_by === trimmedProvider) {
-				const { headers: _, ...rest } = model;
+				const rest = { ...model };
+				delete rest.headers;
 				return {
 					...rest,
 					baseUrl: baseUrl || model.baseUrl,

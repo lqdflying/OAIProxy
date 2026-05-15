@@ -8,6 +8,7 @@ const state = {
 	models: [],
 	providerKeys: {},
 	providerInfo: {},
+	providerPresets: [],
 };
 
 // Store the action to be performed after confirmation
@@ -125,12 +126,39 @@ document.getElementById("refreshGlobalConfig").addEventListener("click", handleR
 document.getElementById("refreshProviders").addEventListener("click", handleRefresh);
 document.getElementById("refreshModels").addEventListener("click", handleRefresh);
 
+function renderProviderPresetOptions() {
+	const options = state.providerPresets
+		.map((preset) => `<option value="${preset.id}">${preset.label}</option>`)
+		.join("");
+	return `<option value="">Custom provider</option>${options}`;
+}
+
+function applyProviderPreset(row, presetId) {
+	const preset = state.providerPresets.find((item) => item.id === presetId);
+	if (!preset) {
+		return;
+	}
+
+	const providerInput = row.querySelector('[data-field="provider"]');
+	const baseUrlInput = row.querySelector('[data-field="baseUrl"]');
+	const apiModeInput = row.querySelector('[data-field="apiMode"]');
+
+	providerInput.value = preset.provider;
+	baseUrlInput.value = preset.baseUrl;
+	apiModeInput.value = preset.apiMode;
+}
+
 // Add Provider button event listener
 document.getElementById("addProvider").addEventListener("click", () => {
 	// Add new provider row to the table
 	const newRow = document.createElement("tr");
 	newRow.innerHTML = `
-		<td><input type="text" class="provider-input" data-field="provider" placeholder="Provider ID" /></td>
+		<td>
+			<select class="provider-preset-select">
+				${renderProviderPresetOptions()}
+			</select>
+			<input type="text" class="provider-input" data-field="provider" placeholder="Provider ID" />
+		</td>
 		<td><input type="text" class="provider-input" data-field="baseUrl" placeholder="Base URL" /></td>
 		<td><input type="password" class="provider-input" data-field="apiKey" placeholder="API Key" /></td>
 		<td>
@@ -153,6 +181,11 @@ document.getElementById("addProvider").addEventListener("click", () => {
 	// Add event listeners for the new row
 	const saveBtn = newRow.querySelector(".save-provider-btn");
 	const cancelBtn = newRow.querySelector(".cancel-provider-btn");
+	const presetSelect = newRow.querySelector(".provider-preset-select");
+
+	presetSelect.addEventListener("change", () => {
+		applyProviderPreset(newRow, presetSelect.value);
+	});
 
 	saveBtn.addEventListener("click", () => {
 		const inputs = newRow.querySelectorAll(".provider-input");
@@ -273,8 +306,18 @@ window.addEventListener("message", (event) => {
 
 	switch (message.type) {
 		case "init":
-			const { baseUrl, apiKey, delay, readFileLines, retry, commitModel, models, providerKeys, commitLanguage } =
-				message.payload;
+			const {
+				baseUrl,
+				apiKey,
+				delay,
+				readFileLines,
+				retry,
+				commitModel,
+				models,
+				providerKeys,
+				providerPresets,
+				commitLanguage,
+			} = message.payload;
 			state.baseUrl = baseUrl;
 			state.apiKey = apiKey;
 			state.delay = delay || 0;
@@ -288,6 +331,7 @@ window.addEventListener("message", (event) => {
 			state.models = models || [];
 			state.commitModel = commitModel || "";
 			state.providerKeys = providerKeys || {};
+			state.providerPresets = providerPresets || [];
 
 			// Update base configuration
 			baseUrlInput.value = baseUrl || "";
