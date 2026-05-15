@@ -1,6 +1,10 @@
 {
 	// Set your own global base URL in VS Code settings, or configure per-model/provider baseUrl separately.
 	// "oaicopilot.baseUrl": "https://your-openai-compatible-endpoint/v1",
+	// Built-in provider presets use:
+	// - kimi: https://api.moonshot.ai/v1
+	// - deepseek: https://api.deepseek.com
+	// - minimax: https://api.minimax.io/v1
 	"oaicopilot.models": [
 		{
 			"id": "vscodeproxy/deepseek-v4-pro",
@@ -18,7 +22,7 @@
 		},
 		{
 			"id": "vscodeproxy/kimi-k2.6",
-			"owned_by": "moonshot",
+			"owned_by": "kimi",
 			"vision": true,
 			"context_length": 262144,
 			"max_tokens": 65536,
