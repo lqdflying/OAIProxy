@@ -145,13 +145,14 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 
 ### 供应商预设
 
-配置界面可以为 Kimi、DeepSeek 和 MiniMax 预填 OpenAI 兼容供应商设置。预设只填入供应商 ID、Base URL 和 API 模式；具体模型 ID 请另行按需添加。
+配置界面可以为 Kimi、DeepSeek 和 MiniMax 预填供应商设置。预设只填入供应商 ID、Base URL 和 API 模式；具体模型 ID 请另行按需添加。
 
 | 供应商 | 供应商 ID | Base URL | API 模式 |
 |---|---|---|---|
 | Kimi (Moonshot AI) | `kimi` | `https://api.moonshot.ai/v1` | `openai` |
 | DeepSeek | `deepseek` | `https://api.deepseek.com` | `openai` |
-| MiniMax | `minimax` | `https://api.minimax.io/v1` | `openai` |
+| MiniMax (OpenAI) | `minimax` | `https://api.minimax.io/v1` | `openai` |
+| MiniMax (Anthropic) | `minimax-anthropic` | `https://api.minimax.io/anthropic` | `anthropic` |
 
 ### 配置示例
 

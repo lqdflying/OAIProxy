@@ -154,7 +154,7 @@ document.getElementById("addProvider").addEventListener("click", () => {
 	const newRow = document.createElement("tr");
 	newRow.innerHTML = `
 		<td>
-			<select class="provider-preset-select">
+			<select class="provider-preset-select" aria-label="Provider preset">
 				${renderProviderPresetOptions()}
 			</select>
 			<input type="text" class="provider-input" data-field="provider" placeholder="Provider ID" />

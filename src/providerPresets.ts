@@ -25,9 +25,16 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
 	},
 	{
 		id: "minimax",
-		label: "MiniMax",
+		label: "MiniMax (OpenAI)",
 		provider: "minimax",
 		baseUrl: "https://api.minimax.io/v1",
 		apiMode: "openai",
+	},
+	{
+		id: "minimax-anthropic",
+		label: "MiniMax (Anthropic)",
+		provider: "minimax-anthropic",
+		baseUrl: "https://api.minimax.io/anthropic",
+		apiMode: "anthropic",
 	},
 ];

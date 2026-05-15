@@ -588,20 +588,13 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 		let apiKey: string | undefined;
 		const normalizedProvider = provider?.trim().toLowerCase();
 		const providerKey = normalizedProvider ? `oaicopilot.apiKey.${normalizedProvider}` : undefined;
+		const shouldUseProviderKey = !useGenericKey && providerKey !== undefined;
 
-		// 1. Try provider-specific key
-		if (providerKey) {
+		// 1. Dedicated provider models must use the matching provider key.
+		// Falling back to the generic key can accidentally send another provider's credential.
+		if (shouldUseProviderKey) {
 			apiKey = await this.secrets.get(providerKey);
-		}
-
-		// 2. Fall back to generic key before prompting
-		if (!apiKey) {
-			apiKey = await this.secrets.get("oaicopilot.apiKey");
-		}
-
-		// 3. If still missing, prompt for the appropriate key
-		if (!apiKey) {
-			if (!useGenericKey && providerKey) {
+			if (!apiKey) {
 				const entered = await vscode.window.showInputBox({
 					title: `OAIProxy API Key for ${normalizedProvider}`,
 					prompt: `Enter your OAIProxy API key for ${normalizedProvider}`,
@@ -612,17 +605,22 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					apiKey = entered.trim();
 					await this.secrets.store(providerKey, apiKey);
 				}
-			} else {
-				const entered = await vscode.window.showInputBox({
-					title: "OAIProxy API Key",
-					prompt: "Enter your OAIProxy API key",
-					ignoreFocusOut: true,
-					password: true,
-				});
-				if (entered && entered.trim()) {
-					apiKey = entered.trim();
-					await this.secrets.store("oaicopilot.apiKey", apiKey);
-				}
+			}
+			return apiKey;
+		}
+
+		// 2. Generic/global-provider models use the generic key.
+		apiKey = await this.secrets.get("oaicopilot.apiKey");
+		if (!apiKey) {
+			const entered = await vscode.window.showInputBox({
+				title: "OAIProxy API Key",
+				prompt: "Enter your OAIProxy API key",
+				ignoreFocusOut: true,
+				password: true,
+			});
+			if (entered && entered.trim()) {
+				apiKey = entered.trim();
+				await this.secrets.store("oaicopilot.apiKey", apiKey);
 			}
 		}
 		return apiKey;

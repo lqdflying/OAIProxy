@@ -205,7 +205,7 @@ async function performCommitMsgGeneration(secrets: vscode.SecretStorage, gitDiff
 		logger.info("commit.start", { modelId });
 
 		// Get API key for the model's provider
-		const apiKey = await ensureApiKey(secrets, selectedModel.owned_by);
+		const apiKey = await ensureApiKey(secrets, selectedModel.owned_by, !selectedModel.baseUrl);
 		if (!apiKey) {
 			throw new Error("OAIProxy API key not found");
 		}
@@ -295,18 +295,15 @@ function removeThinkTags(text: string): string {
  * Ensure an API key exists in SecretStorage
  * @param provider provider name to get provider-specific API key.
  */
-async function ensureApiKey(secrets: vscode.SecretStorage, provider: string): Promise<string | undefined> {
-	let apiKey: string | undefined;
-	if (provider && provider.trim() !== "") {
-		const normalizedProvider = provider.trim().toLowerCase();
-		const providerKey = `oaicopilot.apiKey.${normalizedProvider}`;
-		apiKey = await secrets.get(providerKey);
+async function ensureApiKey(
+	secrets: vscode.SecretStorage,
+	provider: string,
+	useGenericKey: boolean
+): Promise<string | undefined> {
+	const normalizedProvider = provider?.trim().toLowerCase();
+	if (!useGenericKey && normalizedProvider) {
+		return secrets.get(`oaicopilot.apiKey.${normalizedProvider}`);
 	}
 
-	// Fall back to generic API key
-	if (!apiKey) {
-		apiKey = await secrets.get("oaicopilot.apiKey");
-	}
-
-	return apiKey;
+	return secrets.get("oaicopilot.apiKey");
 }

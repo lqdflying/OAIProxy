@@ -32,6 +32,8 @@ import { logger } from "../logger";
 import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "../vscodeCompat";
 
 export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unknown>> {
+	private readonly _reasoningDetailTextByKey = new Map<string, string>();
+
 	constructor(modelId: string) {
 		super(modelId);
 	}
@@ -359,27 +361,16 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 				(deltaObj as Record<string, unknown> | undefined)?.reasoning ??
 				(deltaObj as Record<string, unknown> | undefined)?.reasoning_content;
 
-			// OpenRouter/Claude reasoning_details array handling (new)
+			// OpenRouter/Claude/MiniMax reasoning_details array handling.
 			const maybeReasoningDetails =
 				(deltaObj as Record<string, unknown>)?.reasoning_details ??
 				(choice as Record<string, unknown>)?.reasoning_details;
 			if (maybeReasoningDetails && Array.isArray(maybeReasoningDetails) && maybeReasoningDetails.length > 0) {
-				// Prioritize details array over simple reasoning
 				const details: Array<ReasoningDetail> = maybeReasoningDetails as Array<ReasoningDetail>;
-				// Sort by index to preserve order (in case out-of-order chunks)
 				const sortedDetails = details.sort((a, b) => (a.index ?? 0) - (b.index ?? 0));
 
 				for (const detail of sortedDetails) {
-					let extractedText = "";
-					if (detail.type === "reasoning.summary") {
-						extractedText = (detail as ReasoningSummaryDetail).summary;
-					} else if (detail.type === "reasoning.text") {
-						extractedText = (detail as ReasoningTextDetail).text;
-					} else if (detail.type === "reasoning.encrypted") {
-						extractedText = "[REDACTED]"; // As per docs
-					} else {
-						extractedText = JSON.stringify(detail); // Fallback for unknown
-					}
+					const extractedText = this.extractReasoningDetailText(detail);
 
 					if (extractedText) {
 						this.bufferThinkingContent(extractedText, progress);
@@ -473,6 +464,37 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 			await this.flushToolCallBuffers(progress, /*throwOnInvalid*/ true);
 		}
 		return emitted;
+	}
+
+	private extractReasoningDetailText(detail: ReasoningDetail): string {
+		if (detail.type === "reasoning.summary") {
+			return (detail as ReasoningSummaryDetail).summary;
+		}
+		if (detail.type === "reasoning.text") {
+			return (detail as ReasoningTextDetail).text;
+		}
+		if (detail.type === "reasoning.encrypted") {
+			return "[REDACTED]";
+		}
+
+		const record = detail as Record<string, unknown>;
+		if (typeof record.text === "string") {
+			return this.getReasoningDetailTextDelta(record);
+		}
+		return JSON.stringify(detail);
+	}
+
+	private getReasoningDetailTextDelta(detail: Record<string, unknown>): string {
+		const text = detail.text as string;
+		const key =
+			typeof detail.index === "number" ? String(detail.index) : typeof detail.id === "string" ? detail.id : "default";
+		const previous = this._reasoningDetailTextByKey.get(key) ?? "";
+		this._reasoningDetailTextByKey.set(key, text);
+
+		if (previous && text.startsWith(previous)) {
+			return text.slice(previous.length);
+		}
+		return text;
 	}
 
 	async *createMessage(

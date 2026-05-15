@@ -1,0 +1,23 @@
+{
+	"oaicopilot.models": [
+		{
+			"id": "gpt-5.5",
+			"displayName": "GPT-5.5",
+			"owned_by": "openai",
+			"baseUrl": "https://api.openai.com/v1",
+			"apiMode": "openai-responses",
+			"family": "gpt-5.5",
+			"vision": true,
+			"context_length": 1050000,
+			"max_tokens": 128000,
+			"reasoning_effort": "high",
+			"supported_reasoning_efforts": ["minimal", "low", "medium", "high", "xhigh"],
+			"default_reasoning_effort": "high",
+			"extra": {
+				"reasoning": {
+					"summary": "detailed",
+				},
+			},
+		},
+	],
+}

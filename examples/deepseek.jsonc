@@ -1,0 +1,22 @@
+{
+	"oaicopilot.models": [
+		{
+			"id": "deepseek-v4-pro",
+			"displayName": "DeepSeek V4 Pro",
+			"owned_by": "deepseek",
+			"baseUrl": "https://api.deepseek.com",
+			"apiMode": "openai",
+			"vision": false,
+			"context_length": 1048576,
+			"max_tokens": 65536,
+			"reasoning_effort": "high",
+			"supported_reasoning_efforts": ["high", "max"],
+			"default_reasoning_effort": "high",
+			"thinking": {
+				"type": "enabled",
+			},
+			"toolCalling": true,
+			"include_reasoning_in_request": true,
+		},
+	],
+}

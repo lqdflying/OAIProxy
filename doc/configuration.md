@@ -144,13 +144,14 @@ Mixed configuration with multiple API modes:
 
 ### Provider Presets
 
-The configuration UI can prefill OpenAI-compatible provider settings for Kimi, DeepSeek, and MiniMax. Presets fill only the provider ID, base URL, and API mode; add the exact model IDs you want to use separately.
+The configuration UI can prefill provider settings for Kimi, DeepSeek, and MiniMax. Presets fill only the provider ID, base URL, and API mode; add the exact model IDs you want to use separately.
 
 | Provider | Provider ID | Base URL | API Mode |
 |---|---|---|---|
 | Kimi (Moonshot AI) | `kimi` | `https://api.moonshot.ai/v1` | `openai` |
 | DeepSeek | `deepseek` | `https://api.deepseek.com` | `openai` |
-| MiniMax | `minimax` | `https://api.minimax.io/v1` | `openai` |
+| MiniMax (OpenAI) | `minimax` | `https://api.minimax.io/v1` | `openai` |
+| MiniMax (Anthropic) | `minimax-anthropic` | `https://api.minimax.io/anthropic` | `anthropic` |
 
 ### Settings Example
 

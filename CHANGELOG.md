@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.0.9 (2026-05-15)
+
+- Fix API key setup from VS Code's Language Models panel for provider-specific models such as Kimi and MiniMax: Configure now saves to `oaicopilot.apiKey.<provider>` when models use a custom `baseUrl`.
+- Keep the generic OAIProxy API key path available for models that do not use a provider-specific `baseUrl`.
+
 ## 0.0.8 (2026-05-15)
 
 - Add Vision Bridge for text-only models: models explicitly configured with `"vision": false` can accept images by describing them through a configured `"vision": true` OAIProxy model before forwarding text to the target model.

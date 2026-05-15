@@ -4,7 +4,7 @@ import type { HFModelItem } from "./types";
 import { initStatusBar } from "./statusBar";
 import { ConfigViewPanel } from "./views/configView";
 import { logger } from "./logger";
-import { normalizeUserModels } from "./utils";
+import { getModelProviderId, normalizeUserModels, parseModelId } from "./utils";
 import { abortCommitGeneration, generateCommitMsg } from "./gitCommit/commitMessageGenerator";
 import { TokenizerManager } from "./tokenizer/tokenizerManager";
 import { VersionManager } from "./versionManager";
@@ -22,36 +22,53 @@ export function activate(context: vscode.ExtensionContext) {
 	TokenizerManager.initialize(context.extensionPath);
 
 	const tokenCountStatusBarItem: vscode.StatusBarItem = initStatusBar(context);
-	const provider = new HuggingFaceChatModelProvider(context.secrets, tokenCountStatusBarItem);
-	context.subscriptions.push(provider);
+	const chatProvider = new HuggingFaceChatModelProvider(context.secrets, tokenCountStatusBarItem);
+	context.subscriptions.push(chatProvider);
 	// Register the provider under the vendor id used in package.json.
-	context.subscriptions.push(vscode.lm.registerLanguageModelChatProvider(LANGUAGE_MODEL_VENDOR, provider));
-	refreshLanguageModels(provider);
+	context.subscriptions.push(vscode.lm.registerLanguageModelChatProvider(LANGUAGE_MODEL_VENDOR, chatProvider));
+	refreshLanguageModels(chatProvider);
 	scheduleLanguageModelWarmup(context);
 
 	// Management command to configure API key
 	context.subscriptions.push(
-		vscode.commands.registerCommand("oaiproxy.setApikey", async () => {
-			const existing = await context.secrets.get("oaicopilot.apiKey");
-			const apiKey = await vscode.window.showInputBox({
-				title: "OAIProxy API Key",
-				prompt: existing ? "Update your OAIProxy API key" : "Enter your OAIProxy API key",
-				ignoreFocusOut: true,
-				password: true,
-				value: existing ?? "",
-			});
-			if (apiKey === undefined) {
-				return; // user canceled
-			}
-			if (!apiKey.trim()) {
-				await context.secrets.delete("oaicopilot.apiKey");
-				refreshLanguageModels(provider);
-				vscode.window.showInformationMessage("OAIProxy API key cleared.");
+		vscode.commands.registerCommand("oaiproxy.setApikey", async (...args: unknown[]) => {
+			const config = vscode.workspace.getConfiguration();
+			const userModels = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+			const providerFromArgs = getProviderFromCommandArgs(args, userModels);
+
+			if (providerFromArgs) {
+				await configureApiKey(context, chatProvider, providerFromArgs);
 				return;
 			}
-			await context.secrets.store("oaicopilot.apiKey", apiKey.trim());
-			refreshLanguageModels(provider);
-			vscode.window.showInformationMessage("OAIProxy API key saved.");
+
+			const providerTargets = getProviderKeyTargets(userModels);
+			if (providerTargets.length > 0) {
+				const selectedTarget = await vscode.window.showQuickPick(
+					[
+						...providerTargets.map((target) => ({
+							label: `$(key) ${target.label}`,
+							description: `Provider key: ${target.provider}`,
+							provider: target.provider,
+						})),
+						{
+							label: "$(globe) Generic OAIProxy key",
+							description: "Used by models without a custom baseUrl",
+							provider: undefined,
+						},
+					],
+					{
+						title: "Select API Key Scope",
+						placeHolder: "Choose which API key to configure",
+					}
+				);
+				if (!selectedTarget) {
+					return;
+				}
+				await configureApiKey(context, chatProvider, selectedTarget.provider);
+				return;
+			}
+
+			await configureApiKey(context, chatProvider);
 		})
 	);
 
@@ -60,57 +77,34 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand("oaiproxy.setProviderApikey", async () => {
 			// Get provider list from configuration
 			const config = vscode.workspace.getConfiguration();
-			const userModels = normalizeUserModels(config.get<HFModelItem[]>("oaicopilot.models", []));
-
-			// Extract unique providers (case-insensitive)
-			const providers = Array.from(
-				new Set(userModels.map((m) => m.owned_by.toLowerCase()).filter((p) => p && p.trim() !== ""))
-			).sort();
+			const userModels = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+			const providers = getProviderKeyTargets(userModels);
 
 			if (providers.length === 0) {
 				vscode.window.showErrorMessage(
-					"No providers found in oaicopilot.models configuration. Please configure models first."
+					"No provider-specific models found in oaicopilot.models. Configure at least one model with owned_by and baseUrl first."
 				);
 				return;
 			}
 
 			// Let user select provider
-			const selectedProvider = await vscode.window.showQuickPick(providers, {
-				title: "Select Provider",
-				placeHolder: "Select a provider to configure API key",
-			});
+			const selectedProvider = await vscode.window.showQuickPick(
+				providers.map((target) => ({
+					label: target.label,
+					description: `Provider key: ${target.provider}`,
+					provider: target.provider,
+				})),
+				{
+					title: "Select Provider",
+					placeHolder: "Select a provider to configure API key",
+				}
+			);
 
 			if (!selectedProvider) {
 				return; // user canceled
 			}
 
-			// Get existing API key for selected provider
-			const providerKey = `oaicopilot.apiKey.${selectedProvider}`;
-			const existing = await context.secrets.get(providerKey);
-
-			// Prompt for API key
-			const apiKey = await vscode.window.showInputBox({
-				title: `OAIProxy API Key for ${selectedProvider}`,
-				prompt: existing ? `Update API key for ${selectedProvider}` : `Enter API key for ${selectedProvider}`,
-				ignoreFocusOut: true,
-				password: true,
-				value: existing ?? "",
-			});
-
-			if (apiKey === undefined) {
-				return; // user canceled
-			}
-
-			if (!apiKey.trim()) {
-				await context.secrets.delete(providerKey);
-				refreshLanguageModels(provider);
-				vscode.window.showInformationMessage(`API key for ${selectedProvider} cleared.`);
-				return;
-			}
-
-			await context.secrets.store(providerKey, apiKey.trim());
-			refreshLanguageModels(provider);
-			vscode.window.showInformationMessage(`API key for ${selectedProvider} saved.`);
+			await configureApiKey(context, chatProvider, selectedProvider.provider);
 		})
 	);
 
@@ -137,13 +131,139 @@ export function activate(context: vscode.ExtensionContext) {
 				logger.reloadConfig();
 			}
 			if (e.affectsConfiguration("oaicopilot.models") || e.affectsConfiguration("oaicopilot.baseUrl")) {
-				refreshLanguageModels(provider);
+				refreshLanguageModels(chatProvider);
 			}
 		})
 	);
 }
 
 export function deactivate() {}
+
+interface ProviderKeyTarget {
+	provider: string;
+	label: string;
+}
+
+async function configureApiKey(
+	context: vscode.ExtensionContext,
+	provider: HuggingFaceChatModelProvider,
+	providerId?: string
+): Promise<void> {
+	const normalizedProvider = providerId?.trim().toLowerCase();
+	const secretKey = normalizedProvider ? `oaicopilot.apiKey.${normalizedProvider}` : "oaicopilot.apiKey";
+	const existing = await context.secrets.get(secretKey);
+	const title = normalizedProvider ? `OAIProxy API Key for ${normalizedProvider}` : "OAIProxy API Key";
+	const prompt = existing
+		? `Update ${normalizedProvider ? `API key for ${normalizedProvider}` : "your OAIProxy API key"}`
+		: `Enter ${normalizedProvider ? `API key for ${normalizedProvider}` : "your OAIProxy API key"}`;
+	const apiKey = await vscode.window.showInputBox({
+		title,
+		prompt,
+		ignoreFocusOut: true,
+		password: true,
+		value: existing ?? "",
+	});
+	if (apiKey === undefined) {
+		return;
+	}
+
+	if (!apiKey.trim()) {
+		await context.secrets.delete(secretKey);
+		refreshLanguageModels(provider);
+		vscode.window.showInformationMessage(
+			normalizedProvider ? `API key for ${normalizedProvider} cleared.` : "OAIProxy API key cleared."
+		);
+		return;
+	}
+
+	await context.secrets.store(secretKey, apiKey.trim());
+	refreshLanguageModels(provider);
+	vscode.window.showInformationMessage(
+		normalizedProvider ? `API key for ${normalizedProvider} saved.` : "OAIProxy API key saved."
+	);
+}
+
+function getProviderKeyTargets(userModels: HFModelItem[]): ProviderKeyTarget[] {
+	const providers = new Map<string, string>();
+	for (const model of userModels) {
+		const provider = model.owned_by?.trim();
+		if (!provider || !model.baseUrl) {
+			continue;
+		}
+		const normalizedProvider = provider.toLowerCase();
+		if (!providers.has(normalizedProvider)) {
+			providers.set(normalizedProvider, provider);
+		}
+	}
+
+	return Array.from(providers, ([provider, label]) => ({ provider, label })).sort((a, b) =>
+		a.label.localeCompare(b.label)
+	);
+}
+
+function getProviderFromCommandArgs(args: readonly unknown[], userModels: HFModelItem[]): string | undefined {
+	for (const arg of args) {
+		const provider = getProviderFromCommandArg(arg, userModels);
+		if (provider) {
+			return provider;
+		}
+	}
+	return undefined;
+}
+
+function getProviderFromCommandArg(arg: unknown, userModels: HFModelItem[]): string | undefined {
+	if (typeof arg === "string") {
+		return getProviderFromString(arg, userModels);
+	}
+	if (!arg || typeof arg !== "object") {
+		return undefined;
+	}
+
+	const directProvider = getModelProviderId(arg);
+	if (directProvider) {
+		return getProviderFromString(directProvider, userModels);
+	}
+
+	const obj = arg as Record<string, unknown>;
+	for (const key of ["id", "modelId", "name"]) {
+		const provider = getProviderFromString(obj[key], userModels);
+		if (provider) {
+			return provider;
+		}
+	}
+
+	for (const key of ["model", "item"]) {
+		const provider = getProviderFromCommandArg(obj[key], userModels);
+		if (provider) {
+			return provider;
+		}
+	}
+
+	return undefined;
+}
+
+function getProviderFromString(value: unknown, userModels: HFModelItem[]): string | undefined {
+	if (typeof value !== "string" || !value.trim()) {
+		return undefined;
+	}
+
+	const trimmed = value.trim();
+	const normalized = trimmed.toLowerCase();
+	const providerTargets = getProviderKeyTargets(userModels);
+	const matchedProvider = providerTargets.find((target) => target.provider === normalized);
+	if (matchedProvider) {
+		return matchedProvider.provider;
+	}
+
+	const parsedModelId = parseModelId(trimmed);
+	const matchedModel = userModels.find((model) => {
+		if (model.id !== parsedModelId.baseId || !model.baseUrl) {
+			return false;
+		}
+		return parsedModelId.configId ? model.configId === parsedModelId.configId : true;
+	});
+	return matchedModel?.owned_by?.trim().toLowerCase();
+}
 
 function recordExtensionLifecycle(context: vscode.ExtensionContext): void {
 	const version = VersionManager.getVersion();
