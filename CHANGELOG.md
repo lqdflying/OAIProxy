@@ -1,5 +1,13 @@
 # Change Log
 
+## 0.0.8 (2026-05-15)
+
+- Add Vision Bridge for text-only models: models explicitly configured with `"vision": false` can accept images by describing them through a configured `"vision": true` OAIProxy model before forwarding text to the target model.
+- Cache Vision Bridge descriptions in-session with a SHA-256 keyed LRU cache to avoid repeatedly describing the same image.
+- Fix Vision Bridge model advertisement and model selection so bridge-enabled text models expose image input and multi-config setups select the correct vision-capable variant.
+- Fix API key lookup after configuring OAIProxy from VS Code's Language Models panel: provider requests now check the generic `oaicopilot.apiKey` before prompting for a provider-specific key.
+- Restructure documentation by moving detailed guides under `doc/`, adding Chinese guide translations, documenting Vision Bridge, and correcting `family` default references to `OAIProxy`.
+
 ## 0.0.7 (2026-05-14)
 
 - Fix XML `<think>` block streaming so visible text before and after thinking tags is preserved.
