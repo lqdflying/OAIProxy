@@ -7,13 +7,9 @@ alwaysApply: true
 
 ## Key storage locations (in `vscode.SecretStorage`)
 
-- **Generic key**: stored at `oaicopilot.apiKey` (set via the Language Models panel management command).
-- **Provider-specific keys**: stored at `oaicopilot.apiKey.<owned_by>`.
-
-## Lookup logic
-
-A model with a model-specific `baseUrl` uses provider-specific lookup first (`oaicopilot.apiKey.<owned_by>`) and then falls back to the generic key.
+- **Provider-specific keys**: The Language Models panel management command stores keys for models with a custom `baseUrl` at `oaicopilot.apiKey.<owned_by>`.
+- **Generic key**: `oaicopilot.apiKey` is for models **without** a provider-specific `baseUrl`.
 
 ## Multi-provider setup
 
-To use separate keys for models, give them distinct `owned_by` values and configure keys via the `OAIProxy: Set OAIProxy Multi-Provider API Key` command.
+To use separate keys for models, give them distinct `owned_by` values and configure keys via the model panel scope picker or the `OAIProxy: Set OAIProxy Multi-Provider API Key` command.

@@ -5,6 +5,12 @@ alwaysApply: true
 
 # OAIProxy Release Workflow
 
+## GA trigger
+
+When the user says `GA` in this repo, complete the full GitHub release workflow: bump version if needed, update changelog, build VSIX, commit, tag, push branch and tag, create GitHub release, upload VSIX, and verify the release URL/asset. Do **not** publish to the VS Code Marketplace.
+
+## Release sequence
+
 Before tagging/releasing, follow this sequence:
 
 1. Update `CHANGELOG.md` with a new section based on commits since the previous tag.
