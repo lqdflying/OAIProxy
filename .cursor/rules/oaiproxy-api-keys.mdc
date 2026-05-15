@@ -1,0 +1,19 @@
+---
+description: OAIProxy multi-provider API key storage and lookup behavior
+alwaysApply: true
+---
+
+# OAIProxy API Key Behavior
+
+## Key storage locations (in `vscode.SecretStorage`)
+
+- **Generic key**: stored at `oaicopilot.apiKey` (set via the Language Models panel management command).
+- **Provider-specific keys**: stored at `oaicopilot.apiKey.<owned_by>`.
+
+## Lookup logic
+
+A model with a model-specific `baseUrl` uses provider-specific lookup first (`oaicopilot.apiKey.<owned_by>`) and then falls back to the generic key.
+
+## Multi-provider setup
+
+To use separate keys for models, give them distinct `owned_by` values and configure keys via the `OAIProxy: Set OAIProxy Multi-Provider API Key` command.

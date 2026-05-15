@@ -1,0 +1,23 @@
+---
+description: Project context, upstream relationship, and VS Code compatibility notes for OAIProxy
+alwaysApply: true
+---
+
+# OAIProxy Project Context
+
+## Fork & rebrand
+
+This repo is the `lqdflying/OAIProxy` fork/rebrand of upstream `oai-compatible-copilot`. The fork reset package versioning to `0.0.1`.
+
+## VS Code compatibility
+
+The VS Code 1.120 compatibility work updated the `chatProvider` proposed API to v5 and uses `LanguageModelChatInformation.configurationSchema` plus `options.modelConfiguration.reasoningEffort` for the model picker's Thinking Effort control.
+
+## Upstream version notes
+
+- **0.3.8**: Marks contributed models with `isUserSelectable: true`, groups them under "OAI Compatible" for the model picker, fires provider refresh events on model/baseUrl/API-key changes, and activates on startup so Copilot Chat can discover the provider before its picker is opened.
+- **0.3.9**: Warms VS Code's language model cache after registration by calling `vscode.lm.selectChatModels({ vendor: "oaicopilot" })` immediately and on short startup delays. This fixes the issue where models only appeared in Copilot Chat after opening the Language Models view and right-clicking a model.
+
+## Screenshots from user
+
+When the user provides screenshot/image URLs, fetch the image locally with `curl` and inspect it with `view_image`. Do **not** infer UI details from the URL or filename alone.

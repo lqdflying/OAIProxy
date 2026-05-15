@@ -1,0 +1,32 @@
+---
+description: Release workflow: changelog, versioning, tagging, and GitHub releases for OAIProxy
+alwaysApply: true
+---
+
+# OAIProxy Release Workflow
+
+Before tagging/releasing, follow this sequence:
+
+1. Update `CHANGELOG.md` with a new section based on commits since the previous tag.
+2. Bump the patch version in **both** `package.json` and `package-lock.json`.
+3. Run `npm run build` after the changelog/version changes.
+4. Commit those files.
+5. Tag `v<version>`.
+6. Push `main` and the tag.
+7. Create the GitHub release with the rebuilt VSIX asset. Use explicit release notes from the changelog/commit summary; do **not** rely only on `--generate-notes`.
+
+## GitHub release notes format
+
+Do **not** start release notes with a duplicate H1 release title — GitHub already shows the release title. Start the body at `## Features`, `## Fixes`, etc.
+
+The `Latest` label is GitHub's automatic badge and should not be edited into notes.
+
+## Redoing a release for the same version
+
+If a release must be redone for the same version:
+1. Delete the GitHub release and remove the tag (both remote and local).
+2. Apply the fix.
+3. Rebuild the VSIX.
+4. Commit and push.
+5. Recreate the tag at the corrected commit and push it.
+6. Recreate the release with explicit notes and the rebuilt VSIX asset.

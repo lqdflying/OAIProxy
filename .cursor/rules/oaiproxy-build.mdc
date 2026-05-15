@@ -1,0 +1,32 @@
+---
+description: Build system quirks, VSIX packaging, and version bumping policy for OAIProxy
+alwaysApply: true
+---
+
+# OAIProxy Build & Packaging
+
+## Bun npm shim interference
+
+This repo may run `/home/opc/.local/bin/npm`, which is Bun's npm compatibility shim. That shim breaks `@vscode/vsce` dependency detection because `vsce` shells out to `npm list --production --parseable --depth=99999 --loglevel=error` and expects real npm parseable output.
+
+## Reliable VSIX build command
+
+To build a VSIX reliably, use system npm/npx first in `PATH` and keep dependency detection enabled:
+
+```
+/usr/bin/env PATH=/usr/bin:/bin:/usr/sbin:/sbin:/home/opc/.local/bin:/home/opc/.bun/bin /usr/bin/npx --yes @vscode/vsce package -o oaiproxy-<version>.vsix
+```
+
+**Never** use plain `/usr/bin/npx`, Bun's npm shim, or `--no-dependencies` for the final test VSIX. Plain `/usr/bin/npx` still lets `vsce` invoke the Bun npm shim internally, and `--no-dependencies` omits runtime packages such as `@microsoft/tiktokenizer`.
+
+The `npm run build` script is intentionally written with the env PATH workaround and emits `oaiproxy-${npm_package_version}.vsix`.
+
+## Version bumping policy
+
+- For local pre-commit/pre-push testing VSIX builds, **do not bump** `package.json` or `package-lock.json` — just run `npm run build` at the current version.
+- Only bump the extension patch version in **both** `package.json` and `package-lock.json` when the user explicitly says they are ready to release/publish or asks for a version bump.
+- Do **not** publish to the VS Code Marketplace from agent actions.
+
+## Stale VSIX installation
+
+A local testing VSIX may have the same version as an already-installed extension while containing newer code. If VS Code appears stale after installing that VSIX, advise uninstalling the existing extension first, then installing the VSIX again.
