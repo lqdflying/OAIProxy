@@ -585,14 +585,23 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 	 * @param provider Optional provider name to get provider-specific API key.
 	 */
 	private async ensureApiKey(useGenericKey: boolean, provider?: string): Promise<string | undefined> {
-		// Try to get provider-specific API key first
 		let apiKey: string | undefined;
-		if (provider && provider.trim() !== "") {
-			const normalizedProvider = provider.trim().toLowerCase();
-			const providerKey = `oaicopilot.apiKey.${normalizedProvider}`;
-			apiKey = await this.secrets.get(providerKey);
+		const normalizedProvider = provider?.trim().toLowerCase();
+		const providerKey = normalizedProvider ? `oaicopilot.apiKey.${normalizedProvider}` : undefined;
 
-			if (!apiKey && !useGenericKey) {
+		// 1. Try provider-specific key
+		if (providerKey) {
+			apiKey = await this.secrets.get(providerKey);
+		}
+
+		// 2. Fall back to generic key before prompting
+		if (!apiKey) {
+			apiKey = await this.secrets.get("oaicopilot.apiKey");
+		}
+
+		// 3. If still missing, prompt for the appropriate key
+		if (!apiKey) {
+			if (!useGenericKey && providerKey) {
 				const entered = await vscode.window.showInputBox({
 					title: `OAIProxy API Key for ${normalizedProvider}`,
 					prompt: `Enter your OAIProxy API key for ${normalizedProvider}`,
@@ -603,24 +612,17 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					apiKey = entered.trim();
 					await this.secrets.store(providerKey, apiKey);
 				}
-			}
-		}
-
-		// Fall back to generic API key
-		if (!apiKey) {
-			apiKey = await this.secrets.get("oaicopilot.apiKey");
-		}
-
-		if (!apiKey && useGenericKey) {
-			const entered = await vscode.window.showInputBox({
-				title: "OAIProxy API Key",
-				prompt: "Enter your OAIProxy API key",
-				ignoreFocusOut: true,
-				password: true,
-			});
-			if (entered && entered.trim()) {
-				apiKey = entered.trim();
-				await this.secrets.store("oaicopilot.apiKey", apiKey);
+			} else {
+				const entered = await vscode.window.showInputBox({
+					title: "OAIProxy API Key",
+					prompt: "Enter your OAIProxy API key",
+					ignoreFocusOut: true,
+					password: true,
+				});
+				if (entered && entered.trim()) {
+					apiKey = entered.trim();
+					await this.secrets.store("oaicopilot.apiKey", apiKey);
+				}
 			}
 		}
 		return apiKey;
