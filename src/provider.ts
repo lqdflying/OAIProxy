@@ -13,8 +13,15 @@ import type { HFModelItem } from "./types";
 
 import type { OllamaRequestBody } from "./ollama/ollamaTypes";
 
-import { parseModelId, createRetryConfig, executeWithRetry, normalizeUserModels, getStringConfiguration } from "./utils";
-import { messagesContainImages, processMessagesForVision } from "./visionBridge";
+import {
+	parseModelId,
+	createRetryConfig,
+	executeWithRetry,
+	normalizeUserModels,
+	getStringConfiguration,
+	isImageMimeType,
+} from "./utils";
+import { messagesContainImages, processMessagesForVision, VISION_BRIDGE_REQUEST_OPTION } from "./visionBridge";
 
 import { prepareLanguageModelChatInformation } from "./provideModel";
 import { countMessageTokens } from "./provideToken";
@@ -223,15 +230,16 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 
 			// get retry config
 			const retryConfig = createRetryConfig();
+			const isVisionBridgeRequest = options.modelOptions?.[VISION_BRIDGE_REQUEST_OPTION] === true;
+			const inputContainsImages = messagesContainImages(messages);
+			const shouldSummarizePayloads = isVisionBridgeRequest || inputContainsImages;
 
 			// prepare headers with custom headers if specified
 			const requestHeaders = CommonApi.prepareHeaders(modelApiKey, apiMode, um?.headers);
 			logger.debug("request.headers", {
 				headers: logger.sanitizeHeaders(requestHeaders as Record<string, string>),
 			});
-			logger.debug("request.messages.origin", {
-				messages: messages,
-			});
+			logRequestMessages(messages, shouldSummarizePayloads, isVisionBridgeRequest);
 			if (token.isCancellationRequested) {
 				return;
 			}
@@ -239,7 +247,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			// Vision bridge: for non-vision models, replace images with text descriptions
 			// obtained from a configured vision-capable model.
 			let workingMessages: readonly LanguageModelChatRequestMessage[] = messages;
-			if (um?.vision === false && messagesContainImages(messages)) {
+			if (um?.vision === false && inputContainsImages) {
 				try {
 					workingMessages = await processMessagesForVision(messages, model.id, token);
 					if (token.isCancellationRequested) {
@@ -270,10 +278,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 
 				// send Ollama chat request with retry
 				const url = `${BASE_URL.replace(/\/+$/, "")}/api/chat`;
-				logger.debug("request.body", {
-					url: url,
-					requestBody: ollamaRequestBody,
-				});
+				logRequestBody(url, ollamaRequestBody, shouldSummarizePayloads, isVisionBridgeRequest);
 				const response = await executeWithRetry(async () => {
 					const res = await fetch(url, {
 						method: "POST",
@@ -317,7 +322,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				const url = normalizedBaseUrl.endsWith("/v1")
 					? `${normalizedBaseUrl}/messages`
 					: `${normalizedBaseUrl}/v1/messages`;
-				logger.debug("request.body", { url, requestBody });
+				logRequestBody(url, requestBody, shouldSummarizePayloads, isVisionBridgeRequest);
 				const response = await executeWithRetry(async () => {
 					const res = await fetch(url, {
 						method: "POST",
@@ -384,7 +389,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				}
 				// send Responses API request with retry
 				const url = `${normalizedBaseUrl}/responses`;
-				logger.debug("request.body", { url, requestBody });
+				logRequestBody(url, requestBody, shouldSummarizePayloads, isVisionBridgeRequest);
 
 				// If the user explicitly set `previous_response_id` via `extra`, don't apply stateful slicing.
 				let addedPreviousResponseId = false;
@@ -486,7 +491,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				requestBody = geminiApi.prepareRequestBody(requestBody, um, options);
 
 				const url = buildGeminiGenerateContentUrl(BASE_URL, parsedModelId.baseId, true);
-				logger.debug("request.body", { url, requestBody });
+				logRequestBody(url, requestBody, shouldSummarizePayloads, isVisionBridgeRequest);
 				if (!url) {
 					throw new Error("Invalid Gemini base URL configuration.");
 				}
@@ -530,7 +535,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 
 				// send chat request with retry
 				const url = `${BASE_URL.replace(/\/+$/, "")}/chat/completions`;
-				logger.debug("request.body", { url, requestBody });
+				logRequestBody(url, requestBody, shouldSummarizePayloads, isVisionBridgeRequest);
 				const response = await executeWithRetry(async () => {
 					const res = await fetch(url, {
 						method: "POST",
@@ -681,6 +686,100 @@ function waitForDelayOrCancellation(delayMs: number, token: CancellationToken): 
 
 function isAbortError(error: unknown): boolean {
 	return !!error && typeof error === "object" && (error as { name?: unknown }).name === "AbortError";
+}
+
+function logRequestMessages(
+	messages: readonly LanguageModelChatRequestMessage[],
+	summarizePayloads: boolean,
+	visionBridge: boolean
+): void {
+	if (!summarizePayloads) {
+		logger.debug("request.messages.origin", {
+			messages: messages,
+		});
+		return;
+	}
+
+	logger.debug("request.messages.origin", {
+		visionBridge,
+		...summarizeLanguageModelMessages(messages),
+	});
+}
+
+function summarizeLanguageModelMessages(messages: readonly LanguageModelChatRequestMessage[]): Record<string, unknown> {
+	let textPartCount = 0;
+	let textLength = 0;
+	let dataPartCount = 0;
+	let imagePartCount = 0;
+	let imageBytes = 0;
+	const imageMimeTypes = new Set<string>();
+
+	for (const message of messages) {
+		for (const part of message.content ?? []) {
+			if (part instanceof vscode.LanguageModelTextPart) {
+				textPartCount++;
+				textLength += part.value.length;
+			} else if (part instanceof vscode.LanguageModelDataPart) {
+				dataPartCount++;
+				if (isImageMimeType(part.mimeType)) {
+					imagePartCount++;
+					imageBytes += part.data.byteLength;
+					imageMimeTypes.add(part.mimeType);
+				}
+			}
+		}
+	}
+
+	return {
+		rawMessagesOmitted: true,
+		messageCount: messages.length,
+		textPartCount,
+		textLength,
+		dataPartCount,
+		imagePartCount,
+		imageBytes,
+		imageMimeTypes: Array.from(imageMimeTypes),
+	};
+}
+
+function logRequestBody(
+	url: string | null | undefined,
+	requestBody: unknown,
+	summarizePayloads: boolean,
+	visionBridge: boolean
+): void {
+	if (!summarizePayloads) {
+		logger.debug("request.body", { url, requestBody });
+		return;
+	}
+
+	logger.debug("request.body", {
+		url,
+		visionBridge,
+		requestBody: summarizeRequestBody(requestBody),
+	});
+}
+
+function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
+	const body = requestBody && typeof requestBody === "object"
+		? requestBody as Record<string, unknown>
+		: {};
+
+	return {
+		rawBodyOmitted: true,
+		imagePayloadsOmitted: true,
+		model: typeof body.model === "string" ? body.model : undefined,
+		stream: typeof body.stream === "boolean" ? body.stream : undefined,
+		messageCount: getArrayLength(body.messages),
+		inputCount: getArrayLength(body.input),
+		contentCount: getArrayLength(body.contents),
+		hasInstructions: body.instructions !== undefined,
+		hasSystemInstruction: body.systemInstruction !== undefined,
+	};
+}
+
+function getArrayLength(value: unknown): number | undefined {
+	return Array.isArray(value) ? value.length : undefined;
 }
 
 function createOpenAIResponsesStatefulMarkerPart(modelId: string, marker: string): vscode.LanguageModelDataPart {

@@ -7,9 +7,8 @@ import { logger } from "./logger";
 const CACHE_MAX_ENTRIES = 50;
 const CACHE_MAX_SIZE_BYTES = 512_000; // ~500KB of description text
 
-const VISION_PROMPT =
-	"Describe this image in detail for use as context in a coding conversation. " +
-	"Focus on any text, code, diagrams, UI elements, or technical content visible in the image.";
+const VISION_PROMPT = "Describe this image. Include visible text, code, UI, diagrams, and other important details.";
+export const VISION_BRIDGE_REQUEST_OPTION = "oaiproxyVisionBridge";
 
 const LANGUAGE_MODEL_VENDOR = "oaiproxy";
 
@@ -65,6 +64,17 @@ const descriptionCache = new ImageDescriptionCache();
 
 function hashImageData(data: Uint8Array): string {
 	return crypto.createHash("sha256").update(data).digest("hex");
+}
+
+function createVisionBridgeMessages(imagePart: vscode.LanguageModelDataPart): vscode.LanguageModelChatMessage[] {
+	// Keep the bridge request intentionally minimal: fixed instruction plus image only.
+	const ChatMessageCtor: typeof vscode.LanguageModelChatMessage =
+		(vscode as Record<string, unknown>).LanguageModelChatMessage2 as typeof vscode.LanguageModelChatMessage ??
+		vscode.LanguageModelChatMessage;
+
+	return [
+		ChatMessageCtor.User([new vscode.LanguageModelTextPart(VISION_PROMPT), imagePart] as never),
+	] as vscode.LanguageModelChatMessage[];
 }
 
 /**
@@ -148,7 +158,13 @@ async function describeImage(
 
 	const cached = descriptionCache.get(cacheKey);
 	if (cached !== undefined) {
-		logger.debug("visionBridge.cache.hit", { cacheKey: cacheKey.substring(0, 16) });
+		logger.debug("visionBridge.cache.hit", {
+			cacheKey: cacheKey.substring(0, 16),
+			mimeType: imagePart.mimeType,
+			dataSize: imagePart.data.byteLength,
+			descriptionLength: cached.length,
+			visionModel: visionModel.id,
+		});
 		return cached;
 	}
 
@@ -156,19 +172,31 @@ async function describeImage(
 		mimeType: imagePart.mimeType,
 		dataSize: imagePart.data.byteLength,
 		visionModel: visionModel.id,
+		promptLength: VISION_PROMPT.length,
+	});
+	logger.debug("visionBridge.cache.miss", {
+		cacheKey: cacheKey.substring(0, 16),
+		mimeType: imagePart.mimeType,
+		dataSize: imagePart.data.byteLength,
+		visionModel: visionModel.id,
+		promptLength: VISION_PROMPT.length,
 	});
 
-	// Use LanguageModelChatMessage2 (proposed API) for DataPart support,
-	// falling back to the standard LanguageModelChatMessage.
-	const ChatMessageCtor: typeof vscode.LanguageModelChatMessage =
-		(vscode as Record<string, unknown>).LanguageModelChatMessage2 as typeof vscode.LanguageModelChatMessage ??
-		vscode.LanguageModelChatMessage;
+	const messages = createVisionBridgeMessages(imagePart);
+	logger.debug("visionBridge.request", {
+		visionModel: visionModel.id,
+		messageCount: messages.length,
+		contentParts: 2,
+		promptLength: VISION_PROMPT.length,
+		mimeType: imagePart.mimeType,
+		dataSize: imagePart.data.byteLength,
+	});
 
-	const messages = [
-		ChatMessageCtor.User([new vscode.LanguageModelTextPart(VISION_PROMPT), imagePart] as never),
-	];
-
-	const response = await visionModel.sendRequest(messages as never[], {}, token);
+	const response = await visionModel.sendRequest(
+		messages,
+		{ modelOptions: { [VISION_BRIDGE_REQUEST_OPTION]: true } },
+		token
+	);
 	let description = "";
 	for await (const chunk of response.text) {
 		if (token.isCancellationRequested) {
