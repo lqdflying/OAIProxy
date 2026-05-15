@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.1.0 (2026-05-15)
+
+- Optimize Vision Bridge requests so the vision model receives only a minimal fixed image-description prompt plus the image, avoiding the full Copilot chat prompt and history.
+- Add Vision Bridge metadata logging for cache hit/miss, image size, MIME type, prompt length, selected vision model, and generated description length without logging raw image payloads.
+- Summarize request message and request body debug logs globally to avoid dumping full prompts, tools, histories, and image data into OAIProxy logs.
+- Reduce streaming debug log volume by omitting routine per-token chunks and retaining only start/done, usage, finish, and error metadata.
+
 ## 0.0.9 (2026-05-15)
 
 - Fix API key setup from VS Code's Language Models panel for provider-specific models such as Kimi and MiniMax: Configure now saves to `oaicopilot.apiKey.<provider>` when models use a custom `baseUrl`.

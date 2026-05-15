@@ -232,14 +232,13 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			const retryConfig = createRetryConfig();
 			const isVisionBridgeRequest = options.modelOptions?.[VISION_BRIDGE_REQUEST_OPTION] === true;
 			const inputContainsImages = messagesContainImages(messages);
-			const shouldSummarizePayloads = isVisionBridgeRequest || inputContainsImages;
 
 			// prepare headers with custom headers if specified
 			const requestHeaders = CommonApi.prepareHeaders(modelApiKey, apiMode, um?.headers);
 			logger.debug("request.headers", {
 				headers: logger.sanitizeHeaders(requestHeaders as Record<string, string>),
 			});
-			logRequestMessages(messages, shouldSummarizePayloads, isVisionBridgeRequest);
+			logRequestMessages(messages, isVisionBridgeRequest);
 			if (token.isCancellationRequested) {
 				return;
 			}
@@ -278,7 +277,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 
 				// send Ollama chat request with retry
 				const url = `${BASE_URL.replace(/\/+$/, "")}/api/chat`;
-				logRequestBody(url, ollamaRequestBody, shouldSummarizePayloads, isVisionBridgeRequest);
+				logRequestBody(url, ollamaRequestBody, isVisionBridgeRequest);
 				const response = await executeWithRetry(async () => {
 					const res = await fetch(url, {
 						method: "POST",
@@ -322,7 +321,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				const url = normalizedBaseUrl.endsWith("/v1")
 					? `${normalizedBaseUrl}/messages`
 					: `${normalizedBaseUrl}/v1/messages`;
-				logRequestBody(url, requestBody, shouldSummarizePayloads, isVisionBridgeRequest);
+				logRequestBody(url, requestBody, isVisionBridgeRequest);
 				const response = await executeWithRetry(async () => {
 					const res = await fetch(url, {
 						method: "POST",
@@ -389,7 +388,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				}
 				// send Responses API request with retry
 				const url = `${normalizedBaseUrl}/responses`;
-				logRequestBody(url, requestBody, shouldSummarizePayloads, isVisionBridgeRequest);
+				logRequestBody(url, requestBody, isVisionBridgeRequest);
 
 				// If the user explicitly set `previous_response_id` via `extra`, don't apply stateful slicing.
 				let addedPreviousResponseId = false;
@@ -491,7 +490,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				requestBody = geminiApi.prepareRequestBody(requestBody, um, options);
 
 				const url = buildGeminiGenerateContentUrl(BASE_URL, parsedModelId.baseId, true);
-				logRequestBody(url, requestBody, shouldSummarizePayloads, isVisionBridgeRequest);
+				logRequestBody(url, requestBody, isVisionBridgeRequest);
 				if (!url) {
 					throw new Error("Invalid Gemini base URL configuration.");
 				}
@@ -535,7 +534,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 
 				// send chat request with retry
 				const url = `${BASE_URL.replace(/\/+$/, "")}/chat/completions`;
-				logRequestBody(url, requestBody, shouldSummarizePayloads, isVisionBridgeRequest);
+				logRequestBody(url, requestBody, isVisionBridgeRequest);
 				const response = await executeWithRetry(async () => {
 					const res = await fetch(url, {
 						method: "POST",
@@ -690,16 +689,8 @@ function isAbortError(error: unknown): boolean {
 
 function logRequestMessages(
 	messages: readonly LanguageModelChatRequestMessage[],
-	summarizePayloads: boolean,
 	visionBridge: boolean
 ): void {
-	if (!summarizePayloads) {
-		logger.debug("request.messages.origin", {
-			messages: messages,
-		});
-		return;
-	}
-
 	logger.debug("request.messages.origin", {
 		visionBridge,
 		...summarizeLanguageModelMessages(messages),
@@ -745,14 +736,8 @@ function summarizeLanguageModelMessages(messages: readonly LanguageModelChatRequ
 function logRequestBody(
 	url: string | null | undefined,
 	requestBody: unknown,
-	summarizePayloads: boolean,
 	visionBridge: boolean
 ): void {
-	if (!summarizePayloads) {
-		logger.debug("request.body", { url, requestBody });
-		return;
-	}
-
 	logger.debug("request.body", {
 		url,
 		visionBridge,
@@ -766,13 +751,16 @@ function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
 		: {};
 
 	return {
+		payloadSummarized: true,
 		rawBodyOmitted: true,
-		imagePayloadsOmitted: true,
+		imagePayloadsOmitted: containsImagePayload(requestBody),
 		model: typeof body.model === "string" ? body.model : undefined,
 		stream: typeof body.stream === "boolean" ? body.stream : undefined,
 		messageCount: getArrayLength(body.messages),
 		inputCount: getArrayLength(body.input),
 		contentCount: getArrayLength(body.contents),
+		toolCount: getArrayLength(body.tools),
+		hasToolChoice: body.tool_choice !== undefined || body.toolChoice !== undefined,
 		hasInstructions: body.instructions !== undefined,
 		hasSystemInstruction: body.systemInstruction !== undefined,
 	};
@@ -780,6 +768,37 @@ function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
 
 function getArrayLength(value: unknown): number | undefined {
 	return Array.isArray(value) ? value.length : undefined;
+}
+
+function containsImagePayload(value: unknown, depth = 0): boolean {
+	if (depth > 8 || value === undefined || value === null) {
+		return false;
+	}
+	if (typeof value === "string") {
+		return value.startsWith("data:image/");
+	}
+	if (Array.isArray(value)) {
+		return value.some((item) => containsImagePayload(item, depth + 1));
+	}
+	if (typeof value !== "object") {
+		return false;
+	}
+
+	const obj = value as Record<string, unknown>;
+	if (
+		typeof obj.type === "string" &&
+		["image", "image_url", "input_image"].includes(obj.type)
+	) {
+		return true;
+	}
+	if (typeof obj.mime_type === "string" && obj.mime_type.startsWith("image/")) {
+		return true;
+	}
+	if (typeof obj.mimeType === "string" && obj.mimeType.startsWith("image/")) {
+		return true;
+	}
+
+	return Object.values(obj).some((item) => containsImagePayload(item, depth + 1));
 }
 
 function createOpenAIResponsesStatefulMarkerPart(modelId: string, marker: string): vscode.LanguageModelDataPart {

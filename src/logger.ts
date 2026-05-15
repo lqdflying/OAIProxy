@@ -54,6 +54,9 @@ class Logger {
 		if (this._level === "off" || LOG_LEVEL_PRIORITY[this._level] > LOG_LEVEL_PRIORITY.debug) {
 			return;
 		}
+		if (this.shouldSkipDebugLog(tag, data)) {
+			return;
+		}
 		this.write("debug", tag, data);
 	}
 
@@ -147,9 +150,186 @@ class Logger {
 			return;
 		}
 
-		const sanitizedData = this.sanitizeData(data);
+		const sanitizedData = this.sanitizeLogData(tag, data);
 		this.writeOutput(level, tag, sanitizedData);
 		this.writeFile(level, tag, sanitizedData);
+	}
+
+	private sanitizeLogData(tag: string, data: Record<string, unknown>): Record<string, unknown> {
+		const sanitizedData = this.sanitizeData(data);
+		if (tag.includes(".stream.chunk")) {
+			return this.summarizeStreamChunkData(sanitizedData);
+		}
+		return sanitizedData;
+	}
+
+	private shouldSkipDebugLog(tag: string, data: Record<string, unknown>): boolean {
+		if (!tag.endsWith(".stream.chunk")) {
+			return false;
+		}
+
+		return !this.isImportantStreamChunk(data.data);
+	}
+
+	private isImportantStreamChunk(payload: unknown): boolean {
+		if (payload === "[DONE]") {
+			return true;
+		}
+
+		const metadata = this.extractStreamPayloadMetadata(this.parseStreamPayload(payload));
+		return (
+			metadata.done === true ||
+			metadata.usage !== undefined ||
+			metadata.usageMetadata !== undefined ||
+			metadata.finishReason !== undefined ||
+			metadata.type === "message_start" ||
+			metadata.type === "message_stop"
+		);
+	}
+
+	private parseStreamPayload(payload: unknown): unknown {
+		if (typeof payload !== "string" || payload === "[DONE]") {
+			return payload;
+		}
+
+		try {
+			return JSON.parse(payload);
+		} catch {
+			return payload;
+		}
+	}
+
+	private summarizeStreamChunkData(data: Record<string, unknown>): Record<string, unknown> {
+		if (!("data" in data)) {
+			return data;
+		}
+
+		return {
+			...data,
+			data: this.summarizeStreamPayload(data.data),
+		};
+	}
+
+	private summarizeStreamPayload(payload: unknown): Record<string, unknown> {
+		if (typeof payload === "string") {
+			const summary: Record<string, unknown> = {
+				rawOmitted: true,
+				rawType: "string",
+				rawLength: payload.length,
+			};
+			if (payload === "[DONE]") {
+				summary.done = true;
+				return summary;
+			}
+
+			try {
+				Object.assign(summary, this.extractStreamPayloadMetadata(JSON.parse(payload)));
+			} catch {
+				summary.parseableJson = false;
+			}
+			return summary;
+		}
+
+		return {
+			rawOmitted: true,
+			rawType: Array.isArray(payload) ? "array" : typeof payload,
+			...this.extractStreamPayloadMetadata(payload),
+		};
+	}
+
+	private extractStreamPayloadMetadata(payload: unknown): Record<string, unknown> {
+		if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+			return {};
+		}
+
+		const obj = payload as Record<string, unknown>;
+		const summary: Record<string, unknown> = {};
+		for (const key of ["id", "object", "model", "type", "event"]) {
+			if (typeof obj[key] === "string") {
+				summary[key] = obj[key];
+			}
+		}
+		if (typeof obj.done === "boolean") {
+			summary.done = obj.done;
+		}
+		if (obj.usage && typeof obj.usage === "object" && !Array.isArray(obj.usage)) {
+			summary.usage = obj.usage;
+		}
+		if (obj.usageMetadata && typeof obj.usageMetadata === "object" && !Array.isArray(obj.usageMetadata)) {
+			summary.usageMetadata = obj.usageMetadata;
+		}
+		if (typeof obj.delta === "string") {
+			summary.deltaLength = obj.delta.length;
+		} else if (obj.delta && typeof obj.delta === "object" && !Array.isArray(obj.delta)) {
+			this.addDeltaMetadata(summary, obj.delta as Record<string, unknown>, "delta");
+		}
+		if (typeof obj.response === "string") {
+			summary.responseLength = obj.response.length;
+		}
+		if (obj.message && typeof obj.message === "object" && !Array.isArray(obj.message)) {
+			const message = obj.message as Record<string, unknown>;
+			if (typeof message.role === "string") {
+				summary.messageRole = message.role;
+			}
+			if (typeof message.content === "string") {
+				summary.messageContentLength = message.content.length;
+			}
+		}
+
+		const choice = Array.isArray(obj.choices) && obj.choices[0] && typeof obj.choices[0] === "object"
+			? obj.choices[0] as Record<string, unknown>
+			: undefined;
+		if (choice) {
+			if (typeof choice.finish_reason === "string") {
+				summary.finishReason = choice.finish_reason;
+			}
+			if (typeof choice.finishReason === "string") {
+				summary.finishReason = choice.finishReason;
+			}
+			if (choice.delta && typeof choice.delta === "object" && !Array.isArray(choice.delta)) {
+				this.addDeltaMetadata(summary, choice.delta as Record<string, unknown>, "choiceDelta");
+			}
+		}
+
+		const candidate = Array.isArray(obj.candidates) && obj.candidates[0] && typeof obj.candidates[0] === "object"
+			? obj.candidates[0] as Record<string, unknown>
+			: undefined;
+		if (candidate) {
+			if (typeof candidate.finishReason === "string") {
+				summary.finishReason = candidate.finishReason;
+			}
+			const content = candidate.content;
+			if (content && typeof content === "object" && !Array.isArray(content)) {
+				const parts = (content as Record<string, unknown>).parts;
+				if (Array.isArray(parts)) {
+					summary.candidatePartCount = parts.length;
+					summary.candidateTextLength = parts.reduce((total, part) => {
+						if (part && typeof part === "object" && typeof (part as { text?: unknown }).text === "string") {
+							return total + ((part as { text: string }).text.length);
+						}
+						return total;
+					}, 0);
+				}
+			}
+		}
+
+		return summary;
+	}
+
+	private addDeltaMetadata(summary: Record<string, unknown>, delta: Record<string, unknown>, prefix: string): void {
+		summary[`${prefix}Keys`] = Object.keys(delta);
+		if (typeof delta.content === "string") {
+			summary[`${prefix}ContentLength`] = delta.content.length;
+		}
+		if (typeof delta.reasoning_content === "string") {
+			summary[`${prefix}ReasoningLength`] = delta.reasoning_content.length;
+		}
+		if (typeof delta.text === "string") {
+			summary[`${prefix}TextLength`] = delta.text.length;
+		}
+		if (Array.isArray(delta.tool_calls)) {
+			summary[`${prefix}ToolCallCount`] = delta.tool_calls.length;
+		}
 	}
 
 	private writeOutput(level: string, tag: string, data: Record<string, unknown>): void {
