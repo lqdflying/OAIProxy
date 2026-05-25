@@ -458,10 +458,36 @@
 						<button id="saveModel" class="primary">Save Model</button>
 						<button id="cancelModel" class="secondary">Cancel</button>
 					</div>
+					</div>
 				</div>
-			</div>
-		</section>
+			</section>
 
-		<script src="%SCRIPT_URI%" nonce="%NONCE%"></script>
+			<section id="providerUsageCheckSection">
+				<div class="section-header">
+					<h2>Provider Usage Check</h2>
+					<div class="section-actions">
+						<button id="checkAllProviderUsage" class="secondary">Check All</button>
+					</div>
+				</div>
+				<div class="table-container">
+					<table id="providerUsageTable">
+						<thead>
+							<tr>
+								<th>Provider</th>
+								<th>Usage Plan</th>
+								<th>Remaining / Usage</th>
+								<th>Usage Key</th>
+								<th>Status</th>
+								<th>Action</th>
+							</tr>
+						</thead>
+						<tbody id="providerUsageTableBody">
+							<!-- Provider usage rows will be inserted here -->
+						</tbody>
+					</table>
+				</div>
+			</section>
+
+			<script src="%SCRIPT_URI%" nonce="%NONCE%"></script>
 	</body>
 </html>

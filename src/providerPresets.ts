@@ -10,6 +10,20 @@ export interface ProviderPreset {
 
 export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
 	{
+		id: "openai",
+		label: "OpenAI",
+		provider: "openai",
+		baseUrl: "https://api.openai.com/v1",
+		apiMode: "openai",
+	},
+	{
+		id: "anthropic",
+		label: "Anthropic",
+		provider: "anthropic",
+		baseUrl: "https://api.anthropic.com",
+		apiMode: "anthropic",
+	},
+	{
 		id: "kimi",
 		label: "Kimi (Moonshot AI)",
 		provider: "kimi",

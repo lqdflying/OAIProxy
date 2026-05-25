@@ -4,7 +4,7 @@
 
 # OAIProxy
 
-**自维护的 VS Code 扩展，用于在 GitHub Copilot Chat 中使用 OpenAI/Ollama/Anthropic/Gemini API 兼容供应商，并内置 Kimi、DeepSeek、MiniMax 预设** 🔥
+**自维护的 VS Code 扩展，用于在 GitHub Copilot Chat 中使用 OpenAI/Ollama/Anthropic/Gemini API 兼容供应商，并内置 OpenAI、Anthropic、Kimi、DeepSeek、MiniMax 预设** 🔥
 
 [English](README.md) | 简体中文
 
@@ -63,7 +63,7 @@
 
 本扩展提供可视化配置界面，用于管理供应商、模型和 API 密钥，无需手动编辑 JSON 文件。可通过命令面板（`OAIProxy: Open Configuration UI`）打开，或点击 OAIProxy 状态栏项。
 
-供应商管理表单内置 Kimi、DeepSeek、MiniMax 预设。选择预设会填入供应商 ID、Base URL 和 `openai` API 模式；模型 ID 仍以供应商当前文档或模型列表为准。
+供应商管理表单内置 OpenAI、Anthropic、Kimi、DeepSeek、MiniMax 预设。选择预设会填入供应商 ID、Base URL 和 API 模式；模型 ID 仍以供应商当前文档或模型列表为准。示例片段见 `examples/openai.jsonc` 和 `examples/anthropic.jsonc`。
 
 → [完整配置指南](doc/configuration.zh-CN.md)
 

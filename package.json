@@ -2,7 +2,7 @@
 	"name": "oaiproxy",
 	"publisher": "lqdflying",
 	"displayName": "OAIProxy",
-	"description": "OpenAI/Ollama/Anthropic/Gemini provider for Copilot Chat, with Kimi, DeepSeek, and MiniMax presets",
+	"description": "OpenAI/Ollama/Anthropic/Gemini provider for Copilot Chat, with OpenAI, Anthropic, Kimi, DeepSeek, and MiniMax presets",
 	"icon": "assets/icon.png",
 	"keywords": [
 		"ai",
@@ -29,7 +29,7 @@
 		"type": "git",
 		"url": "https://github.com/lqdflying/OAIProxy"
 	},
-	"version": "0.1.0",
+	"version": "0.1.1",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -80,6 +80,11 @@
 				"command": "oaiproxy.openConfig",
 				"category": "OAIProxy",
 				"title": "Open Configuration UI"
+			},
+			{
+				"command": "oaiproxy.checkProviderUsage",
+				"category": "OAIProxy",
+				"title": "Check Provider Balance / Usage"
 			},
 			{
 				"command": "oaiproxy.generateGitCommitMessage",

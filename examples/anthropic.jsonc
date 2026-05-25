@@ -1,0 +1,16 @@
+{
+	"oaicopilot.models": [
+		{
+			"id": "claude-sonnet-4-6",
+			"displayName": "Claude Sonnet 4.6",
+			"owned_by": "anthropic",
+			"baseUrl": "https://api.anthropic.com",
+			"apiMode": "anthropic",
+			"family": "claude-sonnet-4.6",
+			"vision": true,
+			"context_length": 200000,
+			"max_tokens": 64000,
+			"toolCalling": true,
+		},
+	],
+}

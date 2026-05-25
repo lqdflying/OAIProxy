@@ -8,6 +8,15 @@ import { getModelProviderId, normalizeUserModels, parseModelId } from "./utils";
 import { abortCommitGeneration, generateCommitMsg } from "./gitCommit/commitMessageGenerator";
 import { TokenizerManager } from "./tokenizer/tokenizerManager";
 import { VersionManager } from "./versionManager";
+import {
+	checkProviderUsage,
+	formatProviderUsageResult,
+	getProviderSecretKey,
+	getProviderUsageAdapter,
+	getProviderUsageSecretKey,
+	providerRequiresUsageApiKey,
+	type ProviderUsageAdapter,
+} from "./providerUsage";
 
 const LANGUAGE_MODEL_VENDOR = "oaiproxy";
 const LAST_ACTIVATED_VERSION_KEY = "oaiproxy.lastActivatedVersion";
@@ -22,6 +31,8 @@ export function activate(context: vscode.ExtensionContext) {
 	TokenizerManager.initialize(context.extensionPath);
 
 	const tokenCountStatusBarItem: vscode.StatusBarItem = initStatusBar(context);
+	const usageOutputChannel = vscode.window.createOutputChannel("OAIProxy Usage");
+	context.subscriptions.push(usageOutputChannel);
 	const chatProvider = new HuggingFaceChatModelProvider(context.secrets, tokenCountStatusBarItem);
 	context.subscriptions.push(chatProvider);
 	// Register the provider under the vendor id used in package.json.
@@ -114,6 +125,40 @@ export function activate(context: vscode.ExtensionContext) {
 		})
 	);
 
+	context.subscriptions.push(
+		vscode.commands.registerCommand("oaiproxy.checkProviderUsage", async () => {
+			const config = vscode.workspace.getConfiguration();
+			const userModels = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+			const providers = getProviderUsageTargets(userModels);
+
+			if (providers.length === 0) {
+				vscode.window.showInformationMessage(
+					"No configured OpenAI, Anthropic, DeepSeek, Kimi/Moonshot, or MiniMax providers found in oaicopilot.models."
+				);
+				return;
+			}
+
+			const selectedProvider = await vscode.window.showQuickPick(
+				providers.map((target) => ({
+					label: target.label,
+					description: target.adapter,
+					provider: target.provider,
+					baseUrl: target.baseUrl,
+				})),
+				{
+					title: "Check Provider Balance / Usage",
+					placeHolder: "Select a provider to check",
+				}
+			);
+
+			if (!selectedProvider) {
+				return;
+			}
+
+			await runProviderUsageCheck(context, usageOutputChannel, selectedProvider.provider, selectedProvider.baseUrl);
+		})
+	);
+
 	// Register the generateGitCommitMessage command handler
 	context.subscriptions.push(
 		vscode.commands.registerCommand("oaiproxy.generateGitCommitMessage", async (scm) => {
@@ -142,6 +187,11 @@ export function deactivate() {}
 interface ProviderKeyTarget {
 	provider: string;
 	label: string;
+	baseUrl?: string;
+}
+
+interface ProviderUsageTarget extends ProviderKeyTarget {
+	adapter: ProviderUsageAdapter;
 }
 
 async function configureApiKey(
@@ -184,7 +234,7 @@ async function configureApiKey(
 }
 
 function getProviderKeyTargets(userModels: HFModelItem[]): ProviderKeyTarget[] {
-	const providers = new Map<string, string>();
+	const providers = new Map<string, ProviderKeyTarget>();
 	for (const model of userModels) {
 		const provider = model.owned_by?.trim();
 		if (!provider || !model.baseUrl) {
@@ -192,13 +242,95 @@ function getProviderKeyTargets(userModels: HFModelItem[]): ProviderKeyTarget[] {
 		}
 		const normalizedProvider = provider.toLowerCase();
 		if (!providers.has(normalizedProvider)) {
-			providers.set(normalizedProvider, provider);
+			providers.set(normalizedProvider, {
+				provider: normalizedProvider,
+				label: provider,
+				baseUrl: model.baseUrl,
+			});
 		}
 	}
 
-	return Array.from(providers, ([provider, label]) => ({ provider, label })).sort((a, b) =>
-		a.label.localeCompare(b.label)
-	);
+	return Array.from(providers.values()).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function getProviderUsageTargets(userModels: HFModelItem[]): ProviderUsageTarget[] {
+	return getProviderKeyTargets(userModels)
+		.map((target) => {
+			const adapter = getProviderUsageAdapter(target.provider, target.baseUrl);
+			return adapter ? { ...target, adapter } : undefined;
+		})
+		.filter((target): target is ProviderUsageTarget => target !== undefined);
+}
+
+async function runProviderUsageCheck(
+	context: vscode.ExtensionContext,
+	outputChannel: vscode.OutputChannel,
+	provider: string,
+	baseUrl?: string
+): Promise<void> {
+	try {
+		const adapter = getProviderUsageAdapter(provider, baseUrl);
+		if (!adapter) {
+			vscode.window.showErrorMessage(`Provider ${provider} does not support usage checks yet.`);
+			return;
+		}
+
+		let apiKey = await context.secrets.get(
+			providerRequiresUsageApiKey(adapter) ? getProviderUsageSecretKey(provider) : getProviderSecretKey(provider)
+		);
+		if (!apiKey && providerRequiresUsageApiKey(adapter)) {
+			apiKey = await promptForUsageApiKey(context, provider, adapter);
+		}
+		if (!apiKey) {
+			vscode.window.showErrorMessage(
+				providerRequiresUsageApiKey(adapter)
+					? `No usage/admin API key found for provider ${provider}.`
+					: `No API key found for provider ${provider}. Configure its provider API key first.`
+			);
+			return;
+		}
+
+		const result = await checkProviderUsage({ provider, baseUrl, apiKey });
+		outputChannel.appendLine(`\n[${new Date().toISOString()}] ${provider}`);
+		outputChannel.appendLine(formatProviderUsageResult(result));
+		outputChannel.show(true);
+		vscode.window.showInformationMessage(result.summary);
+	} catch (error) {
+		const errorMessage = error instanceof Error ? error.message : String(error);
+		outputChannel.appendLine(`\n[${new Date().toISOString()}] ${provider} failed`);
+		outputChannel.appendLine(errorMessage);
+		outputChannel.show(true);
+		vscode.window.showErrorMessage(errorMessage);
+	}
+}
+
+async function promptForUsageApiKey(
+	context: vscode.ExtensionContext,
+	provider: string,
+	adapter: ProviderUsageAdapter
+): Promise<string | undefined> {
+	const title = adapter === "openai" ? "OpenAI Admin API Key for Usage" : "Anthropic Admin API Key for Usage";
+	const prompt =
+		adapter === "openai"
+			? "OpenAI usage/cost checks require an Admin API key. It is stored separately from the chat API key."
+			: "Anthropic usage/cost checks require an Admin API key (sk-ant-admin...). It is stored separately from the chat API key.";
+	const apiKey = await vscode.window.showInputBox({
+		title,
+		prompt,
+		ignoreFocusOut: true,
+		password: true,
+	});
+	if (apiKey === undefined) {
+		return undefined;
+	}
+
+	const trimmed = apiKey.trim();
+	if (!trimmed) {
+		return undefined;
+	}
+
+	await context.secrets.store(getProviderUsageSecretKey(provider), trimmed);
+	return trimmed;
 }
 
 function getProviderFromCommandArgs(args: readonly unknown[], userModels: HFModelItem[]): string | undefined {

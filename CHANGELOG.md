@@ -1,5 +1,13 @@
 # Change Log
 
+## 0.1.1 (2026-05-25)
+
+- Add OpenAI and Anthropic provider presets, examples, and configuration documentation.
+- Add provider balance/usage checks for DeepSeek, Kimi/Moonshot, MiniMax, OpenAI, and Anthropic.
+- Add a standalone Provider Usage Check table that lists configured supported providers dynamically with credit, token, or cost usage status.
+- Store OpenAI and Anthropic usage/admin keys separately from normal chat API keys.
+- Package the GA VSIX artifact for manual Marketplace publication.
+
 ## 0.1.0 (2026-05-15)
 
 - Optimize Vision Bridge requests so the vision model receives only a minimal fixed image-description prompt plus the image, avoiding the full Copilot chat prompt and history.

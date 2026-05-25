@@ -7,8 +7,10 @@ const state = {
 	commitModel: "",
 	models: [],
 	providerKeys: {},
+	providerUsageKeys: {},
 	providerInfo: {},
 	providerPresets: [],
+	providerUsage: {},
 };
 
 // Store the action to be performed after confirmation
@@ -26,6 +28,8 @@ const statusCodesInput = document.getElementById("statusCodes");
 
 // Provider management elements
 const providerTableBody = document.getElementById("providerTableBody");
+const providerUsageTableBody = document.getElementById("providerUsageTableBody");
+const checkAllProviderUsageBtn = document.getElementById("checkAllProviderUsage");
 
 // Model management elements
 const modelTableBody = document.getElementById("modelTableBody");
@@ -125,6 +129,28 @@ document.getElementById("importConfig").addEventListener("click", () => {
 document.getElementById("refreshGlobalConfig").addEventListener("click", handleRefresh);
 document.getElementById("refreshProviders").addEventListener("click", handleRefresh);
 document.getElementById("refreshModels").addEventListener("click", handleRefresh);
+checkAllProviderUsageBtn.addEventListener("click", () => {
+	const usageTargets = getProviderUsageTargets();
+	if (!usageTargets.length) {
+		return;
+	}
+
+	rememberProviderUsageKeyInputs();
+	for (const target of usageTargets) {
+		state.providerUsage[target.provider] = {
+			status: "loading",
+			summary: "Checking usage...",
+		};
+	}
+	renderProviderUsageChecks();
+	for (const target of usageTargets) {
+		vscode.postMessage({
+			type: "checkProviderUsage",
+			provider: target.provider,
+			usageApiKey: state.providerUsageKeys[target.provider] || undefined,
+		});
+	}
+});
 
 function renderProviderPresetOptions() {
 	const options = state.providerPresets
@@ -146,6 +172,220 @@ function applyProviderPreset(row, presetId) {
 	providerInput.value = preset.provider;
 	baseUrlInput.value = preset.baseUrl;
 	apiModeInput.value = preset.apiMode;
+}
+
+function getProviderUsageKind(provider, baseUrl) {
+	const normalizedProvider = (provider || "").trim().toLowerCase();
+	const normalizedBaseUrl = (baseUrl || "").trim().toLowerCase();
+	if (normalizedProvider === "openai" || normalizedBaseUrl.includes("api.openai.com")) {
+		return "openai";
+	}
+	if (normalizedProvider === "deepseek" || normalizedBaseUrl.includes("deepseek.com")) {
+		return "deepseek";
+	}
+	if (
+		normalizedProvider === "kimi" ||
+		normalizedProvider === "moonshot" ||
+		normalizedBaseUrl.includes("moonshot.ai") ||
+		normalizedBaseUrl.includes("kimi.ai")
+	) {
+		return "kimi";
+	}
+	if (
+		normalizedProvider === "minimax" ||
+		normalizedProvider === "minimax-anthropic" ||
+		normalizedBaseUrl.includes("minimax.io")
+	) {
+		return "minimax";
+	}
+	if (
+		normalizedProvider === "anthropic" ||
+		normalizedProvider === "claude" ||
+		normalizedBaseUrl.includes("api.anthropic.com")
+	) {
+		return "anthropic";
+	}
+	return "";
+}
+
+function providerUsageNeedsSeparateKey(usageKind) {
+	return usageKind === "openai" || usageKind === "anthropic";
+}
+
+function getProviderUsagePlan(usageKind) {
+	if (usageKind === "deepseek" || usageKind === "kimi") {
+		return "Credit";
+	}
+	if (usageKind === "minimax") {
+		return "Token";
+	}
+	if (usageKind === "openai" || usageKind === "anthropic") {
+		return "Cost usage";
+	}
+	return "";
+}
+
+function getProviderUsageTargetDescription(usageKind) {
+	if (usageKind === "deepseek" || usageKind === "kimi") {
+		return "Remaining credit balance";
+	}
+	if (usageKind === "minimax") {
+		return "Tokens left and reset time";
+	}
+	if (usageKind === "openai" || usageKind === "anthropic") {
+		return "Month-to-date spend";
+	}
+	return "Not supported";
+}
+
+function escapeHtml(value) {
+	return String(value)
+		.replaceAll("&", "&amp;")
+		.replaceAll("<", "&lt;")
+		.replaceAll(">", "&gt;")
+		.replaceAll('"', "&quot;")
+		.replaceAll("'", "&#39;");
+}
+
+function getConfiguredProviders() {
+	const providers = new Map();
+	for (const model of state.models) {
+		const provider = model.owned_by;
+		if (!provider) {
+			continue;
+		}
+		const current = providers.get(provider) || {
+			provider,
+			baseUrl: model.baseUrl || "",
+			modelCount: 0,
+			modelIds: [],
+		};
+		if (!current.baseUrl && model.baseUrl) {
+			current.baseUrl = model.baseUrl;
+		}
+		if (!model.id.startsWith("__provider__")) {
+			current.modelCount += 1;
+			current.modelIds.push(model.displayName || model.id);
+		}
+		providers.set(provider, current);
+	}
+	return Array.from(providers.values()).sort((a, b) => a.provider.localeCompare(b.provider));
+}
+
+function formatModelList(entry) {
+	if (!entry.modelIds.length) {
+		return "provider only";
+	}
+	const visible = entry.modelIds.slice(0, 2).join(", ");
+	const remaining = entry.modelIds.length - 2;
+	return remaining > 0 ? `${visible}, +${remaining} more` : visible;
+}
+
+function getProviderUsageTargets() {
+	return getConfiguredProviders()
+		.map((entry) => ({
+			...entry,
+			usageKind: getProviderUsageKind(entry.provider, entry.baseUrl),
+		}))
+		.filter((entry) => entry.usageKind);
+}
+
+function rememberProviderUsageKeyInputs() {
+	document.querySelectorAll(".provider-usage-key-input").forEach((input) => {
+		const provider = input.getAttribute("data-provider");
+		if (provider) {
+			state.providerUsageKeys[provider] = input.value;
+		}
+	});
+}
+
+function renderProviderUsageStatus(usageState) {
+	if (!usageState || !usageState.status) {
+		return '<span class="status-pill idle">Not checked</span>';
+	}
+	if (usageState.status === "loading") {
+		return '<span class="status-pill loading">Checking</span>';
+	}
+	if (usageState.status === "error") {
+		return '<span class="status-pill error">Error</span>';
+	}
+	return '<span class="status-pill success">Checked</span>';
+}
+
+function renderProviderUsageValue(usageState, usageKind) {
+	if (usageState?.status === "success") {
+		return `<div class="usage-value">${escapeHtml(usageState.summary || "Usage check completed.")}</div>`;
+	}
+	if (usageState?.status === "error") {
+		return `<div class="usage-value error-text">${escapeHtml(usageState.error || "Usage check failed.")}</div>`;
+	}
+	return `<div class="usage-value muted">${escapeHtml(getProviderUsageTargetDescription(usageKind))}</div>`;
+}
+
+function renderProviderUsageKeyCell(provider, usageKind) {
+	if (providerUsageNeedsSeparateKey(usageKind)) {
+		return `<input type="password" class="provider-input provider-usage-key-input" data-provider="${escapeHtml(
+			provider
+		)}" value="${escapeHtml(state.providerUsageKeys[provider] || "")}" placeholder="Admin usage key" />`;
+	}
+	return '<div class="usage-key-note">Provider API key</div>';
+}
+
+function renderProviderUsageChecks() {
+	const targets = getProviderUsageTargets();
+	checkAllProviderUsageBtn.disabled = targets.length === 0 || targets.some((target) => state.providerUsage[target.provider]?.status === "loading");
+	if (!targets.length) {
+		providerUsageTableBody.innerHTML =
+			'<tr><td colspan="6" class="no-data">No configured providers support usage checks yet</td></tr>';
+		return;
+	}
+
+	providerUsageTableBody.innerHTML = targets
+		.map((target) => {
+			const providerAttr = escapeHtml(target.provider);
+			const usageState = state.providerUsage[target.provider] || {};
+			const isLoading = usageState.status === "loading";
+			return `
+				<tr data-provider="${providerAttr}">
+					<td class="provider-id-cell">
+						<div class="provider-name">${providerAttr}</div>
+						<div class="provider-meta">${escapeHtml(formatModelList(target))}</div>
+					</td>
+					<td>
+						<div class="usage-plan">${escapeHtml(getProviderUsagePlan(target.usageKind))}</div>
+						<div class="provider-meta">${escapeHtml(target.usageKind)}</div>
+					</td>
+					<td>${renderProviderUsageValue(usageState, target.usageKind)}</td>
+					<td>${renderProviderUsageKeyCell(target.provider, target.usageKind)}</td>
+					<td>${renderProviderUsageStatus(usageState)}</td>
+					<td class="action-buttons">
+						<button class="check-provider-usage-btn compact" data-provider="${providerAttr}" ${isLoading ? "disabled" : ""}>${
+							isLoading ? "Checking..." : "Check"
+						}</button>
+					</td>
+				</tr>`;
+		})
+		.join("");
+
+	document.querySelectorAll(".check-provider-usage-btn").forEach((btn) => {
+		btn.addEventListener("click", (event) => {
+			const provider = event.target.getAttribute("data-provider");
+			if (!provider) {
+				return;
+			}
+			rememberProviderUsageKeyInputs();
+			state.providerUsage[provider] = {
+				status: "loading",
+				summary: "Checking usage...",
+			};
+			renderProviderUsageChecks();
+			vscode.postMessage({
+				type: "checkProviderUsage",
+				provider: provider,
+				usageApiKey: state.providerUsageKeys[provider] || undefined,
+			});
+		});
+	});
 }
 
 // Add Provider button event listener
@@ -315,6 +555,7 @@ window.addEventListener("message", (event) => {
 				commitModel,
 				models,
 				providerKeys,
+				providerUsageKeys,
 				providerPresets,
 				commitLanguage,
 			} = message.payload;
@@ -331,6 +572,7 @@ window.addEventListener("message", (event) => {
 			state.models = models || [];
 			state.commitModel = commitModel || "";
 			state.providerKeys = providerKeys || {};
+			state.providerUsageKeys = providerUsageKeys || {};
 			state.providerPresets = providerPresets || [];
 
 			// Update base configuration
@@ -351,6 +593,7 @@ window.addEventListener("message", (event) => {
 			// Render provider and model management
 			renderProviders();
 			renderModels();
+			renderProviderUsageChecks();
 			break;
 		case "modelsFetched":
 			// Handle the response from fetchModels
@@ -361,6 +604,20 @@ window.addEventListener("message", (event) => {
 			dropdownHeader.textContent = "Error fetching models";
 			dropdownContent.innerHTML = `<div class="dropdown-option error">Failed to fetch models. Check the Developer Console for details.</div>`;
 			console.error("[oaiproxy] Failed to fetch models:", message.error);
+			break;
+		case "providerUsageResult":
+			state.providerUsage[message.provider] = {
+				status: "success",
+				summary: message.result.summary,
+			};
+			renderProviderUsageChecks();
+			break;
+		case "providerUsageError":
+			state.providerUsage[message.provider] = {
+				status: "error",
+				error: message.error,
+			};
+			renderProviderUsageChecks();
 			break;
 		case "confirmResponse":
 			// Handle confirmation responses
@@ -380,10 +637,7 @@ window.addEventListener("message", (event) => {
 });
 
 function renderProviders() {
-	// Get all unique providers
-	const providers = Array.from(new Set(state.models.map((m) => m.owned_by).filter(Boolean))).sort((a, b) =>
-		a.localeCompare(b)
-	);
+	const providers = getConfiguredProviders();
 
 	if (!providers.length) {
 		providerTableBody.innerHTML = '<tr><td colspan="6" class="no-data">No providers</td></tr>';
@@ -393,32 +647,39 @@ function renderProviders() {
 	}
 
 	const rows = providers
-		.map((provider) => {
+		.map((providerEntry) => {
+			const provider = providerEntry.provider;
 			// Get the provider's configuration information
 			const providerModels = state.models.filter((m) => m.owned_by === provider);
 			const firstModel = providerModels[0];
+			const baseUrl = firstModel.baseUrl || "";
 			const headersJson = firstModel.headers ? JSON.stringify(firstModel.headers, null, 2) : "";
+			const providerAttr = escapeHtml(provider);
+			const modelCount = providerEntry.modelCount;
 
 			return `
-			<tr data-provider="${provider}">
-				<td>${provider}</td>
-				<td><input type="text" class="provider-input" data-field="baseUrl" value="${firstModel.baseUrl || ""}" placeholder="Base URL" /></td>
-				<td><input type="password" class="provider-input" data-field="apiKey" value="${state.providerKeys[provider] || ""}" placeholder="API Key" /></td>
-				<td>
-					<select class="provider-input" data-field="apiMode">
-						<option value="openai" ${firstModel.apiMode === "openai" ? "selected" : ""}>OpenAI</option>
-						<option value="openai-responses" ${firstModel.apiMode === "openai-responses" ? "selected" : ""}>OpenAI Responses</option>
-						<option value="ollama" ${firstModel.apiMode === "ollama" ? "selected" : ""}>Ollama</option>
-						<option value="anthropic" ${firstModel.apiMode === "anthropic" ? "selected" : ""}>Anthropic</option>
-						<option value="gemini" ${firstModel.apiMode === "gemini" ? "selected" : ""}>Gemini</option>
-					</select>
-				</td>
-				<td><textarea class="provider-input" data-field="headers" rows="2" placeholder='{"X-API-Version": "v1"}' style="width: 100%; font-family: monospace; font-size: 12px;">${headersJson}</textarea></td>
-				<td class="action-buttons">
-					<button class="update-provider-btn" data-provider="${provider}">Save</button>
-					<button class="delete-provider-btn danger" data-provider="${provider}">Delete</button>
-				</td>
-			</tr>`;
+				<tr data-provider="${providerAttr}">
+					<td class="provider-id-cell">
+						<div class="provider-name">${escapeHtml(provider)}</div>
+						<div class="provider-meta">${modelCount} ${modelCount === 1 ? "model" : "models"}</div>
+					</td>
+					<td class="provider-url-cell"><input type="text" class="provider-input" data-field="baseUrl" value="${escapeHtml(baseUrl)}" placeholder="Base URL" /></td>
+					<td class="provider-key-cell"><input type="password" class="provider-input" data-field="apiKey" value="${escapeHtml(state.providerKeys[provider] || "")}" placeholder="API Key" /></td>
+					<td class="provider-mode-cell">
+						<select class="provider-input" data-field="apiMode">
+							<option value="openai" ${firstModel.apiMode === "openai" ? "selected" : ""}>OpenAI</option>
+							<option value="openai-responses" ${firstModel.apiMode === "openai-responses" ? "selected" : ""}>OpenAI Responses</option>
+							<option value="ollama" ${firstModel.apiMode === "ollama" ? "selected" : ""}>Ollama</option>
+							<option value="anthropic" ${firstModel.apiMode === "anthropic" ? "selected" : ""}>Anthropic</option>
+							<option value="gemini" ${firstModel.apiMode === "gemini" ? "selected" : ""}>Gemini</option>
+						</select>
+					</td>
+					<td class="provider-headers-cell"><textarea class="provider-input provider-headers-input" data-field="headers" rows="2" placeholder='{"X-API-Version": "v1"}'>${escapeHtml(headersJson)}</textarea></td>
+					<td class="action-buttons">
+						<button class="update-provider-btn compact" data-provider="${providerAttr}">Save</button>
+						<button class="delete-provider-btn danger compact" data-provider="${providerAttr}">Delete</button>
+					</td>
+				</tr>`;
 		})
 		.join("");
 
@@ -427,7 +688,8 @@ function renderProviders() {
 	// Populate the provider dropdown in the model form and provider info
 	state.providerInfo = {}; // Reset provider info
 	const providerOptions = providers
-		.map((provider) => {
+		.map((providerEntry) => {
+			const provider = providerEntry.provider;
 			// Get the provider's configuration information
 			const providerModels = state.models.filter((m) => m.owned_by === provider);
 			const firstModel = providerModels[0];

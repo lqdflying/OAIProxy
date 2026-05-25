@@ -144,14 +144,18 @@ Mixed configuration with multiple API modes:
 
 ### Provider Presets
 
-The configuration UI can prefill provider settings for Kimi, DeepSeek, and MiniMax. Presets fill only the provider ID, base URL, and API mode; add the exact model IDs you want to use separately.
+The configuration UI can prefill provider settings for OpenAI, Anthropic, Kimi, DeepSeek, and MiniMax. Presets fill only the provider ID, base URL, and API mode; add the exact model IDs you want to use separately.
 
 | Provider | Provider ID | Base URL | API Mode |
 |---|---|---|---|
+| OpenAI | `openai` | `https://api.openai.com/v1` | `openai` |
+| Anthropic | `anthropic` | `https://api.anthropic.com` | `anthropic` |
 | Kimi (Moonshot AI) | `kimi` | `https://api.moonshot.ai/v1` | `openai` |
 | DeepSeek | `deepseek` | `https://api.deepseek.com` | `openai` |
 | MiniMax (OpenAI) | `minimax` | `https://api.minimax.io/v1` | `openai` |
 | MiniMax (Anthropic) | `minimax-anthropic` | `https://api.minimax.io/anthropic` | `anthropic` |
+
+Settings snippets are available in `examples/openai.jsonc` and `examples/anthropic.jsonc`. OpenAI and Anthropic usage/cost checks require separate admin keys; enter those in the configuration UI's `Usage Key` field instead of adding them to `settings.json`.
 
 ### Settings Example
 

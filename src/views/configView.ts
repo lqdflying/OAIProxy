@@ -5,6 +5,14 @@ import { normalizeUserModels, parseModelId } from "../utils";
 import { fetchModels } from "../provideModel";
 import { VersionManager } from "../versionManager";
 import { PROVIDER_PRESETS, type ProviderPreset } from "../providerPresets";
+import {
+	checkProviderUsage,
+	getProviderSecretKey,
+	getProviderUsageAdapter,
+	getProviderUsageSecretKey,
+	providerRequiresUsageApiKey,
+	type ProviderUsageResult,
+} from "../providerUsage";
 
 interface InitPayload {
 	baseUrl: string;
@@ -21,6 +29,7 @@ interface InitPayload {
 	commitLanguage: string;
 	models: HFModelItem[];
 	providerKeys: Record<string, string>;
+	providerUsageKeys: Record<string, string>;
 	providerPresets: readonly ProviderPreset[];
 }
 
@@ -40,6 +49,7 @@ interface ExportConfig {
 	commitModel: string;
 	models: HFModelItem[];
 	providerKeys: Record<string, string>;
+	providerUsageKeys?: Record<string, string>;
 	readFileLines: number;
 }
 
@@ -79,6 +89,7 @@ type IncomingMessage =
 			headers?: Record<string, string>;
 	  }
 	| { type: "deleteProvider"; provider: string }
+	| { type: "checkProviderUsage"; provider: string; usageApiKey?: string }
 	| { type: "addModel"; model: HFModelItem }
 	| { type: "updateModel"; model: HFModelItem; originalModelId?: string; originalConfigId?: string }
 	| { type: "deleteModel"; modelId: string }
@@ -89,6 +100,8 @@ type IncomingMessage =
 type OutgoingMessage =
 	| { type: "init"; payload: InitPayload }
 	| { type: "modelsFetched"; models: HFModelItem[] }
+	| { type: "providerUsageResult"; provider: string; result: ProviderUsageResult }
+	| { type: "providerUsageError"; provider: string; error: string }
 	| { type: "confirmResponse"; id: string; confirmed: boolean };
 
 export class ConfigViewPanel {
@@ -203,6 +216,9 @@ export class ConfigViewPanel {
 			case "deleteProvider":
 				await this.deleteProvider(message.provider);
 				break;
+			case "checkProviderUsage":
+				await this.checkProviderUsage(message.provider, message.usageApiKey);
+				break;
 			case "addModel":
 				await this.addModel(message.model);
 				break;
@@ -253,6 +269,7 @@ export class ConfigViewPanel {
 
 		const apiKey = (await this.secrets.get("oaicopilot.apiKey")) ?? "";
 		const providerKeys: Record<string, string> = {};
+		const providerUsageKeys: Record<string, string> = {};
 		const providers = Array.from(new Set(models.map((m) => m.owned_by).filter(Boolean)));
 		for (const provider of providers) {
 			const normalized = provider.toLowerCase();
@@ -268,6 +285,10 @@ export class ConfigViewPanel {
 			}
 			if (key) {
 				providerKeys[provider] = key;
+			}
+			const usageKey = await this.secrets.get(getProviderUsageSecretKey(provider));
+			if (usageKey) {
+				providerUsageKeys[provider] = usageKey;
 			}
 		}
 
@@ -297,6 +318,7 @@ export class ConfigViewPanel {
 			commitLanguage,
 			models,
 			providerKeys,
+			providerUsageKeys,
 			providerPresets: PROVIDER_PRESETS,
 		};
 		this.panel.webview.postMessage({ type: "init", payload });
@@ -483,6 +505,10 @@ export class ConfigViewPanel {
 		if (trimmedProvider !== normalizedProvider) {
 			await this.secrets.delete(`oaicopilot.apiKey.${trimmedProvider}`);
 		}
+		await this.secrets.delete(getProviderUsageSecretKey(normalizedProvider));
+		if (trimmedProvider !== normalizedProvider) {
+			await this.secrets.delete(getProviderUsageSecretKey(trimmedProvider));
+		}
 
 		// Remove all models of this provider from the model list
 		const config = vscode.workspace.getConfiguration();
@@ -493,6 +519,52 @@ export class ConfigViewPanel {
 		vscode.window.showInformationMessage(`Provider ${provider} and all its models have been deleted.`);
 		// Send refresh signal to frontend
 		await this.sendInit();
+	}
+
+	private async checkProviderUsage(provider: string, usageApiKey?: string) {
+		const trimmedProvider = provider.trim();
+		const normalizedProvider = trimmedProvider.toLowerCase();
+		try {
+			const config = vscode.workspace.getConfiguration();
+			const models = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+			const model = models.find((item) => item.owned_by?.trim().toLowerCase() === normalizedProvider && item.baseUrl);
+			const baseUrl = model?.baseUrl;
+			const adapter = getProviderUsageAdapter(trimmedProvider, baseUrl);
+			if (!adapter) {
+				throw new Error(`Provider ${trimmedProvider} does not support usage checks yet.`);
+			}
+
+			const secretKey = providerRequiresUsageApiKey(adapter)
+				? getProviderUsageSecretKey(trimmedProvider)
+				: getProviderSecretKey(trimmedProvider);
+			const trimmedUsageApiKey = usageApiKey?.trim();
+			if (providerRequiresUsageApiKey(adapter) && trimmedUsageApiKey) {
+				await this.secrets.store(secretKey, trimmedUsageApiKey);
+			}
+			const apiKey = providerRequiresUsageApiKey(adapter) && trimmedUsageApiKey
+				? trimmedUsageApiKey
+				: await this.secrets.get(secretKey);
+			if (!apiKey) {
+				throw new Error(
+					providerRequiresUsageApiKey(adapter)
+						? `No usage/admin API key found for provider ${trimmedProvider}. Add it in the Usage Key field first.`
+						: `No API key found for provider ${trimmedProvider}. Configure its provider API key first.`
+				);
+			}
+
+			const result = await checkProviderUsage({ provider: trimmedProvider, baseUrl, apiKey });
+			this.panel.webview.postMessage({
+				type: "providerUsageResult",
+				provider: trimmedProvider,
+				result,
+			} as OutgoingMessage);
+		} catch (error) {
+			this.panel.webview.postMessage({
+				type: "providerUsageError",
+				provider: trimmedProvider,
+				error: error instanceof Error ? error.message : String(error),
+			} as OutgoingMessage);
+		}
 	}
 
 	private async addModel(model: HFModelItem) {
@@ -589,12 +661,17 @@ export class ConfigViewPanel {
 			const commitModel = foundModel ? `${foundModel.id}${foundModel.configId ? "::" + foundModel.configId : ""}` : "";
 
 			const providerKeys: Record<string, string> = {};
+			const providerUsageKeys: Record<string, string> = {};
 			const providers = Array.from(new Set(models.map((m) => m.owned_by).filter(Boolean)));
 			for (const provider of providers) {
 				const normalized = provider.toLowerCase();
 				const key = await this.secrets.get(`oaicopilot.apiKey.${normalized}`);
 				if (key) {
 					providerKeys[provider] = key;
+				}
+				const usageKey = await this.secrets.get(getProviderUsageSecretKey(provider));
+				if (usageKey) {
+					providerUsageKeys[provider] = usageKey;
 				}
 			}
 
@@ -610,6 +687,7 @@ export class ConfigViewPanel {
 				models,
 				readFileLines,
 				providerKeys,
+				providerUsageKeys,
 			};
 
 			const uri = await vscode.window.showSaveDialog({
@@ -679,6 +757,14 @@ export class ConfigViewPanel {
 					await this.secrets.store(`oaicopilot.apiKey.${normalized}`, key);
 				} else {
 					await this.secrets.delete(`oaicopilot.apiKey.${normalized}`);
+				}
+			}
+			for (const [provider, key] of Object.entries(importData.providerUsageKeys ?? {})) {
+				const normalized = provider.toLowerCase();
+				if (key) {
+					await this.secrets.store(getProviderUsageSecretKey(normalized), key);
+				} else {
+					await this.secrets.delete(getProviderUsageSecretKey(normalized));
 				}
 			}
 

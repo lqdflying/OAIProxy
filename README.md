@@ -4,7 +4,7 @@
 
 # OAIProxy
 
-**A self-maintained VS Code extension to use OpenAI/Ollama/Anthropic/Gemini API providers in GitHub Copilot Chat, with presets for Kimi, DeepSeek, and MiniMax** 🔥
+**A self-maintained VS Code extension to use OpenAI/Ollama/Anthropic/Gemini API providers in GitHub Copilot Chat, with presets for OpenAI, Anthropic, Kimi, DeepSeek, and MiniMax** 🔥
 
 English | [简体中文](README.zh-CN.md)
 
@@ -63,7 +63,7 @@ English | [简体中文](README.zh-CN.md)
 
 The extension provides a visual configuration interface for managing providers, models, and API keys without editing JSON files manually. Open via the Command Palette (`OAIProxy: Open Configuration UI`) or click the OAIProxy status bar item.
 
-The Provider Management form includes presets for Kimi, DeepSeek, and MiniMax. Selecting a preset fills the provider ID, base URL, and `openai` API mode; you still choose the model ID from the provider's current documentation or model list.
+The Provider Management form includes presets for OpenAI, Anthropic, Kimi, DeepSeek, and MiniMax. Selecting a preset fills the provider ID, base URL, and API mode; you still choose the model ID from the provider's current documentation or model list. Example snippets are in `examples/openai.jsonc` and `examples/anthropic.jsonc`.
 
 → [Full Configuration Guide](doc/configuration.md)
 

@@ -231,6 +231,9 @@ button:active {
 
 .table-container {
 	overflow-x: auto;
+	border: 1px solid var(--vscode-editorWidget-border);
+	border-radius: 8px;
+	background: var(--vscode-editor-background);
 }
 
 table {
@@ -238,11 +241,82 @@ table {
 	border-collapse: collapse;
 }
 
+#providerTable {
+	min-width: 1280px;
+	table-layout: fixed;
+}
+
+#providerTable th:nth-child(1),
+#providerTable td:nth-child(1) {
+	width: 160px;
+}
+
+#providerTable th:nth-child(2),
+#providerTable td:nth-child(2) {
+	width: 300px;
+}
+
+#providerTable th:nth-child(3),
+#providerTable td:nth-child(3) {
+	width: 250px;
+}
+
+#providerTable th:nth-child(4),
+#providerTable td:nth-child(4) {
+	width: 200px;
+}
+
+#providerTable th:nth-child(5),
+#providerTable td:nth-child(5) {
+	width: 240px;
+}
+
+#providerTable th:nth-child(6),
+#providerTable td:nth-child(6) {
+	width: 130px;
+}
+
+#providerUsageTable {
+	min-width: 1180px;
+	table-layout: fixed;
+}
+
+#providerUsageTable th:nth-child(1),
+#providerUsageTable td:nth-child(1) {
+	width: 170px;
+}
+
+#providerUsageTable th:nth-child(2),
+#providerUsageTable td:nth-child(2) {
+	width: 150px;
+}
+
+#providerUsageTable th:nth-child(3),
+#providerUsageTable td:nth-child(3) {
+	width: 350px;
+}
+
+#providerUsageTable th:nth-child(4),
+#providerUsageTable td:nth-child(4) {
+	width: 240px;
+}
+
+#providerUsageTable th:nth-child(5),
+#providerUsageTable td:nth-child(5) {
+	width: 120px;
+}
+
+#providerUsageTable th:nth-child(6),
+#providerUsageTable td:nth-child(6) {
+	width: 120px;
+}
+
 th,
 td {
-	padding: 8px 12px;
+	padding: 12px;
 	text-align: left;
 	border-bottom: 1px solid var(--vscode-editorWidget-border);
+	vertical-align: middle;
 }
 
 th {
@@ -276,6 +350,14 @@ tr:hover {
 	margin-bottom: 6px;
 }
 
+.provider-headers-input {
+	min-height: 42px;
+	margin: 0;
+	font-family: monospace;
+	font-size: 12px;
+	resize: vertical;
+}
+
 .model-input:focus,
 .provider-input:focus,
 .provider-preset-select:focus {
@@ -283,7 +365,93 @@ tr:hover {
 }
 
 .action-buttons {
-	white-space: nowrap;
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
+	flex-wrap: wrap;
+	white-space: normal;
+}
+
+.provider-id-cell {
+	overflow-wrap: anywhere;
+}
+
+.provider-name {
+	font-weight: 700;
+	line-height: 1.3;
+}
+
+.provider-meta {
+	margin-top: 3px;
+	font-size: 12px;
+	color: var(--vscode-descriptionForeground);
+}
+
+.usage-key-note {
+	padding: 7px 0;
+	color: var(--vscode-descriptionForeground);
+	font-size: 12px;
+	line-height: 1.4;
+}
+
+.usage-plan {
+	font-weight: 700;
+	line-height: 1.3;
+}
+
+.usage-value {
+	line-height: 1.4;
+	overflow-wrap: anywhere;
+}
+
+.error-text {
+	color: var(--vscode-errorForeground);
+}
+
+.status-pill {
+	display: inline-flex;
+	align-items: center;
+	min-height: 24px;
+	padding: 2px 8px;
+	border-radius: 999px;
+	border: 1px solid var(--vscode-editorWidget-border);
+	font-size: 12px;
+	font-weight: 700;
+	line-height: 1.2;
+}
+
+.status-pill.success {
+	border-color: color-mix(in srgb, var(--vscode-testing-iconPassed, #4ade80) 45%, transparent);
+	background: color-mix(in srgb, var(--vscode-testing-iconPassed, #4ade80) 12%, transparent);
+	color: var(--vscode-foreground);
+}
+
+.status-pill.error {
+	border-color: color-mix(in srgb, var(--vscode-errorForeground) 45%, transparent);
+	background: color-mix(in srgb, var(--vscode-errorForeground) 12%, transparent);
+	color: var(--vscode-errorForeground);
+}
+
+.status-pill.loading {
+	border-color: color-mix(in srgb, var(--vscode-progressBar-background, #0e70c0) 45%, transparent);
+	background: color-mix(in srgb, var(--vscode-progressBar-background, #0e70c0) 12%, transparent);
+	color: var(--vscode-foreground);
+}
+
+.status-pill.idle {
+	color: var(--vscode-descriptionForeground);
+}
+
+button.compact {
+	padding: 7px 10px;
+	margin-right: 0;
+}
+
+button:disabled {
+	cursor: wait;
+	opacity: 0.65;
+	transform: none;
+	box-shadow: none;
 }
 
 button:not(.secondary):not(.danger) {
