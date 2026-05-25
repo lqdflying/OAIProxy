@@ -20,6 +20,7 @@
 - **思维链力度控制**：模型选择器中 VS Code 内置的按模型 Thinking Effort 下拉菜单 — 实时自定义推理力度
 - **高级配置**：灵活的对话请求选项，支持思维链/推理控制
 - **多供应商管理**：同时配置多个供应商模型，自动管理各供应商 API 密钥
+- **供应商用量检查**：在独立的 Provider Usage Check 表格中查看 DeepSeek/Kimi 余额、MiniMax token 套餐剩余额度，以及 OpenAI/Anthropic 当月费用用量
 - **同模型多配置**：为同一模型定义不同参数配置（如 GLM-4.6 开启/关闭思维链）
 - **可视化配置界面**：直观的界面管理供应商和模型
 - **自动重试**：处理 API 错误（429、500、502、503、504），支持指数退避
@@ -64,6 +65,8 @@
 本扩展提供可视化配置界面，用于管理供应商、模型和 API 密钥，无需手动编辑 JSON 文件。可通过命令面板（`OAIProxy: Open Configuration UI`）打开，或点击 OAIProxy 状态栏项。
 
 供应商管理表单内置 OpenAI、Anthropic、Kimi、DeepSeek、MiniMax 预设。选择预设会填入供应商 ID、Base URL 和 API 模式；模型 ID 仍以供应商当前文档或模型列表为准。示例片段见 `examples/openai.jsonc` 和 `examples/anthropic.jsonc`。
+
+独立的 Provider Usage Check 表格会动态列出已配置且支持用量检查的供应商，并按余额、token 套餐或费用用量展示结果。OpenAI 和 Anthropic 的用量/admin key 会与聊天 API key 分开保存。
 
 → [完整配置指南](doc/configuration.zh-CN.md)
 

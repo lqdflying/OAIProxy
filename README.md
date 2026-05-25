@@ -20,6 +20,7 @@ English | [简体中文](README.zh-CN.md)
 - **Thinking Effort control**: VS Code's built-in per-model Thinking Effort dropdown in the model picker — customize reasoning effort on the fly
 - **Advanced configuration**: Flexible chat request options with thinking/reasoning control
 - **Multi-provider management**: Configure models from multiple providers simultaneously with automatic API key management
+- **Provider usage checks**: Check DeepSeek/Kimi credit balance, MiniMax token-plan remaining quota, and OpenAI/Anthropic month-to-date cost usage from a standalone Provider Usage Check table
 - **Multi-config per model**: Define different settings for the same model (e.g., GLM-4.6 with/without thinking)
 - **Visual configuration UI**: Intuitive interface for managing providers and models
 - **Auto-retry**: Handles API errors (429, 500, 502, 503, 504) with exponential backoff
@@ -64,6 +65,8 @@ English | [简体中文](README.zh-CN.md)
 The extension provides a visual configuration interface for managing providers, models, and API keys without editing JSON files manually. Open via the Command Palette (`OAIProxy: Open Configuration UI`) or click the OAIProxy status bar item.
 
 The Provider Management form includes presets for OpenAI, Anthropic, Kimi, DeepSeek, and MiniMax. Selecting a preset fills the provider ID, base URL, and API mode; you still choose the model ID from the provider's current documentation or model list. Example snippets are in `examples/openai.jsonc` and `examples/anthropic.jsonc`.
+
+The standalone Provider Usage Check table lists configured supported providers dynamically and reports credit, token-plan, or cost usage. OpenAI and Anthropic usage/admin keys are stored separately from chat API keys.
 
 → [Full Configuration Guide](doc/configuration.md)
 
