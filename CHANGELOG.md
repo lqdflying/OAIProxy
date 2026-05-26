@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.1.4 (2026-05-26)
+
+- Keep enhanced OpenAI Responses cache telemetry so `cache.usage` logs include `input_tokens_details.cached_tokens` as `cachedTokens`.
+- Recognize direct provider `cached_tokens` usage fields for future cache investigations.
+
 ## 0.1.3 (2026-05-26)
 
 - Republish the 0.1.2 provider cache and OpenAI fixes under a new Marketplace version after the wrong 0.1.2 VSIX was uploaded.

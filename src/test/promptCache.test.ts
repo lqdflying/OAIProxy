@@ -91,6 +91,41 @@ suite("promptCache", () => {
 
 		assert.deepStrictEqual(
 			extractCacheUsage({
+				type: "response.completed",
+				response: {
+					usage: {
+						input_tokens: 4096,
+						output_tokens: 12,
+						total_tokens: 4108,
+						input_tokens_details: {
+							cached_tokens: 3072,
+						},
+					},
+				},
+			}),
+			{
+				inputTokens: 4096,
+				outputTokens: 12,
+				totalTokens: 4108,
+				cachedTokens: 3072,
+			}
+		);
+
+		assert.deepStrictEqual(
+			extractCacheUsage({
+				usage: {
+					prompt_tokens: 2048,
+					cached_tokens: 1024,
+				},
+			}),
+			{
+				inputTokens: 2048,
+				cachedTokens: 1024,
+			}
+		);
+
+		assert.deepStrictEqual(
+			extractCacheUsage({
 				usage: {
 					input_tokens: 10,
 					cache_creation_input_tokens: 4,

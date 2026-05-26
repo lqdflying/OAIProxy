@@ -239,10 +239,16 @@ function addUsageMetrics(summary: CacheUsageSummary, usage: Record<string, unkno
 	hasCacheField = assignNumber(summary, "promptCacheMissTokens", usage.prompt_cache_miss_tokens) || hasCacheField;
 	hasCacheField = assignNumber(summary, "cacheReadInputTokens", usage.cache_read_input_tokens) || hasCacheField;
 	hasCacheField = assignNumber(summary, "cacheCreationInputTokens", usage.cache_creation_input_tokens) || hasCacheField;
+	hasCacheField = assignNumber(summary, "cachedTokens", usage.cached_tokens) || hasCacheField;
 
 	const promptDetails = asObject(usage.prompt_tokens_details);
 	if (promptDetails) {
 		hasCacheField = assignNumber(summary, "cachedTokens", promptDetails.cached_tokens) || hasCacheField;
+	}
+
+	const inputDetails = asObject(usage.input_tokens_details);
+	if (inputDetails) {
+		hasCacheField = assignNumber(summary, "cachedTokens", inputDetails.cached_tokens) || hasCacheField;
 	}
 
 	const cacheCreation = asObject(usage.cache_creation);
