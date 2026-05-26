@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.1.3 (2026-05-26)
+
+- Republish the 0.1.2 provider cache and OpenAI fixes under a new Marketplace version after the wrong 0.1.2 VSIX was uploaded.
+- No runtime changes from the corrected 0.1.2 GitHub release artifact.
+
 ## 0.1.2 (2026-05-26)
 
 - Add provider-safe prompt/KV cache telemetry and request shaping for OpenAI, Anthropic, DeepSeek, Kimi, MiniMax, and Gemini-compatible usage payloads.
