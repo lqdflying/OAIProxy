@@ -29,7 +29,7 @@
 		"type": "git",
 		"url": "https://github.com/lqdflying/OAIProxy"
 	},
-	"version": "0.1.1",
+	"version": "0.1.2",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -353,6 +353,59 @@
 									}
 								},
 								"description": "Reasoning configuration for OpenRouter-compatible providers"
+							},
+							"prompt_cache": {
+								"type": "object",
+								"description": "Prompt/KV cache configuration. OpenAI prompt-cache keys are auto-applied only for official OpenAI endpoints unless explicitly configured. Anthropic cache-control writes are opt-in unless cache_control message parts are present.",
+								"properties": {
+									"enabled": {
+										"type": "boolean",
+										"default": true,
+										"description": "Enable provider-safe prompt cache request shaping. Set false to disable automatic cache parameters."
+									},
+									"key": {
+										"type": "string",
+										"description": "Optional OpenAI prompt_cache_key override for requests with shared prompt prefixes."
+									},
+									"retention": {
+										"type": "string",
+										"enum": [
+											"in_memory",
+											"24h"
+										],
+										"description": "Optional OpenAI prompt_cache_retention. Leave unset for provider default."
+									},
+									"anthropic": {
+										"type": "object",
+										"description": "Anthropic-compatible prompt cache-control settings.",
+										"properties": {
+											"enabled": {
+												"type": "boolean",
+												"default": false,
+												"description": "Opt in to adding Anthropic cache_control to stable system/tool prefixes."
+											},
+											"ttl": {
+												"type": "string",
+												"enum": [
+													"5m",
+													"1h"
+												],
+												"default": "5m",
+												"description": "Anthropic cache lifetime. Default 5m uses provider default wire shape; 1h sends ttl."
+											},
+											"cache_system": {
+												"type": "boolean",
+												"default": true,
+												"description": "Add cache_control to system prompts when Anthropic prompt cache is enabled."
+											},
+											"cache_tools": {
+												"type": "boolean",
+												"default": true,
+												"description": "Add cache_control to tool definitions when Anthropic prompt cache is enabled."
+											}
+										}
+									}
+								}
 							},
 							"extra": {
 								"type": "object",

@@ -13,6 +13,7 @@ import type {
 	AnthropicMessage,
 	AnthropicRequestBody,
 	AnthropicContentBlock,
+	AnthropicTextBlock,
 	AnthropicToolUseBlock,
 	AnthropicToolResultBlock,
 	AnthropicStreamChunk,
@@ -23,8 +24,20 @@ import { isImageMimeType, isToolResultPart, collectToolResultText, convertToolsT
 import { CommonApi } from "../commonApi";
 import { logger } from "../logger";
 import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "../vscodeCompat";
+import {
+	applyCacheControl,
+	createAnthropicCacheControl,
+	isCacheControlPart,
+	logCacheUsage,
+	parseCacheControlPart,
+	shouldCacheAnthropicSystem,
+	shouldCacheAnthropicTools,
+	type AnthropicCacheControl,
+} from "../promptCache";
 
 export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBody> {
+	private _systemBlocks: AnthropicTextBlock[] | undefined;
+
 	constructor(modelId: string) {
 		super(modelId);
 	}
@@ -48,12 +61,15 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			const toolCalls: AnthropicToolUseBlock[] = [];
 			const toolResults: AnthropicToolResultBlock[] = [];
 			const thinkingParts: string[] = [];
+			let cacheControl: AnthropicCacheControl | null = null;
 
 			for (const part of m.content ?? []) {
 				if (part instanceof vscode.LanguageModelTextPart) {
 					textParts.push(part.value);
 				} else if (part instanceof vscode.LanguageModelDataPart && isImageMimeType(part.mimeType)) {
 					imageParts.push(part);
+				} else if (isCacheControlPart(part)) {
+					cacheControl = parseCacheControlPart(part);
 				} else if (part instanceof vscode.LanguageModelToolCallPart) {
 					const id = part.callId || `toolu_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 					toolCalls.push({
@@ -81,7 +97,19 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			// Handle system messages separately (Anthropic uses top-level system field)
 			if (role === "system") {
 				if (joinedText) {
-					this._systemContent = joinedText;
+					if (cacheControl) {
+						const systemBlock: AnthropicTextBlock = {
+							type: "text",
+							text: joinedText,
+						};
+						this._systemBlocks = [
+							applyCacheControl(systemBlock as unknown as Record<string, unknown>, cacheControl) as unknown as AnthropicTextBlock,
+						];
+						this._systemContent = undefined;
+					} else {
+						this._systemContent = joinedText;
+						this._systemBlocks = undefined;
+					}
 				}
 				continue;
 			}
@@ -138,6 +166,10 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 				});
 			}
 
+			if (cacheControl && contentBlocks.length > 0) {
+				applyCacheControl(contentBlocks[contentBlocks.length - 1] as unknown as Record<string, unknown>, cacheControl);
+			}
+
 			// Only add message if we have content blocks
 			if (contentBlocks.length > 0) {
 				out.push({
@@ -159,8 +191,13 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		rb.max_tokens = um?.max_tokens ?? rb.max_tokens ?? 4096;
 
 		// Add system content if we extracted it
-		if (this._systemContent) {
+		if (this._systemBlocks) {
+			rb.system = this._systemBlocks;
+		} else if (this._systemContent) {
 			rb.system = this._systemContent;
+		}
+		if (shouldCacheAnthropicSystem(um) && rb.system) {
+			rb.system = this.applySystemCacheControl(rb.system, createAnthropicCacheControl(um));
 		}
 
 		// Add temperature
@@ -212,7 +249,33 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			}
 		}
 
+		if (shouldCacheAnthropicTools(um) && rb.tools && rb.tools.length > 0) {
+			applyCacheControl(rb.tools[rb.tools.length - 1] as unknown as Record<string, unknown>, createAnthropicCacheControl(um));
+		}
+
 		return rb;
+	}
+
+	private applySystemCacheControl(
+		system: string | AnthropicTextBlock[],
+		cacheControl: AnthropicCacheControl
+	): string | AnthropicTextBlock[] {
+		if (typeof system === "string") {
+			const systemBlock: AnthropicTextBlock = {
+				type: "text",
+				text: system,
+			};
+			return [
+				applyCacheControl(systemBlock as unknown as Record<string, unknown>, cacheControl) as unknown as AnthropicTextBlock,
+			];
+		}
+
+		if (system.length === 0) {
+			return system;
+		}
+
+		applyCacheControl(system[system.length - 1] as unknown as Record<string, unknown>, cacheControl);
+		return system;
 	}
 
 	/**
@@ -298,6 +361,8 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		chunk: AnthropicStreamChunk,
 		progress: Progress<LanguageModelResponsePart2>
 	): Promise<void> {
+		logCacheUsage("anthropic", this._modelId, chunk);
+
 		// Handle ping events (ignore)
 		if (chunk.type === "ping") {
 			return;

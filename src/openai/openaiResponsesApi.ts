@@ -22,6 +22,7 @@ import {
 import { CommonApi } from "../commonApi";
 import { logger } from "../logger";
 import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "../vscodeCompat";
+import { logCacheUsage } from "../promptCache";
 
 export interface ResponsesInputMessage {
 	role: "user" | "assistant" | "system";
@@ -330,6 +331,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 
 					try {
 						const parsed = JSON.parse(data) as Record<string, unknown>;
+						logCacheUsage("openai-responses", modelId, parsed);
 						await this.processEvent(parsed, progress);
 					} catch (e) {
 						console.error("[OpenAI-Responses Provider] Failed to parse SSE chunk:", e, "data:", data);

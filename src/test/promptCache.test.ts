@@ -1,0 +1,210 @@
+import * as assert from "assert";
+import * as vscode from "vscode";
+import type { HFModelItem } from "../types";
+import { AnthropicApi } from "../anthropic/anthropicApi";
+import {
+	applyOpenAIPromptCache,
+	extractCacheUsage,
+	parseCacheControlPart,
+} from "../promptCache";
+
+suite("promptCache", () => {
+	test("applies OpenAI prompt cache key only for official OpenAI by default", () => {
+		const openaiBody: Record<string, unknown> = {};
+		applyOpenAIPromptCache(openaiBody, {
+			model: model({ id: "gpt-5.1", owned_by: "openai" }),
+			baseUrl: "https://api.openai.com/v1",
+			modelId: "gpt-5.1",
+		});
+
+		assert.strictEqual(openaiBody.prompt_cache_key, "oaiproxy-openai-gpt-5.1");
+
+		const deepseekBody: Record<string, unknown> = {};
+		applyOpenAIPromptCache(deepseekBody, {
+			model: model({ id: "deepseek-chat", owned_by: "deepseek" }),
+			baseUrl: "https://api.deepseek.com",
+			modelId: "deepseek-chat",
+		});
+
+		assert.strictEqual(deepseekBody.prompt_cache_key, undefined);
+	});
+
+	test("respects explicit OpenAI prompt cache configuration", () => {
+		const body: Record<string, unknown> = {
+			prompt_cache_key: "from-extra",
+		};
+		applyOpenAIPromptCache(body, {
+			model: model({
+				id: "custom-model",
+				owned_by: "custom",
+				prompt_cache: {
+					key: "configured-key",
+					retention: "24h",
+				},
+			}),
+			baseUrl: "https://example.test/v1",
+			modelId: "custom-model",
+		});
+
+		assert.strictEqual(body.prompt_cache_key, "from-extra");
+		assert.strictEqual(body.prompt_cache_retention, "24h");
+	});
+
+	test("parses cache_control data parts", () => {
+		const data = new TextEncoder().encode(JSON.stringify({ type: "ephemeral", ttl: "1h" }));
+		const part = new vscode.LanguageModelDataPart(data, "cache_control");
+
+		assert.deepStrictEqual(parseCacheControlPart(part), {
+			type: "ephemeral",
+			ttl: "1h",
+		});
+	});
+
+	test("extracts provider cache usage shapes", () => {
+		assert.deepStrictEqual(
+			extractCacheUsage({
+				usage: {
+					prompt_tokens: 2000,
+					prompt_tokens_details: {
+						cached_tokens: 1500,
+					},
+				},
+			}),
+			{
+				inputTokens: 2000,
+				cachedTokens: 1500,
+			}
+		);
+
+		assert.deepStrictEqual(
+			extractCacheUsage({
+				usage: {
+					prompt_cache_hit_tokens: 120,
+					prompt_cache_miss_tokens: 30,
+				},
+			}),
+			{
+				promptCacheHitTokens: 120,
+				promptCacheMissTokens: 30,
+			}
+		);
+
+		assert.deepStrictEqual(
+			extractCacheUsage({
+				usage: {
+					input_tokens: 10,
+					cache_creation_input_tokens: 4,
+					cache_read_input_tokens: 20,
+				},
+			}),
+			{
+				inputTokens: 10,
+				cacheReadInputTokens: 20,
+				cacheCreationInputTokens: 4,
+			}
+		);
+
+		assert.deepStrictEqual(
+			extractCacheUsage({
+				usageMetadata: {
+					promptTokenCount: 100,
+					cachedContentTokenCount: 80,
+				},
+			}),
+			{
+				inputTokens: 100,
+				cachedContentTokenCount: 80,
+			}
+		);
+	});
+
+	test("preserves Anthropic cache_control message markers", () => {
+		const api = new AnthropicApi("claude-sonnet");
+		const messages = api.convertMessages(
+			[
+				{
+					role: vscode.LanguageModelChatMessageRole.User,
+					name: undefined,
+					content: [
+						new vscode.LanguageModelTextPart("stable context"),
+						new vscode.LanguageModelDataPart(
+							new TextEncoder().encode(JSON.stringify({ type: "ephemeral", ttl: "1h" })),
+							"cache_control"
+						),
+					],
+				} as unknown as vscode.LanguageModelChatRequestMessage,
+			],
+			{ includeReasoningInRequest: false }
+		);
+
+		const content = messages[0].content as unknown as Array<Record<string, unknown>>;
+		assert.deepStrictEqual(content[0].cache_control, {
+			type: "ephemeral",
+			ttl: "1h",
+		});
+	});
+
+	test("adds Anthropic cache_control to configured system and tools", () => {
+		const api = new AnthropicApi("claude-sonnet");
+		api.convertMessages(
+			[
+				{
+					role: 0 as vscode.LanguageModelChatMessageRole,
+					name: undefined,
+					content: [new vscode.LanguageModelTextPart("system prompt")],
+				} as unknown as vscode.LanguageModelChatRequestMessage,
+			],
+			{ includeReasoningInRequest: false }
+		);
+
+		const body = api.prepareRequestBody(
+			{
+				model: "claude-sonnet",
+				messages: [],
+				stream: true,
+			},
+			model({
+				id: "claude-sonnet",
+				owned_by: "anthropic",
+				prompt_cache: {
+					anthropic: {
+						enabled: true,
+						ttl: "1h",
+					},
+				},
+			}),
+			{
+				requestInitiator: "test",
+				tools: [
+					{
+						name: "get_weather",
+						description: "Get weather",
+						inputSchema: {
+							type: "object",
+							properties: {},
+						},
+					},
+				],
+				toolMode: vscode.LanguageModelChatToolMode.Auto,
+			} as unknown as vscode.ProvideLanguageModelChatResponseOptions
+		);
+
+		const system = body.system as unknown as Array<Record<string, unknown>>;
+		assert.deepStrictEqual(system[0].cache_control, {
+			type: "ephemeral",
+			ttl: "1h",
+		});
+		assert.deepStrictEqual(body.tools?.[0].cache_control, {
+			type: "ephemeral",
+			ttl: "1h",
+		});
+	});
+});
+
+function model(overrides: Partial<HFModelItem>): HFModelItem {
+	return {
+		id: "model",
+		owned_by: "provider",
+		...overrides,
+	};
+}

@@ -64,7 +64,7 @@ English | [简体中文](README.zh-CN.md)
 
 The extension provides a visual configuration interface for managing providers, models, and API keys without editing JSON files manually. Open via the Command Palette (`OAIProxy: Open Configuration UI`) or click the OAIProxy status bar item.
 
-The Provider Management form includes presets for OpenAI, Anthropic, Kimi, DeepSeek, and MiniMax. Selecting a preset fills the provider ID, base URL, and API mode; you still choose the model ID from the provider's current documentation or model list. Example snippets are in `examples/openai.jsonc` and `examples/anthropic.jsonc`.
+The Provider Management form includes presets for OpenAI, Anthropic, Kimi, DeepSeek, and MiniMax. Selecting a preset fills the provider ID, base URL, and API mode; you still choose the model ID from the provider's current documentation or model list. Example snippets are in `examples/openai-responses.jsonc`, `examples/openai-chat-completions.jsonc`, and `examples/anthropic.jsonc`.
 
 The standalone Provider Usage Check table lists configured supported providers dynamically and reports credit, token-plan, or cost usage. OpenAI and Anthropic usage/admin keys are stored separately from chat API keys.
 
@@ -113,6 +113,12 @@ Specify custom HTTP headers per model provider (API versioning, additional auth,
 Use the `extra` field to inject arbitrary JSON parameters into the API request body for all API modes. Override standard parameters or add provider-specific features.
 
 → [Custom Request Body Guide](doc/custom-request-body.md)
+
+## Prompt / KV Cache
+
+OAIProxy surfaces provider cache-hit usage in structured logs and applies safe cache request shaping where supported. OpenAI endpoints get a stable `prompt_cache_key` by default, while Anthropic-compatible `cache_control` writes are opt-in via `prompt_cache.anthropic.enabled` or explicit VS Code `cache_control` message parts. DeepSeek, MiniMax OpenAI mode, and Gemini continue to use provider automatic/implicit caching.
+
+OpenAI `previous_response_id` is kept for conversation state only; OpenAI still bills previous input tokens in the response chain. Use `oaicopilot.logLevel: "info"` or `"debug"` and inspect `cache.usage` log entries to verify actual cache reads/hits.
 
 ## Model Parameters
 

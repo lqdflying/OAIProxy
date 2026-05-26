@@ -1,5 +1,14 @@
 # Change Log
 
+## 0.1.2 (2026-05-26)
+
+- Add provider-safe prompt/KV cache telemetry and request shaping for OpenAI, Anthropic, DeepSeek, Kimi, MiniMax, and Gemini-compatible usage payloads.
+- Add Anthropic cache-control support for stable system/tool prefixes and explicit `cache_control` message markers.
+- Add OpenAI Responses `previous_response_id` memory reuse when Copilot Chat does not preserve provider state markers.
+- Harden official OpenAI API key validation and debug logging so malformed keys and cache/state fields are visible without logging raw prompts or secrets.
+- Add separate OpenAI Responses and Chat Completions sample settings, with four-space JSONC formatting across provider examples.
+- Fix official OpenAI GPT-5.x Chat Completions requests with tools by omitting unsupported `reasoning_effort` while leaving Responses mode unchanged.
+
 ## 0.1.1 (2026-05-25)
 
 - Add OpenAI and Anthropic provider presets, examples, and configuration documentation.

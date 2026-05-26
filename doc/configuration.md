@@ -155,7 +155,7 @@ The configuration UI can prefill provider settings for OpenAI, Anthropic, Kimi, 
 | MiniMax (OpenAI) | `minimax` | `https://api.minimax.io/v1` | `openai` |
 | MiniMax (Anthropic) | `minimax-anthropic` | `https://api.minimax.io/anthropic` | `anthropic` |
 
-Settings snippets are available in `examples/openai.jsonc` and `examples/anthropic.jsonc`. OpenAI and Anthropic usage/cost checks require separate admin keys; enter those in the configuration UI's `Usage Key` field instead of adding them to `settings.json`.
+Settings snippets are available in `examples/openai-responses.jsonc`, `examples/openai-chat-completions.jsonc`, and `examples/anthropic.jsonc`. OpenAI and Anthropic usage/cost checks require separate admin keys; enter those in the configuration UI's `Usage Key` field instead of adding them to `settings.json`.
 
 ### Settings Example
 

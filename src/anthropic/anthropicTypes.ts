@@ -1,3 +1,5 @@
+import type { AnthropicCacheControl } from "../promptCache";
+
 /**
  * Anthropic API message format
  * @see https://docs.anthropic.com/en/api/messages
@@ -8,6 +10,7 @@ export type AnthropicRole = "user" | "assistant";
 export interface AnthropicTextBlock {
 	type: "text";
 	text: string;
+	cache_control?: AnthropicCacheControl;
 }
 
 export interface AnthropicImageBlock {
@@ -17,12 +20,14 @@ export interface AnthropicImageBlock {
 		media_type: string;
 		data: string;
 	};
+	cache_control?: AnthropicCacheControl;
 }
 
 export interface AnthropicThinkingBlock {
 	type: "thinking";
 	thinking: string;
 	signature?: string;
+	cache_control?: AnthropicCacheControl;
 }
 
 export interface AnthropicToolUseBlock {
@@ -30,6 +35,7 @@ export interface AnthropicToolUseBlock {
 	id: string;
 	name: string;
 	input: Record<string, unknown>;
+	cache_control?: AnthropicCacheControl;
 }
 
 export interface AnthropicToolResultBlock {
@@ -37,6 +43,7 @@ export interface AnthropicToolResultBlock {
 	tool_use_id: string;
 	content: string | AnthropicTextBlock[];
 	is_error?: boolean;
+	cache_control?: AnthropicCacheControl;
 }
 
 export type AnthropicContentBlock =
@@ -77,6 +84,7 @@ export interface AnthropicToolDefinition {
 	name: string;
 	description?: string;
 	input_schema?: object;
+	cache_control?: AnthropicCacheControl;
 }
 
 export type AnthropicToolChoice =

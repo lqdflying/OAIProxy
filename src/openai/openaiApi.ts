@@ -30,6 +30,7 @@ import {
 import { CommonApi } from "../commonApi";
 import { logger } from "../logger";
 import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "../vscodeCompat";
+import { logCacheUsage } from "../promptCache";
 
 export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unknown>> {
 	private readonly _reasoningDetailTextByKey = new Map<string, string>();
@@ -263,6 +264,14 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 			}
 		}
 
+		if (shouldOmitOpenAIChatCompletionsReasoningEffortWithTools(um, rb)) {
+			delete rb.reasoning_effort;
+			logger.warn("openai.chat.reasoningEffort.omitted", {
+				modelId: typeof rb.model === "string" ? rb.model : this._modelId,
+				reason: "official OpenAI Chat Completions rejects reasoning_effort when function tools are present",
+			});
+		}
+
 		return rb;
 	}
 
@@ -313,6 +322,7 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 
 					try {
 						const parsed = JSON.parse(data);
+						logCacheUsage("openai", modelId, parsed);
 						await this.processDelta(parsed, progress);
 					} catch (e) {
 						console.error("[OpenAI Provider] Failed to parse SSE chunk:", e, "data:", data);
@@ -580,5 +590,33 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 		} finally {
 			reader.releaseLock();
 		}
+	}
+}
+
+function shouldOmitOpenAIChatCompletionsReasoningEffortWithTools(
+	model: HFModelItem | undefined,
+	requestBody: Record<string, unknown>
+): boolean {
+	if (requestBody.reasoning_effort === undefined) {
+		return false;
+	}
+	if (!Array.isArray(requestBody.tools) || requestBody.tools.length === 0) {
+		return false;
+	}
+
+	const requestModel = typeof requestBody.model === "string" ? requestBody.model : model?.id ?? "";
+	if (!/^gpt-5(?:[.-]|$)/i.test(requestModel)) {
+		return false;
+	}
+
+	const provider = model?.owned_by?.trim().toLowerCase();
+	if (provider === "openai") {
+		return true;
+	}
+
+	try {
+		return new URL(model?.baseUrl ?? "").hostname.toLowerCase() === "api.openai.com";
+	} catch {
+		return false;
 	}
 }

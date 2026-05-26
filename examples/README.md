@@ -6,7 +6,8 @@ The provider IDs match OAIProxy's built-in presets:
 
 | File | Provider ID | API Mode |
 |---|---|---|
-| `openai.jsonc` | `openai` | `openai-responses` |
+| `openai-responses.jsonc` | `openai` | `openai-responses` |
+| `openai-chat-completions.jsonc` | `openai` | `openai` |
 | `anthropic.jsonc` | `anthropic` | `anthropic` |
 | `kimi.jsonc` | `kimi` | `openai` |
 | `deepseek.jsonc` | `deepseek` | `openai` |

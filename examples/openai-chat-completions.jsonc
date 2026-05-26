@@ -1,0 +1,19 @@
+{
+    "oaicopilot.models": [
+        {
+            "id": "gpt-5.5",
+            "displayName": "GPT-5.5",
+            "owned_by": "openai",
+            "baseUrl": "https://api.openai.com/v1",
+            "apiMode": "openai",
+            "family": "gpt-5.5",
+            "vision": true,
+            "context_length": 1050000,
+            "max_completion_tokens": 4096,
+            "prompt_cache": {
+                "enabled": true,
+            },
+            "toolCalling": true,
+        },
+    ],
+}

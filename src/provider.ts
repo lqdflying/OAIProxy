@@ -29,6 +29,7 @@ import { updateContextStatusBar } from "./statusBar";
 import { OllamaApi } from "./ollama/ollamaApi";
 import { OpenaiApi } from "./openai/openaiApi";
 import { OpenaiResponsesApi } from "./openai/openaiResponsesApi";
+import { OpenAIResponsesStateStore } from "./openai/openaiResponsesState";
 import { AnthropicApi } from "./anthropic/anthropicApi";
 import { AnthropicRequestBody } from "./anthropic/anthropicTypes";
 import { GeminiApi, buildGeminiGenerateContentUrl, type GeminiToolCallMeta } from "./gemini/geminiApi";
@@ -36,6 +37,7 @@ import type { GeminiGenerateContentRequest } from "./gemini/geminiTypes";
 import { CommonApi } from "./commonApi";
 import { logger } from "./logger";
 import { normalizeReasoningEffortForModel } from "./reasoningEffort";
+import { applyOpenAIPromptCache } from "./promptCache";
 
 interface ChatInformationOptions {
 	readonly silent?: boolean;
@@ -54,6 +56,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 
 	private readonly _geminiToolCallMetaByCallId = new Map<string, GeminiToolCallMeta>();
 	private readonly _openaiResponsesPreviousResponseIdUnsupportedBaseUrls = new Set<string>();
+	private readonly _openaiResponsesState = new OpenAIResponsesStateStore();
 
 	static readonly OPENAI_RESPONSES_STATEFUL_MARKER_MIME = "application/vnd.oaiproxy.stateful-marker";
 
@@ -205,7 +208,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			// Get API key for the model's provider
 			const provider = um?.owned_by;
 			const useGenericKey = !um?.baseUrl;
-			const modelApiKey = await this.ensureApiKey(useGenericKey, provider);
+			const modelApiKey = await this.ensureApiKey(useGenericKey, provider, baseUrl, apiMode);
 			if (!modelApiKey) {
 				logger.warn("apiKey.missing", {
 					provider: provider ?? "",
@@ -355,49 +358,113 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				const fullInput = openaiResponsesApi.convertMessages(workingMessages, modelConfig);
 
 				const marker = findLastOpenAIResponsesStatefulMarker(statefulModelId, workingMessages);
-				let deltaInput: unknown[] | null = null;
+				let markerDeltaInput: unknown[] | null = null;
 				if (marker && marker.index >= 0 && marker.index < workingMessages.length - 1) {
 					const deltaMessages = workingMessages.slice(marker.index + 1);
 					const converted = openaiResponsesApi.convertMessages(deltaMessages, modelConfig);
 					if (converted.length > 0) {
-						deltaInput = converted;
+						markerDeltaInput = converted;
 					}
 				}
 
-				const canUsePreviousResponseId =
-					!!marker?.marker &&
-					!this._openaiResponsesPreviousResponseIdUnsupportedBaseUrls.has(normalizedBaseUrl) &&
-					Array.isArray(deltaInput) &&
-					deltaInput.length > 0;
+				let preparedFullRequestBody: Record<string, unknown> = {
+					model: parsedModelId.baseId,
+					input: fullInput,
+					stream: true,
+				};
+				preparedFullRequestBody = openaiResponsesApi.prepareRequestBody(preparedFullRequestBody, um, options);
 
-				const input = canUsePreviousResponseId ? deltaInput! : fullInput;
+				const previousResponseIdUnsupported = this._openaiResponsesPreviousResponseIdUnsupportedBaseUrls.has(normalizedBaseUrl);
+				const explicitPreviousResponseId = preparedFullRequestBody.previous_response_id !== undefined;
+				const memoryState = this._openaiResponsesState.resolve({
+					identity: {
+						normalizedBaseUrl,
+						modelId: statefulModelId,
+						modelInfoId: model.id,
+						configId: parsedModelId.configId,
+						requestInitiator: options.requestInitiator,
+						instructions: preparedFullRequestBody.instructions,
+						tools: preparedFullRequestBody.tools,
+						toolChoice: preparedFullRequestBody.tool_choice,
+					},
+					fullInput,
+					previousResponseIdUnsupported,
+				});
+
+				const canUseMarkerPreviousResponseId =
+					!!marker?.marker &&
+					!previousResponseIdUnsupported &&
+					Array.isArray(markerDeltaInput) &&
+					markerDeltaInput.length > 0;
+				const canUseMemoryPreviousResponseId =
+					!marker?.marker &&
+					!previousResponseIdUnsupported &&
+					!!memoryState.responseId &&
+					Array.isArray(memoryState.deltaInput) &&
+					memoryState.deltaInput.length > 0;
+				const canUsePreviousResponseId =
+					!explicitPreviousResponseId && (canUseMarkerPreviousResponseId || canUseMemoryPreviousResponseId);
+				let stateSource: "marker" | "memory" | "none" = "none";
+				let previousResponseId: string | undefined;
+				let input: unknown[] = fullInput;
+				if (!explicitPreviousResponseId && canUseMarkerPreviousResponseId) {
+					stateSource = "marker";
+					previousResponseId = marker!.marker;
+					input = markerDeltaInput!;
+				} else if (!explicitPreviousResponseId && canUseMemoryPreviousResponseId) {
+					stateSource = "memory";
+					previousResponseId = memoryState.responseId;
+					input = memoryState.deltaInput!;
+				}
+
+				const statefulMetadata = {
+					hasStatefulMarker: !!marker?.marker,
+					markerMessageIndex: marker?.index,
+					fullInputCount: fullInput.length,
+					markerDeltaInputCount: markerDeltaInput?.length,
+					deltaInputCount: input.length,
+					stateSource,
+					memoryStateFound: memoryState.memoryStateFound,
+					memoryStateExpired: memoryState.memoryStateExpired,
+					memoryPrefixMatched: memoryState.memoryPrefixMatched,
+					previousInputCount: memoryState.previousInputCount,
+					currentInputCount: memoryState.currentInputCount,
+					memoryDeltaInputCount: memoryState.memoryDeltaInputCount,
+					memorySkippedAssistantInputCount: memoryState.memorySkippedAssistantInputCount,
+					previousResponseIdUnsupported,
+				};
 
 				// requestBody
 				let requestBody: Record<string, unknown> = {
-					model: parsedModelId.baseId,
+					...preparedFullRequestBody,
 					input,
-					stream: true,
 				};
 
-				requestBody = openaiResponsesApi.prepareRequestBody(requestBody, um, options);
-
-				// Add prompt_cache_key to enable OpenAI prompt caching.
-				// Without this parameter, cached_tokens is always 0 even with identical requests.
-				if (!requestBody.prompt_cache_key) {
-					requestBody.prompt_cache_key = `oaiproxy-${parsedModelId.baseId}`;
-				}
+				applyOpenAIPromptCache(requestBody, {
+					model: um,
+					baseUrl: BASE_URL,
+					modelId: parsedModelId.baseId,
+				});
 				// send Responses API request with retry
 				const url = `${normalizedBaseUrl}/responses`;
-				logRequestBody(url, requestBody, isVisionBridgeRequest);
 
 				// If the user explicitly set `previous_response_id` via `extra`, don't apply stateful slicing.
 				let addedPreviousResponseId = false;
 				if (requestBody.previous_response_id !== undefined) {
 					requestBody.input = fullInput;
-				} else if (canUsePreviousResponseId) {
-					requestBody.previous_response_id = marker!.marker;
+				} else if (previousResponseId) {
+					requestBody.previous_response_id = previousResponseId;
 					addedPreviousResponseId = true;
 				}
+				let finalStateSource = stateSource;
+				let previousResponseIdFallback = false;
+				logRequestBody(url, requestBody, isVisionBridgeRequest, {
+					...statefulMetadata,
+					canUsePreviousResponseId,
+					addedPreviousResponseId,
+					explicitPreviousResponseId,
+					usedStatefulDeltaInput: addedPreviousResponseId,
+				});
 
 				const sendRequest = async (body: Record<string, unknown>) =>
 					await executeWithRetry(async () => {
@@ -442,8 +509,29 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 						stream: true,
 					};
 					fallbackBody = openaiResponsesApi.prepareRequestBody(fallbackBody, um, options);
+					applyOpenAIPromptCache(fallbackBody, {
+						model: um,
+						baseUrl: BASE_URL,
+						modelId: parsedModelId.baseId,
+					});
 					delete fallbackBody.previous_response_id;
+					logRequestBody(url, fallbackBody, isVisionBridgeRequest, {
+						...statefulMetadata,
+						canUsePreviousResponseId: false,
+						addedPreviousResponseId: false,
+						explicitPreviousResponseId,
+						usedStatefulDeltaInput: false,
+						stateSource: "none",
+						attemptedStateSource: stateSource,
+						previousResponseIdUnsupported: true,
+						previousResponseIdFallback: true,
+					});
 					response = await sendRequest(fallbackBody);
+					this._openaiResponsesState.clear(memoryState.stateKey);
+					requestBody = fallbackBody;
+					addedPreviousResponseId = false;
+					finalStateSource = "none";
+					previousResponseIdFallback = true;
 				}
 
 				if (!response.body) {
@@ -453,6 +541,27 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 
 				// Append a stateful marker so future requests can reuse `previous_response_id` (Copilot Chat style).
 				const responseId = openaiResponsesApi.responseId;
+				const memoryStateStored = !!responseId && !explicitPreviousResponseId && !previousResponseIdFallback &&
+					!this._openaiResponsesPreviousResponseIdUnsupportedBaseUrls.has(normalizedBaseUrl) &&
+					this._openaiResponsesState.update({
+						stateKey: memoryState.stateKey,
+						responseId,
+						inputSignatures: memoryState.inputSignatures,
+					});
+				logger.debug("responses.state", {
+					modelId: model.id,
+					responseIdCaptured: !!responseId,
+					statefulMarkerEmitted: !!responseId,
+					addedPreviousResponseId,
+					explicitPreviousResponseId,
+					usedStatefulDeltaInput: addedPreviousResponseId,
+					stateSource: finalStateSource,
+					previousResponseIdFallback,
+					memoryStateStored,
+					stateEntryCount: this._openaiResponsesState.size,
+					fullInputCount: fullInput.length,
+					requestInputCount: getArrayLength(requestBody.input),
+				});
 				if (responseId) {
 					trackingProgress.report(createOpenAIResponsesStatefulMarkerPart(statefulModelId, responseId));
 				}
@@ -531,6 +640,11 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					stream_options: { include_usage: true },
 				};
 				requestBody = openaiApi.prepareRequestBody(requestBody, um, options);
+				applyOpenAIPromptCache(requestBody, {
+					model: um,
+					baseUrl: BASE_URL,
+					modelId: parsedModelId.baseId,
+				});
 
 				// send chat request with retry
 				const url = `${BASE_URL.replace(/\/+$/, "")}/chat/completions`;
@@ -588,7 +702,12 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 	 * @param useGenericKey If true, use generic API key.
 	 * @param provider Optional provider name to get provider-specific API key.
 	 */
-	private async ensureApiKey(useGenericKey: boolean, provider?: string): Promise<string | undefined> {
+	private async ensureApiKey(
+		useGenericKey: boolean,
+		provider?: string,
+		baseUrl?: string,
+		apiMode?: string
+	): Promise<string | undefined> {
 		let apiKey: string | undefined;
 		const normalizedProvider = provider?.trim().toLowerCase();
 		const providerKey = normalizedProvider ? `oaicopilot.apiKey.${normalizedProvider}` : undefined;
@@ -598,36 +717,105 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 		// Falling back to the generic key can accidentally send another provider's credential.
 		if (shouldUseProviderKey) {
 			apiKey = await this.secrets.get(providerKey);
-			if (!apiKey) {
-				const entered = await vscode.window.showInputBox({
-					title: `OAIProxy API Key for ${normalizedProvider}`,
-					prompt: `Enter your OAIProxy API key for ${normalizedProvider}`,
-					ignoreFocusOut: true,
-					password: true,
-				});
-				if (entered && entered.trim()) {
-					apiKey = entered.trim();
-					await this.secrets.store(providerKey, apiKey);
-				}
-			}
+			apiKey = await this.normalizeStoredApiKey({
+				apiKey,
+				secretKey: providerKey,
+				title: `OAIProxy API Key for ${normalizedProvider}`,
+				prompt: `Enter your OAIProxy API key for ${normalizedProvider}`,
+				provider: normalizedProvider,
+				baseUrl,
+				apiMode,
+			});
 			return apiKey;
 		}
 
 		// 2. Generic/global-provider models use the generic key.
 		apiKey = await this.secrets.get("oaicopilot.apiKey");
+		return await this.normalizeStoredApiKey({
+			apiKey,
+			secretKey: "oaicopilot.apiKey",
+			title: "OAIProxy API Key",
+			prompt: "Enter your OAIProxy API key",
+			provider: normalizedProvider,
+			baseUrl,
+			apiMode,
+		});
+	}
+
+	private async normalizeStoredApiKey(options: {
+		apiKey: string | undefined;
+		secretKey: string;
+		title: string;
+		prompt: string;
+		provider?: string;
+		baseUrl?: string;
+		apiMode?: string;
+	}): Promise<string | undefined> {
+		let apiKey = options.apiKey?.trim();
+		if (apiKey && apiKey !== options.apiKey) {
+			await this.secrets.store(options.secretKey, apiKey);
+		}
+
+		if (apiKey && this.isInvalidOfficialOpenAIApiKey(apiKey, options.provider, options.baseUrl, options.apiMode)) {
+			logger.warn("apiKey.invalidShape", {
+				provider: options.provider ?? "",
+				baseUrl: options.baseUrl ?? "",
+				apiMode: options.apiMode ?? "",
+				secretKey: options.secretKey,
+				keyPrefix: apiKey.slice(0, 4),
+				keyLength: apiKey.length,
+			});
+			await this.secrets.delete(options.secretKey);
+			apiKey = undefined;
+			void vscode.window.showWarningMessage(
+				"Stored OpenAI API key is malformed. OAIProxy removed it; enter a valid OpenAI key starting with sk-."
+			);
+		}
+
 		if (!apiKey) {
 			const entered = await vscode.window.showInputBox({
-				title: "OAIProxy API Key",
-				prompt: "Enter your OAIProxy API key",
+				title: options.title,
+				prompt: options.prompt,
 				ignoreFocusOut: true,
 				password: true,
 			});
 			if (entered && entered.trim()) {
 				apiKey = entered.trim();
-				await this.secrets.store("oaicopilot.apiKey", apiKey);
+				if (this.isInvalidOfficialOpenAIApiKey(apiKey, options.provider, options.baseUrl, options.apiMode)) {
+					throw new Error("Invalid OpenAI API key format. Enter an OpenAI API key that starts with sk-.");
+				}
+				await this.secrets.store(options.secretKey, apiKey);
 			}
 		}
+
 		return apiKey;
+	}
+
+	private isInvalidOfficialOpenAIApiKey(
+		apiKey: string,
+		provider?: string,
+		baseUrl?: string,
+		apiMode?: string
+	): boolean {
+		if (apiMode !== "openai" && apiMode !== "openai-responses") {
+			return false;
+		}
+
+		const normalizedProvider = provider?.trim().toLowerCase();
+		const isOpenAIProvider = normalizedProvider === "openai";
+		const isOpenAIBaseUrl = (() => {
+			try {
+				return new URL(baseUrl ?? "").hostname.toLowerCase() === "api.openai.com";
+			} catch {
+				return false;
+			}
+		})();
+
+		if (!isOpenAIProvider && !isOpenAIBaseUrl) {
+			return false;
+		}
+
+		return !apiKey.startsWith("sk-");
 	}
 }
 
@@ -736,12 +924,16 @@ function summarizeLanguageModelMessages(messages: readonly LanguageModelChatRequ
 function logRequestBody(
 	url: string | null | undefined,
 	requestBody: unknown,
-	visionBridge: boolean
+	visionBridge: boolean,
+	extraSummary?: Record<string, unknown>
 ): void {
 	logger.debug("request.body", {
 		url,
 		visionBridge,
-		requestBody: summarizeRequestBody(requestBody),
+		requestBody: {
+			...summarizeRequestBody(requestBody),
+			...(extraSummary ?? {}),
+		},
 	});
 }
 
@@ -763,6 +955,14 @@ function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
 		hasToolChoice: body.tool_choice !== undefined || body.toolChoice !== undefined,
 		hasInstructions: body.instructions !== undefined,
 		hasSystemInstruction: body.systemInstruction !== undefined,
+		hasPromptCacheKey: body.prompt_cache_key !== undefined,
+		promptCacheKeyLength: typeof body.prompt_cache_key === "string" ? body.prompt_cache_key.length : undefined,
+		hasPromptCacheRetention: body.prompt_cache_retention !== undefined,
+		promptCacheRetention: typeof body.prompt_cache_retention === "string" ? body.prompt_cache_retention : undefined,
+		hasPreviousResponseId: body.previous_response_id !== undefined,
+		previousResponseIdPrefix: typeof body.previous_response_id === "string"
+			? body.previous_response_id.slice(0, 8)
+			: undefined,
 	};
 }
 

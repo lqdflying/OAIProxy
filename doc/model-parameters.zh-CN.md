@@ -31,6 +31,7 @@
 | `default_reasoning_effort` | 否 | `string` | — | 模型选择器中的默认 Thinking Effort 值 |
 | `toolCalling` | 否 | `boolean` | `true` | 向 VS Code 声明工具调用支持 |
 | `headers` | 否 | `object` | — | 每次请求的自定义 HTTP 请求头 |
+| `prompt_cache` | 否 | `object` | 安全自动 | Prompt/KV 缓存配置与命中统计 |
 | `extra` | 否 | `object` | — | 额外请求体参数 |
 | `include_reasoning_in_request` | 否 | `boolean` | — | 在 assistant 消息中包含 `reasoning_content` |
 | `apiMode` | 否 | `string` | `openai` | API 协议：`openai`、`openai-responses`、`ollama`、`anthropic`、`gemini` |
@@ -67,6 +68,13 @@ Zai 供应商的思维链配置：
 ### `default_reasoning_effort`
 
 模型选择器中预选的默认 Thinking Effort 值。未设置时使用 `reasoning_effort` 或 `reasoning.effort` 作为默认值。
+
+### `prompt_cache`
+
+按供应商适配的 Prompt/KV 缓存配置：
+- OpenAI 官方端点会自动添加稳定的 `prompt_cache_key`，除非设置 `prompt_cache.enabled: false`。可用 `prompt_cache.key` 覆盖 key，用 `prompt_cache.retention` 设置 `"in_memory"` 或 `"24h"`。
+- Anthropic 兼容缓存写入需要显式启用。设置 `prompt_cache.anthropic.enabled: true` 后，会为稳定的 system prompt 和工具定义添加 `cache_control`；`ttl` 可为 `"5m"` 或 `"1h"`。显式的 VS Code `cache_control` 数据片段即使未启用该配置也会被保留。
+- DeepSeek、MiniMax OpenAI 模式和 Gemini 使用供应商自动/隐式缓存。通过 `cache.usage` 日志查看实际命中情况。
 
 ### `apiMode`
 

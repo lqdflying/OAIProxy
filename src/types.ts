@@ -55,6 +55,7 @@ export interface HFModelItem {
 	presence_penalty?: number;
 	repetition_penalty?: number;
 	reasoning?: ReasoningConfig;
+	prompt_cache?: PromptCacheConfig;
 	/**
 	 * Optional family specification for the model. This allows users to specify
 	 * the model family (e.g., "gpt-4", "claude-3", "gemini") to enable family-specific
@@ -112,6 +113,25 @@ export interface ReasoningConfig {
 	exclude?: boolean;
 	max_tokens?: number;
 	enabled?: boolean;
+}
+
+/**
+ * Prompt/KV cache configuration. Defaults are intentionally conservative:
+ * automatic provider caching can still happen, while explicit cache-control
+ * write behavior is opt-in unless the caller sends cache_control parts.
+ */
+export interface PromptCacheConfig {
+	enabled?: boolean;
+	key?: string;
+	retention?: "in_memory" | "24h";
+	anthropic?: AnthropicPromptCacheConfig;
+}
+
+export interface AnthropicPromptCacheConfig {
+	enabled?: boolean;
+	ttl?: "5m" | "1h";
+	cache_system?: boolean;
+	cache_tools?: boolean;
 }
 
 /**

@@ -31,6 +31,7 @@ All parameters support individual configuration for different models, providing 
 | `default_reasoning_effort` | no | `string` | — | Default Thinking Effort value in the model picker |
 | `toolCalling` | no | `boolean` | `true` | Advertise tool calling support to VS Code |
 | `headers` | no | `object` | — | Custom HTTP headers per request |
+| `prompt_cache` | no | `object` | safe auto | Prompt/KV cache configuration and telemetry |
 | `extra` | no | `object` | — | Extra request body parameters |
 | `include_reasoning_in_request` | no | `boolean` | — | Include `reasoning_content` in assistant messages |
 | `apiMode` | no | `string` | `openai` | API protocol: `openai`, `openai-responses`, `ollama`, `anthropic`, `gemini` |
@@ -67,6 +68,13 @@ Custom list of Thinking Effort values shown in the model picker dropdown. DeepSe
 ### `default_reasoning_effort`
 
 Default Thinking Effort value pre-selected in the model picker. If not set, `reasoning_effort` or `reasoning.effort` is used as the default.
+
+### `prompt_cache`
+
+Provider-aware prompt/KV cache configuration:
+- OpenAI official endpoints automatically receive a stable `prompt_cache_key` unless `prompt_cache.enabled` is `false`. Set `prompt_cache.key` to override the key, and `prompt_cache.retention` to `"in_memory"` or `"24h"` when you need an explicit OpenAI retention policy.
+- Anthropic-compatible cache writes are opt-in. Set `prompt_cache.anthropic.enabled: true` to mark stable system prompts and tool definitions with `cache_control`; `ttl` can be `"5m"` or `"1h"`. Explicit VS Code `cache_control` data parts are preserved even without this config.
+- DeepSeek, MiniMax OpenAI mode, and Gemini use provider automatic/implicit caching. Check `cache.usage` log entries to verify cache hits.
 
 ### `apiMode`
 

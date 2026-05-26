@@ -156,7 +156,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 | MiniMax (OpenAI) | `minimax` | `https://api.minimax.io/v1` | `openai` |
 | MiniMax (Anthropic) | `minimax-anthropic` | `https://api.minimax.io/anthropic` | `anthropic` |
 
-配置示例见 `examples/openai.jsonc` 和 `examples/anthropic.jsonc`。OpenAI 和 Anthropic 的用量/费用检查需要单独的 admin key，请在配置界面的 `Usage Key` 字段中填写，不要写入 `settings.json`。
+配置示例见 `examples/openai-responses.jsonc`、`examples/openai-chat-completions.jsonc` 和 `examples/anthropic.jsonc`。OpenAI 和 Anthropic 的用量/费用检查需要单独的 admin key，请在配置界面的 `Usage Key` 字段中填写，不要写入 `settings.json`。
 
 ### 配置示例
 

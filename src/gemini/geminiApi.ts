@@ -21,6 +21,7 @@ import {
 	mapRole,
 	tryParseJSONObject,
 } from "../utils";
+import { logCacheUsage } from "../promptCache";
 
 import type {
 	GeminiGenerateContentRequest,
@@ -821,6 +822,7 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 					if (!payload) {
 						continue;
 					}
+					logCacheUsage("gemini", modelId, payload);
 
 					const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
 					const cand = candidates.length > 0 ? candidates[0] : null;
