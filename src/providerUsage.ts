@@ -24,6 +24,8 @@ const KIMI_BALANCE_ENDPOINT = "https://api.moonshot.ai/v1/users/me/balance";
 const MINIMAX_TOKEN_PLAN_ENDPOINT = "https://api.minimax.io/v1/token_plan/remains";
 const OPENAI_COSTS_ENDPOINT = "https://api.openai.com/v1/organization/costs";
 const ANTHROPIC_COST_REPORT_ENDPOINT = "https://api.anthropic.com/v1/organizations/cost_report";
+const MIMO_USAGE_UNSUPPORTED_REASON =
+	"Xiaomi MiMo usage checks are unavailable because Xiaomi only exposes balance/usage through web Console endpoints; no public API-key usage endpoint is documented.";
 
 export function getProviderSecretKey(provider: string): string {
 	return `oaicopilot.apiKey.${provider.trim().toLowerCase()}`;
@@ -35,6 +37,25 @@ export function getProviderUsageSecretKey(provider: string): string {
 
 export function providerRequiresUsageApiKey(adapter: ProviderUsageAdapter): boolean {
 	return adapter === "openai" || adapter === "anthropic";
+}
+
+export function isMimoProvider(provider: string, baseUrl?: string): boolean {
+	const normalizedProvider = provider.trim().toLowerCase();
+	const normalizedBaseUrl = (baseUrl ?? "").trim().toLowerCase();
+	return (
+		normalizedProvider === "mimo" ||
+		normalizedProvider === "xiaomi" ||
+		normalizedProvider === "xiaomi-mimo" ||
+		normalizedProvider === "xiaomimimo" ||
+		normalizedBaseUrl.includes("xiaomimimo.com")
+	);
+}
+
+export function getProviderUsageUnsupportedReason(provider: string, baseUrl?: string): string | undefined {
+	if (isMimoProvider(provider, baseUrl)) {
+		return MIMO_USAGE_UNSUPPORTED_REASON;
+	}
+	return undefined;
 }
 
 export function getProviderUsageAdapter(provider: string, baseUrl?: string): ProviderUsageAdapter | undefined {
@@ -76,7 +97,10 @@ export function getProviderUsageAdapter(provider: string, baseUrl?: string): Pro
 export async function checkProviderUsage(request: ProviderUsageRequest): Promise<ProviderUsageResult> {
 	const adapter = getProviderUsageAdapter(request.provider, request.baseUrl);
 	if (!adapter) {
-		throw new Error(`Provider ${request.provider} does not support usage checks yet.`);
+		throw new Error(
+			getProviderUsageUnsupportedReason(request.provider, request.baseUrl) ??
+				`Provider ${request.provider} does not support usage checks yet.`
+		);
 	}
 
 	let parsed: ParsedProviderUsage;

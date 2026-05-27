@@ -73,8 +73,12 @@ export interface AnthropicRequestBody {
 	};
 	service_tier?: "auto" | "standard_only";
 	thinking?: {
-		type: "enabled";
-		budget_tokens: number;
+		type: "enabled" | "adaptive" | "disabled";
+		budget_tokens?: number;
+		display?: "summarized" | "omitted";
+	};
+	output_config?: {
+		effort?: string;
 	};
 	tools?: AnthropicToolDefinition[];
 	tool_choice?: AnthropicToolChoice;

@@ -208,6 +208,25 @@ function getProviderUsageKind(provider, baseUrl) {
 	return "";
 }
 
+function isMimoProvider(provider, baseUrl) {
+	const normalizedProvider = (provider || "").trim().toLowerCase();
+	const normalizedBaseUrl = (baseUrl || "").trim().toLowerCase();
+	return (
+		normalizedProvider === "mimo" ||
+		normalizedProvider === "xiaomi" ||
+		normalizedProvider === "xiaomi-mimo" ||
+		normalizedProvider === "xiaomimimo" ||
+		normalizedBaseUrl.includes("xiaomimimo.com")
+	);
+}
+
+function getProviderUsageUnsupportedReason(provider, baseUrl) {
+	if (isMimoProvider(provider, baseUrl)) {
+		return "Xiaomi MiMo usage checks are unavailable because Xiaomi only exposes balance/usage through web Console endpoints; no public API-key usage endpoint is documented.";
+	}
+	return "";
+}
+
 function providerUsageNeedsSeparateKey(usageKind) {
 	return usageKind === "openai" || usageKind === "anthropic";
 }
@@ -282,12 +301,17 @@ function formatModelList(entry) {
 }
 
 function getProviderUsageTargets() {
+	return getProviderUsageRows().filter((entry) => entry.usageKind);
+}
+
+function getProviderUsageRows() {
 	return getConfiguredProviders()
 		.map((entry) => ({
 			...entry,
 			usageKind: getProviderUsageKind(entry.provider, entry.baseUrl),
+			unsupportedReason: getProviderUsageUnsupportedReason(entry.provider, entry.baseUrl),
 		}))
-		.filter((entry) => entry.usageKind);
+		.filter((entry) => entry.usageKind || entry.unsupportedReason);
 }
 
 function rememberProviderUsageKeyInputs() {
@@ -299,7 +323,10 @@ function rememberProviderUsageKeyInputs() {
 	});
 }
 
-function renderProviderUsageStatus(usageState) {
+function renderProviderUsageStatus(usageState, unsupportedReason) {
+	if (unsupportedReason) {
+		return '<span class="status-pill idle">Unavailable</span>';
+	}
 	if (!usageState || !usageState.status) {
 		return '<span class="status-pill idle">Not checked</span>';
 	}
@@ -312,7 +339,10 @@ function renderProviderUsageStatus(usageState) {
 	return '<span class="status-pill success">Checked</span>';
 }
 
-function renderProviderUsageValue(usageState, usageKind) {
+function renderProviderUsageValue(usageState, usageKind, unsupportedReason) {
+	if (unsupportedReason) {
+		return `<div class="usage-value muted">${escapeHtml(unsupportedReason)}</div>`;
+	}
 	if (usageState?.status === "success") {
 		return `<div class="usage-value">${escapeHtml(usageState.summary || "Usage check completed.")}</div>`;
 	}
@@ -322,7 +352,10 @@ function renderProviderUsageValue(usageState, usageKind) {
 	return `<div class="usage-value muted">${escapeHtml(getProviderUsageTargetDescription(usageKind))}</div>`;
 }
 
-function renderProviderUsageKeyCell(provider, usageKind) {
+function renderProviderUsageKeyCell(provider, usageKind, unsupportedReason) {
+	if (unsupportedReason) {
+		return '<div class="usage-key-note">Not used</div>';
+	}
 	if (providerUsageNeedsSeparateKey(usageKind)) {
 		return `<input type="password" class="provider-input provider-usage-key-input" data-provider="${escapeHtml(
 			provider
@@ -332,19 +365,22 @@ function renderProviderUsageKeyCell(provider, usageKind) {
 }
 
 function renderProviderUsageChecks() {
-	const targets = getProviderUsageTargets();
-	checkAllProviderUsageBtn.disabled = targets.length === 0 || targets.some((target) => state.providerUsage[target.provider]?.status === "loading");
-	if (!targets.length) {
+	const rows = getProviderUsageRows();
+	const supportedTargets = rows.filter((target) => target.usageKind);
+	checkAllProviderUsageBtn.disabled =
+		supportedTargets.length === 0 || supportedTargets.some((target) => state.providerUsage[target.provider]?.status === "loading");
+	if (!rows.length) {
 		providerUsageTableBody.innerHTML =
-			'<tr><td colspan="6" class="no-data">No configured providers support usage checks yet</td></tr>';
+			'<tr><td colspan="6" class="no-data">No configured providers have known usage-check behavior yet</td></tr>';
 		return;
 	}
 
-	providerUsageTableBody.innerHTML = targets
+	providerUsageTableBody.innerHTML = rows
 		.map((target) => {
 			const providerAttr = escapeHtml(target.provider);
 			const usageState = state.providerUsage[target.provider] || {};
 			const isLoading = usageState.status === "loading";
+			const isUnsupported = Boolean(target.unsupportedReason);
 			return `
 				<tr data-provider="${providerAttr}">
 					<td class="provider-id-cell">
@@ -352,16 +388,20 @@ function renderProviderUsageChecks() {
 						<div class="provider-meta">${escapeHtml(formatModelList(target))}</div>
 					</td>
 					<td>
-						<div class="usage-plan">${escapeHtml(getProviderUsagePlan(target.usageKind))}</div>
-						<div class="provider-meta">${escapeHtml(target.usageKind)}</div>
+						<div class="usage-plan">${escapeHtml(isUnsupported ? "Unavailable" : getProviderUsagePlan(target.usageKind))}</div>
+						<div class="provider-meta">${escapeHtml(target.usageKind || "mimo")}</div>
 					</td>
-					<td>${renderProviderUsageValue(usageState, target.usageKind)}</td>
-					<td>${renderProviderUsageKeyCell(target.provider, target.usageKind)}</td>
-					<td>${renderProviderUsageStatus(usageState)}</td>
+					<td>${renderProviderUsageValue(usageState, target.usageKind, target.unsupportedReason)}</td>
+					<td>${renderProviderUsageKeyCell(target.provider, target.usageKind, target.unsupportedReason)}</td>
+					<td>${renderProviderUsageStatus(usageState, target.unsupportedReason)}</td>
 					<td class="action-buttons">
-						<button class="check-provider-usage-btn compact" data-provider="${providerAttr}" ${isLoading ? "disabled" : ""}>${
-							isLoading ? "Checking..." : "Check"
-						}</button>
+						${
+							isUnsupported
+								? '<span class="usage-key-note">No API endpoint</span>'
+								: `<button class="check-provider-usage-btn compact" data-provider="${providerAttr}" ${isLoading ? "disabled" : ""}>${
+										isLoading ? "Checking..." : "Check"
+									}</button>`
+						}
 					</td>
 				</tr>`;
 		})

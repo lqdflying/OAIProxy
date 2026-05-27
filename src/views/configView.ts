@@ -10,6 +10,7 @@ import {
 	getProviderSecretKey,
 	getProviderUsageAdapter,
 	getProviderUsageSecretKey,
+	getProviderUsageUnsupportedReason,
 	providerRequiresUsageApiKey,
 	type ProviderUsageResult,
 } from "../providerUsage";
@@ -531,7 +532,10 @@ export class ConfigViewPanel {
 			const baseUrl = model?.baseUrl;
 			const adapter = getProviderUsageAdapter(trimmedProvider, baseUrl);
 			if (!adapter) {
-				throw new Error(`Provider ${trimmedProvider} does not support usage checks yet.`);
+				throw new Error(
+					getProviderUsageUnsupportedReason(trimmedProvider, baseUrl) ??
+						`Provider ${trimmedProvider} does not support usage checks yet.`
+				);
 			}
 
 			const secretKey = providerRequiresUsageApiKey(adapter)

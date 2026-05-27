@@ -23,7 +23,11 @@ npm run download-api   # Download VS Code proposed API types (required after vsc
 - API keys stored via `vscode.SecretStorage` with keys `oaicopilot.apiKey` or `oaicopilot.apiKey.{provider}`
 - Model config via `oaicopilot.models` setting (see `src/types.ts` for `HFModelItem`)
 - Supports multi-provider: same model can have different `configId` for different settings
+- When adding a new provider or provider preset, check whether the provider offers an official usage/balance/cost API. If a public API-key endpoint exists, add the usage adapter, UI copy, tests, and docs in the same change; if not, document the unsupported reason and do not integrate private console/cookie endpoints.
+- For test VSIX builds, keep the current package version. Do not bump `package.json`, `package-lock.json`, or add a release changelog entry unless the user explicitly says GA/release/version bump.
 - Release automation should build/package VSIX artifacts only. Do not publish to the VS Code Marketplace from agent actions; the maintainer publishes manually.
+- This repo is a VS Code extension commonly tested through remote VS Code Server. When asked to check plugin logs, inspect VS Code Server Output/Extension Host logs first under `~/.vscode-server/data/logs/<session>/exthost*/output_logging_*/N-OAIProxy.log`, `N-OAIProxy Usage.log`, and `remoteexthost.log`; use `~/.copilot/oaiproxy/logs/` only as a secondary cross-check.
+- Do not infer hidden request fields from summarized debug logs. If a field such as reasoning effort, thinking type, or output config is not present in the log summary, treat the log as inconclusive and add safe summary fields instead of claiming the field was sent.
 
 ## Code Style (from eslint.config.mjs)
 - Semicolons required (`@stylistic/semi`)

@@ -31,7 +31,7 @@
 		"type": "git",
 		"url": "https://github.com/lqdflying/OAIProxy"
 	},
-	"version": "0.1.5",
+	"version": "0.1.6",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -245,15 +245,16 @@
 							},
 							"thinking": {
 								"type": "object",
-								"description": "Thinking configuration for Zai provider",
+								"description": "Thinking configuration for providers that expose an explicit thinking mode, such as Zai and Anthropic.",
 								"properties": {
 									"type": {
 										"type": "string",
 										"enum": [
 											"enabled",
-											"disabled"
+											"disabled",
+											"adaptive"
 										],
-										"description": "Set to 'enabled' to enable thinking, 'disabled' to disable thinking"
+										"description": "Set to 'enabled' to enable thinking, 'disabled' to disable thinking, or 'adaptive' for Anthropic adaptive thinking."
 									}
 								}
 							},

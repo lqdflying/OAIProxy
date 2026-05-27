@@ -51,3 +51,9 @@ DeepSeek models (models whose ID or provider contains "deepseek") use a special 
 - `xhigh`/`max` → maps to `max`
 
 The picker shows only `high` and `max` for DeepSeek models by default.
+
+## Anthropic Claude models
+
+Claude Sonnet 4.6, Claude Opus 4.6, Claude Opus 4.7, Claude Opus 4.5, and Claude Mythos Preview expose the picker automatically. OAIProxy maps the selected value to Anthropic's `output_config.effort`; for Claude Sonnet 4.6 and other adaptive-thinking models, OAIProxy also sends `thinking: { "type": "adaptive" }` unless you explicitly disable thinking.
+
+Claude Sonnet 4.6 shows `low`, `medium`, `high`, and `max`. `xhigh` is only exposed for Claude Opus 4.7.

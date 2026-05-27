@@ -20,7 +20,7 @@ English | [简体中文](README.zh-CN.md)
 - **Thinking Effort control**: VS Code's built-in per-model Thinking Effort dropdown in the model picker — customize reasoning effort on the fly
 - **Advanced configuration**: Flexible chat request options with thinking/reasoning control
 - **Multi-provider management**: Configure models from multiple providers simultaneously with automatic API key management
-- **Provider usage checks**: Check DeepSeek/Kimi credit balance, MiniMax token-plan remaining quota, and OpenAI/Anthropic month-to-date cost usage from a standalone Provider Usage Check table
+- **Provider usage checks**: Check DeepSeek/Kimi credit balance, MiniMax token-plan remaining quota, and OpenAI/Anthropic month-to-date cost usage from a standalone Provider Usage Check table; MiMo is shown as unavailable until Xiaomi publishes a public API-key usage endpoint
 - **Multi-config per model**: Define different settings for the same model (e.g., GLM-4.6 with/without thinking)
 - **Visual configuration UI**: Intuitive interface for managing providers and models
 - **Auto-retry**: Handles API errors (429, 500, 502, 503, 504) with exponential backoff
@@ -66,7 +66,7 @@ The extension provides a visual configuration interface for managing providers, 
 
 The Provider Management form includes presets for OpenAI, Anthropic, Kimi, DeepSeek, Xiaomi MiMo, and MiniMax. Selecting a preset fills the provider ID, base URL, and API mode; you still choose the model ID from the provider's current documentation or model list. Example snippets are in `examples/openai-responses.jsonc`, `examples/openai-chat-completions.jsonc`, `examples/anthropic.jsonc`, and `examples/mimo.jsonc`.
 
-The standalone Provider Usage Check table lists configured supported providers dynamically and reports credit, token-plan, or cost usage. OpenAI and Anthropic usage/admin keys are stored separately from chat API keys.
+The standalone Provider Usage Check table lists configured supported providers dynamically and reports credit, token-plan, or cost usage. OpenAI and Anthropic usage/admin keys are stored separately from chat API keys. MiMo entries are shown with an unavailable reason because Xiaomi currently exposes balance and usage through Console pages, not a documented public API-key endpoint.
 
 → [Full Configuration Guide](doc/configuration.md)
 
@@ -98,7 +98,7 @@ Define multiple configurations for the same model ID via `configId` (e.g., `glm-
 
 ## Thinking Effort Control
 
-VS Code 1.120+ exposes a per-model Thinking Effort dropdown in the model picker. Enable it with `supports_reasoning_effort: true`. DeepSeek models default to `high`/`max`.
+VS Code 1.120+ exposes a per-model Thinking Effort dropdown in the model picker. Enable it with `supports_reasoning_effort: true`. DeepSeek models default to `high`/`max`; Claude Sonnet 4.6 is detected automatically and maps to Anthropic `output_config.effort`.
 
 → [Thinking Effort Guide](doc/thinking-effort.md)
 

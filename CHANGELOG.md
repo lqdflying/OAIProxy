@@ -1,5 +1,13 @@
 # Change Log
 
+## 0.1.6 (2026-05-27)
+
+- Add explicit Xiaomi MiMo usage-check handling so the configuration UI shows MiMo usage as unavailable until Xiaomi documents a public API-key usage endpoint.
+- Add a provider rule requiring new providers to check and document official usage/balance/cost API support.
+- Add automatic VS Code Thinking Effort support for Claude Sonnet 4.6, mapping picker selections to Anthropic `output_config.effort` with adaptive thinking enabled.
+- Add safe request-body debug summaries for reasoning, thinking, and output-config fields so plugin logs can verify effort settings without exposing raw prompts.
+- Clean up existing lint violations and keep the release build passing compile and lint.
+
 ## 0.1.5 (2026-05-27)
 
 - Add a Xiaomi MiMo provider preset using the official OpenAI-compatible endpoint.

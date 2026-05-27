@@ -25,7 +25,7 @@ async function checkGitRepo(cwd: string): Promise<boolean> {
 	try {
 		await execFileAsync("git", ["rev-parse", "--git-dir"], { cwd });
 		return true;
-	} catch (_error) {
+	} catch {
 		return false;
 	}
 }
@@ -34,7 +34,7 @@ async function checkGitInstalled(): Promise<boolean> {
 	try {
 		await execFileAsync("git", ["--version"]);
 		return true;
-	} catch (_error) {
+	} catch {
 		return false;
 	}
 }
@@ -43,7 +43,7 @@ async function checkGitRepoHasCommits(cwd: string): Promise<boolean> {
 	try {
 		await execFileAsync("git", ["rev-parse", "HEAD"], { cwd });
 		return true;
-	} catch (_error) {
+	} catch {
 		return false;
 	}
 }
@@ -72,15 +72,7 @@ export async function searchCommits(query: string, cwd: string): Promise<GitComm
 		// Use execFile + argv so `query` cannot escape into the shell.
 		const { stdout } = await execFileAsync(
 			"git",
-			[
-				"log",
-				"-n",
-				"10",
-				"--format=%H%n%h%n%s%n%an%n%ad",
-				"--date=short",
-				`--grep=${query}`,
-				"--regexp-ignore-case",
-			],
+			["log", "-n", "10", "--format=%H%n%h%n%s%n%an%n%ad", "--date=short", `--grep=${query}`, "--regexp-ignore-case"],
 			{ cwd }
 		);
 
@@ -210,38 +202,34 @@ export async function getWorkingState(cwd: string): Promise<string> {
 }
 
 export async function getGitDiff(cwd: string, stagedOnly = false): Promise<string> {
-	try {
-		const isInstalled = await checkGitInstalled();
-		if (!isInstalled) {
-			throw new Error("Git is not installed");
-		}
-
-		const isRepo = await checkGitRepo(cwd);
-		if (!isRepo) {
-			throw new Error("Not a git repository");
-		}
-
-		let diff = "";
-		let commandArgs = ["--no-pager", "diff", "--staged", "--diff-filter=d"];
-		if (await checkGitRepoHasCommits(cwd)) {
-			const { stdout: staged } = await execFileAsync("git", commandArgs, { cwd });
-			diff = staged.trim();
-		}
-
-		if (!stagedOnly && !diff) {
-			commandArgs = ["--no-pager", "diff", "HEAD", "--diff-filter=d"];
-			const { stdout: unstaged } = await execFileAsync("git", commandArgs, { cwd });
-			diff = unstaged.trim();
-		}
-
-		if (!diff) {
-			throw new Error("No changes in workspace for commit message");
-		}
-
-		return truncateOutput(`'git ${commandArgs.join(" ")}' Output:\n\n${diff}`.trim());
-	} catch (error) {
-		throw error;
+	const isInstalled = await checkGitInstalled();
+	if (!isInstalled) {
+		throw new Error("Git is not installed");
 	}
+
+	const isRepo = await checkGitRepo(cwd);
+	if (!isRepo) {
+		throw new Error("Not a git repository");
+	}
+
+	let diff = "";
+	let commandArgs = ["--no-pager", "diff", "--staged", "--diff-filter=d"];
+	if (await checkGitRepoHasCommits(cwd)) {
+		const { stdout: staged } = await execFileAsync("git", commandArgs, { cwd });
+		diff = staged.trim();
+	}
+
+	if (!stagedOnly && !diff) {
+		commandArgs = ["--no-pager", "diff", "HEAD", "--diff-filter=d"];
+		const { stdout: unstaged } = await execFileAsync("git", commandArgs, { cwd });
+		diff = unstaged.trim();
+	}
+
+	if (!diff) {
+		throw new Error("No changes in workspace for commit message");
+	}
+
+	return truncateOutput(`'git ${commandArgs.join(" ")}' Output:\n\n${diff}`.trim());
 }
 
 export async function getGitRemoteUrls(cwd: string): Promise<string[]> {

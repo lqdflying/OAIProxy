@@ -24,6 +24,7 @@ import { isImageMimeType, isToolResultPart, collectToolResultText, convertToolsT
 import { CommonApi } from "../commonApi";
 import { logger } from "../logger";
 import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "../vscodeCompat";
+import { isAnthropicAdaptiveThinkingModel, normalizeReasoningEffortForModel } from "../reasoningEffort";
 import {
 	applyCacheControl,
 	createAnthropicCacheControl,
@@ -34,6 +35,13 @@ import {
 	shouldCacheAnthropicTools,
 	type AnthropicCacheControl,
 } from "../promptCache";
+
+function normalizeAnthropicThinkingType(value: string | undefined): "enabled" | "adaptive" | "disabled" | undefined {
+	if (value === "enabled" || value === "adaptive" || value === "disabled") {
+		return value;
+	}
+	return undefined;
+}
 
 export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBody> {
 	private _systemBlocks: AnthropicTextBlock[] | undefined;
@@ -103,7 +111,10 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 							text: joinedText,
 						};
 						this._systemBlocks = [
-							applyCacheControl(systemBlock as unknown as Record<string, unknown>, cacheControl) as unknown as AnthropicTextBlock,
+							applyCacheControl(
+								systemBlock as unknown as Record<string, unknown>,
+								cacheControl
+							) as unknown as AnthropicTextBlock,
 						];
 						this._systemContent = undefined;
 					} else {
@@ -215,6 +226,37 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			rb.top_k = um.top_k;
 		}
 
+		const configuredThinkingType = normalizeAnthropicThinkingType(um?.thinking?.type);
+		if (configuredThinkingType) {
+			rb.thinking =
+				configuredThinkingType === "enabled"
+					? { type: "enabled", budget_tokens: um?.thinking_budget ?? 1024 }
+					: { type: configuredThinkingType };
+		}
+
+		const effort = um ? normalizeReasoningEffortForModel(um, um.reasoning_effort) : undefined;
+		if (effort) {
+			rb.output_config = {
+				...rb.output_config,
+				effort,
+			};
+
+			if (um && isAnthropicAdaptiveThinkingModel(um) && !rb.thinking && um.enable_thinking !== false) {
+				rb.thinking = { type: "adaptive" };
+			}
+		}
+
+		if (um?.enable_thinking === true && !rb.thinking) {
+			if (isAnthropicAdaptiveThinkingModel(um) && um.thinking_budget === undefined) {
+				rb.thinking = { type: "adaptive" };
+			} else {
+				rb.thinking = {
+					type: "enabled",
+					budget_tokens: um.thinking_budget ?? 1024,
+				};
+			}
+		}
+
 		// Add tools configuration
 		const toolConfig = convertToolsToOpenAI(options);
 		if (toolConfig.tools) {
@@ -250,7 +292,10 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		}
 
 		if (shouldCacheAnthropicTools(um) && rb.tools && rb.tools.length > 0) {
-			applyCacheControl(rb.tools[rb.tools.length - 1] as unknown as Record<string, unknown>, createAnthropicCacheControl(um));
+			applyCacheControl(
+				rb.tools[rb.tools.length - 1] as unknown as Record<string, unknown>,
+				createAnthropicCacheControl(um)
+			);
 		}
 
 		return rb;
@@ -266,7 +311,10 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 				text: system,
 			};
 			return [
-				applyCacheControl(systemBlock as unknown as Record<string, unknown>, cacheControl) as unknown as AnthropicTextBlock,
+				applyCacheControl(
+					systemBlock as unknown as Record<string, unknown>,
+					cacheControl
+				) as unknown as AnthropicTextBlock,
 			];
 		}
 
@@ -499,18 +547,26 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		try {
 			while (true) {
 				const { done, value } = await reader.read();
-				if (done) break;
+				if (done) {
+					break;
+				}
 
 				buffer += decoder.decode(value, { stream: true });
 				const lines = buffer.split("\n");
 				buffer = lines.pop() || "";
 
 				for (const line of lines) {
-					if (line.trim() === "") continue;
-					if (!line.startsWith("data:")) continue;
+					if (line.trim() === "") {
+						continue;
+					}
+					if (!line.startsWith("data:")) {
+						continue;
+					}
 
 					const data = line.slice(5).trim();
-					if (data === "[DONE]") continue;
+					if (data === "[DONE]") {
+						continue;
+					}
 
 					try {
 						const chunk: AnthropicStreamChunk = JSON.parse(data);
@@ -521,7 +577,9 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 						}
 
 						// Handle message stop
-						if (chunk.type === "message_stop") break;
+						if (chunk.type === "message_stop") {
+							break;
+						}
 
 						// Handle error responses
 						if (chunk.type === "error") {

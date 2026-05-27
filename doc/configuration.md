@@ -156,7 +156,7 @@ The configuration UI can prefill provider settings for OpenAI, Anthropic, Kimi, 
 | MiniMax (OpenAI) | `minimax` | `https://api.minimax.io/v1` | `openai` |
 | MiniMax (Anthropic) | `minimax-anthropic` | `https://api.minimax.io/anthropic` | `anthropic` |
 
-Settings snippets are available in `examples/openai-responses.jsonc`, `examples/openai-chat-completions.jsonc`, `examples/anthropic.jsonc`, and `examples/mimo.jsonc`. OpenAI and Anthropic usage/cost checks require separate admin keys; enter those in the configuration UI's `Usage Key` field instead of adding them to `settings.json`.
+Settings snippets are available in `examples/openai-responses.jsonc`, `examples/openai-chat-completions.jsonc`, `examples/anthropic.jsonc`, and `examples/mimo.jsonc`. OpenAI and Anthropic usage/cost checks require separate admin keys; enter those in the configuration UI's `Usage Key` field instead of adding them to `settings.json`. MiMo usage checks are shown as unavailable because Xiaomi currently documents balance and usage only through Console pages, not a public API-key endpoint.
 
 ### Settings Example
 

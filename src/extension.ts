@@ -14,6 +14,7 @@ import {
 	getProviderSecretKey,
 	getProviderUsageAdapter,
 	getProviderUsageSecretKey,
+	getProviderUsageUnsupportedReason,
 	providerRequiresUsageApiKey,
 	type ProviderUsageAdapter,
 } from "./providerUsage";
@@ -271,7 +272,9 @@ async function runProviderUsageCheck(
 	try {
 		const adapter = getProviderUsageAdapter(provider, baseUrl);
 		if (!adapter) {
-			vscode.window.showErrorMessage(`Provider ${provider} does not support usage checks yet.`);
+			vscode.window.showErrorMessage(
+				getProviderUsageUnsupportedReason(provider, baseUrl) ?? `Provider ${provider} does not support usage checks yet.`
+			);
 			return;
 		}
 

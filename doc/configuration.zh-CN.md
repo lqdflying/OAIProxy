@@ -157,7 +157,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 | MiniMax (OpenAI) | `minimax` | `https://api.minimax.io/v1` | `openai` |
 | MiniMax (Anthropic) | `minimax-anthropic` | `https://api.minimax.io/anthropic` | `anthropic` |
 
-配置示例见 `examples/openai-responses.jsonc`、`examples/openai-chat-completions.jsonc`、`examples/anthropic.jsonc` 和 `examples/mimo.jsonc`。OpenAI 和 Anthropic 的用量/费用检查需要单独的 admin key，请在配置界面的 `Usage Key` 字段中填写，不要写入 `settings.json`。
+配置示例见 `examples/openai-responses.jsonc`、`examples/openai-chat-completions.jsonc`、`examples/anthropic.jsonc` 和 `examples/mimo.jsonc`。OpenAI 和 Anthropic 的用量/费用检查需要单独的 admin key，请在配置界面的 `Usage Key` 字段中填写，不要写入 `settings.json`。小米 MiMo 用量检查会显示为不可用，因为小米目前仅在 Console 页面提供余额和用量信息，尚未公开 API key 用量端点。
 
 ### 配置示例
 

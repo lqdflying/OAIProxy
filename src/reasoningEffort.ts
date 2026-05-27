@@ -2,6 +2,8 @@ import type { HFModelItem } from "./types";
 
 export const DEFAULT_REASONING_EFFORTS = ["minimal", "low", "medium", "high", "xhigh", "max"];
 const DEEPSEEK_REASONING_EFFORTS = ["high", "max"];
+const ANTHROPIC_REASONING_EFFORTS = ["low", "medium", "high", "max"];
+const ANTHROPIC_OPUS_4_7_REASONING_EFFORTS = ["low", "medium", "high", "xhigh", "max"];
 
 export function shouldExposeReasoningEffort(model: HFModelItem): boolean {
 	return (
@@ -9,7 +11,8 @@ export function shouldExposeReasoningEffort(model: HFModelItem): boolean {
 		hasReasoningEffortValues(model.supported_reasoning_efforts) ||
 		typeof model.default_reasoning_effort === "string" ||
 		typeof model.reasoning_effort === "string" ||
-		typeof model.reasoning?.effort === "string"
+		typeof model.reasoning?.effort === "string" ||
+		isAnthropicReasoningEffortModel(model)
 	);
 }
 
@@ -31,6 +34,12 @@ export function getReasoningEfforts(model: HFModelItem, selectedEffort?: string)
 	}
 	if (isDeepSeekModel(model)) {
 		return appendSelectedAlias(DEEPSEEK_REASONING_EFFORTS);
+	}
+	if (isAnthropicOpus47Model(model)) {
+		return appendSelectedAlias(ANTHROPIC_OPUS_4_7_REASONING_EFFORTS);
+	}
+	if (isAnthropicReasoningEffortModel(model)) {
+		return appendSelectedAlias(ANTHROPIC_REASONING_EFFORTS);
 	}
 	return DEFAULT_REASONING_EFFORTS;
 }
@@ -67,6 +76,14 @@ export function normalizeReasoningEffortForModel(model: HFModelItem, value: stri
 		return values.includes(normalized) ? normalized : undefined;
 	}
 
+	if (isAnthropicOpus47Model(model)) {
+		return ANTHROPIC_OPUS_4_7_REASONING_EFFORTS.includes(normalized) ? normalized : undefined;
+	}
+
+	if (isAnthropicReasoningEffortModel(model)) {
+		return ANTHROPIC_REASONING_EFFORTS.includes(normalized) ? normalized : undefined;
+	}
+
 	return normalized;
 }
 
@@ -83,4 +100,34 @@ function isDeepSeekModel(model: HFModelItem): boolean {
 	const id = model.id.toLowerCase();
 	const provider = model.owned_by?.toLowerCase() ?? "";
 	return id.includes("deepseek") || provider.includes("deepseek");
+}
+
+export function isAnthropicReasoningEffortModel(model: HFModelItem): boolean {
+	const key = getAnthropicModelKey(model);
+	return (
+		key.includes("claude-mythos-preview") ||
+		key.includes("claude-opus-4-7") ||
+		key.includes("claude-opus-4-6") ||
+		key.includes("claude-sonnet-4-6") ||
+		key.includes("claude-opus-4-5")
+	);
+}
+
+export function isAnthropicAdaptiveThinkingModel(model: HFModelItem): boolean {
+	const key = getAnthropicModelKey(model);
+	return (
+		key.includes("claude-mythos-preview") ||
+		key.includes("claude-opus-4-7") ||
+		key.includes("claude-opus-4-6") ||
+		key.includes("claude-sonnet-4-6")
+	);
+}
+
+function isAnthropicOpus47Model(model: HFModelItem): boolean {
+	const key = getAnthropicModelKey(model);
+	return key.includes("claude-opus-4-7");
+}
+
+function getAnthropicModelKey(model: HFModelItem): string {
+	return [model.id, model.family, model.displayName].filter(Boolean).join(" ").toLowerCase();
 }

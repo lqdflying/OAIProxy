@@ -1,8 +1,10 @@
 import * as assert from "assert";
 import {
+	checkProviderUsage,
 	formatDuration,
 	getProviderUsageAdapter,
 	getProviderUsageSecretKey,
+	getProviderUsageUnsupportedReason,
 	parseAnthropicCostReport,
 	parseDeepSeekBalance,
 	parseKimiBalance,
@@ -161,6 +163,27 @@ suite("providerUsage", () => {
 		assert.strictEqual(getProviderUsageAdapter("custom", "https://api.anthropic.com"), "anthropic");
 		assert.strictEqual(getProviderUsageAdapter("minimax-anthropic", "https://api.minimax.io/anthropic"), "minimax");
 		assert.strictEqual(getProviderUsageSecretKey("OpenAI"), "oaicopilot.usageApiKey.openai");
+	});
+
+	test("detects MiMo as unsupported for provider usage checks", async () => {
+		assert.strictEqual(getProviderUsageAdapter("mimo", "https://api.xiaomimimo.com/v1"), undefined);
+		assert.strictEqual(getProviderUsageAdapter("custom", "https://token-plan-sgp.xiaomimimo.com/v1"), undefined);
+		assert.match(
+			getProviderUsageUnsupportedReason("mimo", "https://api.xiaomimimo.com/v1") ?? "",
+			/Xiaomi MiMo usage checks are unavailable/
+		);
+		assert.match(
+			getProviderUsageUnsupportedReason("custom", "https://token-plan-sgp.xiaomimimo.com/v1") ?? "",
+			/web Console endpoints/
+		);
+		await assert.rejects(
+			checkProviderUsage({
+				provider: "mimo",
+				baseUrl: "https://api.xiaomimimo.com/v1",
+				apiKey: "test",
+			}),
+			/Xiaomi MiMo usage checks are unavailable/
+		);
 	});
 
 	test("formats non-positive reset times as now", () => {

@@ -963,11 +963,36 @@ function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
 		previousResponseIdPrefix: typeof body.previous_response_id === "string"
 			? body.previous_response_id.slice(0, 8)
 			: undefined,
+		hasReasoningEffort: body.reasoning_effort !== undefined,
+		reasoningEffort: typeof body.reasoning_effort === "string" ? body.reasoning_effort : undefined,
+		hasReasoning: body.reasoning !== undefined,
+		reasoningEffortNested: getNestedString(body.reasoning, "effort"),
+		hasThinking: body.thinking !== undefined,
+		thinkingType: getNestedString(body.thinking, "type"),
+		thinkingBudgetTokens: getNestedNumber(body.thinking, "budget_tokens"),
+		hasOutputConfig: body.output_config !== undefined,
+		outputConfigEffort: getNestedString(body.output_config, "effort"),
 	};
 }
 
 function getArrayLength(value: unknown): number | undefined {
 	return Array.isArray(value) ? value.length : undefined;
+}
+
+function getNestedString(value: unknown, key: string): string | undefined {
+	if (!value || typeof value !== "object") {
+		return undefined;
+	}
+	const nestedValue = (value as Record<string, unknown>)[key];
+	return typeof nestedValue === "string" ? nestedValue : undefined;
+}
+
+function getNestedNumber(value: unknown, key: string): number | undefined {
+	if (!value || typeof value !== "object") {
+		return undefined;
+	}
+	const nestedValue = (value as Record<string, unknown>)[key];
+	return typeof nestedValue === "number" ? nestedValue : undefined;
 }
 
 function containsImagePayload(value: unknown, depth = 0): boolean {
