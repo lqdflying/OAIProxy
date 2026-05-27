@@ -1,0 +1,40 @@
+---
+description: Code style, new provider checks, log inspection, and debug-log inference policy for OAIProxy
+alwaysApply: true
+---
+
+# OAIProxy Development Conventions
+
+## Code Style (from eslint.config.mjs)
+
+- Semicolons required (`@stylistic/semi`)
+- Curly braces required (`curly`)
+- Unused vars with `_` prefix are ignored
+- Use `\t` indentation (`@stylistic/indent`)
+- Double quotes for strings (`@stylistic/quotes`)
+
+## Adding a new provider or provider preset
+
+When adding a new provider or provider preset, check whether the provider offers an official usage/balance/cost API. If a public API-key endpoint exists, add the usage adapter, UI copy, tests, and docs in the same change; if not, document the unsupported reason and do **not** integrate private console/cookie endpoints.
+
+## Multi-provider model configuration
+
+- Supports multi-provider: same model can have different `configId` values for different settings.
+- Model config via `oaicopilot.models` setting (see `src/types.ts` for `HFModelItem`).
+- API keys stored via `vscode.SecretStorage` with keys `oaicopilot.apiKey` or `oaicopilot.apiKey.{provider}`.
+
+## Checking runtime logs
+
+This is a VS Code extension tested through remote VS Code Server. When asked to check plugin logs:
+
+1. **Primary**: VS Code Server Output/Extension Host logs under `~/.vscode-server/data/logs/<session>/exthost*/output_logging_*/N-OAIProxy.log` and `N-OAIProxy Usage.log`
+   - Choose the newest `*OAIProxy.log` by mtime and verify it has a recent `extension.lifecycle` / `request.start`
+2. **Extension host errors**: `~/.vscode-server/data/logs/<session>/exthost*/remoteexthost.log`
+3. **Installed version**: `~/.vscode-server/extensions/lqdflying.oaiproxy-*`
+4. **Secondary cross-check**: `~/.copilot/oaiproxy/logs/oaiproxy-YYYYMMDD.log`
+
+Search those files for `cache.usage`, `cachedTokens`, `request.body`, `request.error`, `responses.state`, activation lines, version strings, and the model id.
+
+## Debug log inference discipline
+
+Do **not** infer that a request field was sent unless the log summary explicitly contains that field or the raw body is intentionally available. If a field such as reasoning effort, thinking type, or output config is not present in the log summary, treat the log as inconclusive and add safe summary fields (e.g., `reasoningEffort`, `thinkingType`, `outputConfigEffort`) instead of claiming the field was sent.

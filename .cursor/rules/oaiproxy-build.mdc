@@ -1,9 +1,21 @@
 ---
-description: Build system quirks, VSIX packaging, and version bumping policy for OAIProxy
+description: Build system quirks, commands, VSIX packaging, install policy, and version bumping for OAIProxy
 alwaysApply: true
 ---
 
 # OAIProxy Build & Packaging
+
+## Build / Test / Lint commands
+
+```bash
+npm run compile        # Build TypeScript
+npm run watch          # Build in watch mode
+npm run lint           # Run ESLint
+npm run format         # Format with Prettier
+npm run test           # Run tests (compile + vscode-test)
+npm run build          # Package extension to .vsix
+npm run download-api   # Download VS Code proposed API types (required after vscode.d.ts updates)
+```
 
 ## Bun npm shim interference
 
@@ -21,12 +33,17 @@ To build a VSIX reliably, use system npm/npx first in `PATH` and keep dependency
 
 The `npm run build` script is intentionally written with the env PATH workaround and emits `oaiproxy-${npm_package_version}.vsix`.
 
+## Extension install / reload policy
+
+Do **not** install, reinstall, or reload the OAIProxy VS Code extension/VSIX from agent actions unless the user explicitly asks for that. Build/package the VSIX and let the user install/reload it.
+
 ## Version bumping policy
 
 - For local pre-commit/pre-push testing VSIX builds, **do not bump** `package.json` or `package-lock.json` — just run `npm run build` at the current version.
-- Only bump the extension patch version in **both** `package.json` and `package-lock.json` when the user explicitly says they are ready to release/publish or asks for a version bump.
+- Only bump the extension patch version in **both** `package.json` and `package-lock.json` when the user explicitly says they are ready to release/publish, says `GA`, or asks for a version bump.
+- Do **not** create a new `CHANGELOG.md` release section for test-only builds.
 - Do **not** publish to the VS Code Marketplace from agent actions.
 
 ## Stale VSIX installation
 
-A local testing VSIX may have the same version as an already-installed extension while containing newer code. If VS Code appears stale after installing that VSIX, advise uninstalling the existing extension first, then installing the VSIX again.
+A local testing VSIX may have the same version as an already-installed extension while containing newer code. If VS Code appears stale after installing that VSIX, advise uninstalling the existing extension first, then installing the VSIX again. Do **not** solve stale-install ambiguity by bumping the extension version unless the user explicitly asks for a version bump.

@@ -1,5 +1,5 @@
 ---
-description: Project context, upstream relationship, and VS Code compatibility notes for OAIProxy
+description: Project context, architecture, upstream relationship, VS Code compatibility, and current features
 alwaysApply: true
 ---
 
@@ -8,6 +8,19 @@ alwaysApply: true
 ## Fork & rebrand
 
 This repo is the `lqdflying/OAIProxy` fork/rebrand of upstream `oai-compatible-copilot`. The fork reset package versioning to `0.0.1`.
+
+## Architecture
+
+- **Entry**: `src/extension.ts` — registers `HuggingFaceChatModelProvider` under vendor id `oaicopilot`
+- **Core Provider**: `src/provider.ts` — implements `LanguageModelChatProvider` interface
+- **API Providers**: `src/openai/`, `src/ollama/`, `src/anthropic/`, `src/gemini/` — each handles provider-specific API
+- **Types**: `src/types.ts` — `HFModelItem` and other shared type definitions
+
+## Current features
+
+- **Provider presets**: Xiaomi MiMo, Kimi, DeepSeek, MiniMax, OpenAI, Anthropic, Ollama, Gemini
+- **Vision bridge**: Transparent image→text conversion for text-only models via `src/visionBridge.ts`
+- **Multi-provider**: Same model can have different `configId` values for different settings; provider/API-key groups by `owned_by`
 
 ## VS Code compatibility
 

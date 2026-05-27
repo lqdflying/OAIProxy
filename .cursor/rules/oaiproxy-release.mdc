@@ -16,7 +16,7 @@ Before tagging/releasing, follow this sequence:
 1. Update `CHANGELOG.md` with a new section based on commits since the previous tag.
 2. Bump the patch version in **both** `package.json` and `package-lock.json`.
 3. Run `npm run build` after the changelog/version changes.
-4. Commit those files.
+4. Commit all intended release changes (including the changelog and version metadata).
 5. Tag `v<version>`.
 6. Push `main` and the tag.
 7. Create the GitHub release with the rebuilt VSIX asset. Use explicit release notes from the changelog/commit summary; do **not** rely only on `--generate-notes`.
