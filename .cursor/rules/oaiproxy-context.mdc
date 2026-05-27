@@ -18,7 +18,7 @@ This repo is the `lqdflying/OAIProxy` fork/rebrand of upstream `oai-compatible-c
 
 ## Current features
 
-- **Provider presets**: Xiaomi MiMo, Kimi, DeepSeek, MiniMax, OpenAI, Anthropic, Ollama, Gemini
+- **Provider presets**: OpenAI, Anthropic, Kimi, DeepSeek, Xiaomi MiMo, MiniMax (OpenAI/Anthropic). Ollama and Gemini are supported as API modes but do not have server-endpoint presets.
 - **Vision bridge**: Transparent image→text conversion for text-only models via `src/visionBridge.ts`
 - **Multi-provider**: Same model can have different `configId` values for different settings; provider/API-key groups by `owned_by`
 
