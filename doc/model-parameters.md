@@ -61,6 +61,8 @@ OpenRouter reasoning configuration object with the following options:
 Thinking configuration for Zai provider:
 - `type`: Set to `"enabled"` to enable thinking, `"disabled"` to disable thinking
 
+MiMo uses the same `thinking.type` request-body shape in OpenAI-compatible mode. For MiMo thinking-enabled agent/tool sessions, keep `include_reasoning_in_request: true` so historical assistant `reasoning_content` is sent back in later turns.
+
 ### `supported_reasoning_efforts`
 
 Custom list of Thinking Effort values shown in the model picker dropdown. DeepSeek models default to `["high", "max"]`; other models default to `["minimal", "low", "medium", "high", "xhigh", "max"]`.
@@ -74,12 +76,12 @@ Default Thinking Effort value pre-selected in the model picker. If not set, `rea
 Provider-aware prompt/KV cache configuration:
 - OpenAI official endpoints automatically receive a stable `prompt_cache_key` unless `prompt_cache.enabled` is `false`. Set `prompt_cache.key` to override the key, and `prompt_cache.retention` to `"in_memory"` or `"24h"` when you need an explicit OpenAI retention policy.
 - Anthropic-compatible cache writes are opt-in. Set `prompt_cache.anthropic.enabled: true` to mark stable system prompts and tool definitions with `cache_control`; `ttl` can be `"5m"` or `"1h"`. Explicit VS Code `cache_control` data parts are preserved even without this config.
-- DeepSeek, MiniMax OpenAI mode, and Gemini use provider automatic/implicit caching. Check `cache.usage` log entries to verify cache hits.
+- DeepSeek, Xiaomi MiMo, MiniMax OpenAI mode, and Gemini use provider automatic/implicit caching. Check `cache.usage` log entries to verify cache hits.
 
 ### `apiMode`
 
 API protocol to use for this model:
-- `"openai"` (default): `/chat/completions` with `Authorization: Bearer` header. Use this for OpenAI-compatible providers such as Kimi, DeepSeek, and MiniMax.
+- `"openai"` (default): `/chat/completions` with `Authorization: Bearer` header. Use this for OpenAI-compatible providers such as Kimi, DeepSeek, Xiaomi MiMo, and MiniMax.
 - `"openai-responses"`: `/responses` with `Authorization: Bearer` header
 - `"ollama"`: `/api/chat` with optional `Authorization: Bearer` header
 - `"anthropic"`: `/v1/messages` with `x-api-key` header

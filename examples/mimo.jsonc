@@ -1,0 +1,49 @@
+{
+    "oaicopilot.models": [
+        {
+            "id": "mimo-v2.5-pro",
+            "displayName": "MiMo V2.5 Pro",
+            "owned_by": "mimo",
+            "baseUrl": "https://api.xiaomimimo.com/v1",
+            "apiMode": "openai",
+            "vision": false,
+            "context_length": 1048576,
+            "max_completion_tokens": 8192,
+            "thinking": {
+                "type": "enabled",
+            },
+            "include_reasoning_in_request": true,
+            "toolCalling": true,
+        },
+        {
+            "id": "mimo-v2.5",
+            "displayName": "MiMo V2.5",
+            "owned_by": "mimo",
+            "baseUrl": "https://api.xiaomimimo.com/v1",
+            "apiMode": "openai",
+            "vision": true,
+            "context_length": 1048576,
+            "max_completion_tokens": 8192,
+            "thinking": {
+                "type": "enabled",
+            },
+            "include_reasoning_in_request": true,
+            "toolCalling": true,
+        },
+        {
+            "id": "mimo-v2-flash",
+            "displayName": "MiMo V2 Flash",
+            "owned_by": "mimo",
+            "baseUrl": "https://api.xiaomimimo.com/v1",
+            "apiMode": "openai",
+            "vision": false,
+            "context_length": 262144,
+            "max_completion_tokens": 8192,
+            "thinking": {
+                "type": "enabled",
+            },
+            "include_reasoning_in_request": true,
+            "toolCalling": true,
+        },
+    ],
+}

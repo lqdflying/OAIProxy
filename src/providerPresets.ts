@@ -38,6 +38,13 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
 		apiMode: "openai",
 	},
 	{
+		id: "mimo",
+		label: "Xiaomi MiMo",
+		provider: "mimo",
+		baseUrl: "https://api.xiaomimimo.com/v1",
+		apiMode: "openai",
+	},
+	{
 		id: "minimax",
 		label: "MiniMax (OpenAI)",
 		provider: "minimax",

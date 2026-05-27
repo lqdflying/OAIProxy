@@ -27,6 +27,15 @@ suite("promptCache", () => {
 		});
 
 		assert.strictEqual(deepseekBody.prompt_cache_key, undefined);
+
+		const mimoBody: Record<string, unknown> = {};
+		applyOpenAIPromptCache(mimoBody, {
+			model: model({ id: "mimo-v2.5-pro", owned_by: "mimo" }),
+			baseUrl: "https://api.xiaomimimo.com/v1",
+			modelId: "mimo-v2.5-pro",
+		});
+
+		assert.strictEqual(mimoBody.prompt_cache_key, undefined);
 	});
 
 	test("respects explicit OpenAI prompt cache configuration", () => {
@@ -121,6 +130,25 @@ suite("promptCache", () => {
 			{
 				inputTokens: 2048,
 				cachedTokens: 1024,
+			}
+		);
+
+		assert.deepStrictEqual(
+			extractCacheUsage({
+				usage: {
+					completion_tokens: 574,
+					prompt_tokens: 1085,
+					total_tokens: 1659,
+					prompt_tokens_details: {
+						cached_tokens: 1081,
+					},
+				},
+			}),
+			{
+				inputTokens: 1085,
+				outputTokens: 574,
+				totalTokens: 1659,
+				cachedTokens: 1081,
 			}
 		);
 

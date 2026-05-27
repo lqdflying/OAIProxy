@@ -11,6 +11,7 @@ The provider IDs match OAIProxy's built-in presets:
 | `anthropic.jsonc` | `anthropic` | `anthropic` |
 | `kimi.jsonc` | `kimi` | `openai` |
 | `deepseek.jsonc` | `deepseek` | `openai` |
+| `mimo.jsonc` | `mimo` | `openai` |
 | `minimax-openai.jsonc` | `minimax` | `openai` |
 | `minimax-anthropic.jsonc` | `minimax-anthropic` | `anthropic` |
 

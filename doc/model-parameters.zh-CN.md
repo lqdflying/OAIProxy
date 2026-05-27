@@ -61,6 +61,8 @@ OpenRouter 推理配置对象，包含以下选项：
 Zai 供应商的思维链配置：
 - `type`：设为 `"enabled"` 开启思维链，`"disabled"` 关闭思维链
 
+小米 MiMo 在 OpenAI 兼容模式下使用同样的 `thinking.type` 请求体结构。对开启思维链的 MiMo agent/工具调用会话，请保持 `include_reasoning_in_request: true`，以便后续轮次继续传回历史 assistant 的 `reasoning_content`。
+
 ### `supported_reasoning_efforts`
 
 模型选择器下拉菜单中显示的自定义 Thinking Effort 值列表。DeepSeek 模型默认使用 `["high", "max"]`；其他模型默认使用 `["minimal", "low", "medium", "high", "xhigh", "max"]`。
@@ -74,12 +76,12 @@ Zai 供应商的思维链配置：
 按供应商适配的 Prompt/KV 缓存配置：
 - OpenAI 官方端点会自动添加稳定的 `prompt_cache_key`，除非设置 `prompt_cache.enabled: false`。可用 `prompt_cache.key` 覆盖 key，用 `prompt_cache.retention` 设置 `"in_memory"` 或 `"24h"`。
 - Anthropic 兼容缓存写入需要显式启用。设置 `prompt_cache.anthropic.enabled: true` 后，会为稳定的 system prompt 和工具定义添加 `cache_control`；`ttl` 可为 `"5m"` 或 `"1h"`。显式的 VS Code `cache_control` 数据片段即使未启用该配置也会被保留。
-- DeepSeek、MiniMax OpenAI 模式和 Gemini 使用供应商自动/隐式缓存。通过 `cache.usage` 日志查看实际命中情况。
+- DeepSeek、小米 MiMo、MiniMax OpenAI 模式和 Gemini 使用供应商自动/隐式缓存。通过 `cache.usage` 日志查看实际命中情况。
 
 ### `apiMode`
 
 此模型使用的 API 协议：
-- `"openai"`（默认）：`/chat/completions`，使用 `Authorization: Bearer` 请求头。适用于 Kimi、DeepSeek、MiniMax 等 OpenAI 兼容供应商。
+- `"openai"`（默认）：`/chat/completions`，使用 `Authorization: Bearer` 请求头。适用于 Kimi、DeepSeek、小米 MiMo、MiniMax 等 OpenAI 兼容供应商。
 - `"openai-responses"`：`/responses`，使用 `Authorization: Bearer` 请求头
 - `"ollama"`：`/api/chat`，可选 `Authorization: Bearer` 请求头
 - `"anthropic"`：`/v1/messages`，使用 `x-api-key` 请求头

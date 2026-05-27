@@ -2,7 +2,7 @@
 	"name": "oaiproxy",
 	"publisher": "lqdflying",
 	"displayName": "OAIProxy",
-	"description": "OpenAI/Ollama/Anthropic/Gemini provider for Copilot Chat, with OpenAI, Anthropic, Kimi, DeepSeek, and MiniMax presets",
+	"description": "OpenAI/Ollama/Anthropic/Gemini provider for Copilot Chat, with OpenAI, Anthropic, Kimi, DeepSeek, Xiaomi MiMo, and MiniMax presets",
 	"icon": "assets/icon.png",
 	"keywords": [
 		"ai",
@@ -15,6 +15,8 @@
 		"kimi",
 		"moonshot",
 		"deepseek",
+		"mimo",
+		"xiaomi",
 		"minimax",
 		"ollama",
 		"anthropic",
@@ -29,7 +31,7 @@
 		"type": "git",
 		"url": "https://github.com/lqdflying/OAIProxy"
 	},
-	"version": "0.1.4",
+	"version": "0.1.5",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -163,15 +165,15 @@
 							},
 							"owned_by": {
 								"type": "string",
-								"description": "Model provider (e.g., 'zai', 'openai', 'kimi', 'deepseek', 'minimax')."
+								"description": "Model provider (e.g., 'zai', 'openai', 'kimi', 'deepseek', 'mimo', 'minimax')."
 							},
 							"provider": {
 								"type": "string",
-								"description": "(Alias of owned_by) Model provider (e.g., 'zai', 'openai', 'kimi', 'deepseek', 'minimax')."
+								"description": "(Alias of owned_by) Model provider (e.g., 'zai', 'openai', 'kimi', 'deepseek', 'mimo', 'minimax')."
 							},
 							"provide": {
 								"type": "string",
-								"description": "(Alias of owned_by) Model provider (e.g., 'zai', 'openai', 'kimi', 'deepseek', 'minimax')."
+								"description": "(Alias of owned_by) Model provider (e.g., 'zai', 'openai', 'kimi', 'deepseek', 'mimo', 'minimax')."
 							},
 							"family": {
 								"type": "string",
@@ -356,7 +358,7 @@
 							},
 							"prompt_cache": {
 								"type": "object",
-								"description": "Prompt/KV cache configuration. OpenAI prompt-cache keys are auto-applied only for official OpenAI endpoints unless explicitly configured. Anthropic cache-control writes are opt-in unless cache_control message parts are present.",
+								"description": "Prompt/KV cache configuration. OpenAI prompt-cache keys are auto-applied only for official OpenAI endpoints unless explicitly configured. Anthropic cache-control writes are opt-in unless cache_control message parts are present. Providers such as DeepSeek, MiMo, MiniMax, and Gemini use provider-managed cache hits.",
 								"properties": {
 									"enabled": {
 										"type": "boolean",
@@ -421,7 +423,7 @@
 							"include_reasoning_in_request": {
 								"type": "boolean",
 								"default": false,
-								"description": "Whether to include reasoning_content in assistant messages sent to the API. Support deepseek-v3.2 or others."
+								"description": "Whether to include reasoning_content in assistant messages sent to the API. Supports DeepSeek, MiMo thinking mode, and other compatible providers."
 							},
 							"apiMode": {
 								"type": "string",
@@ -433,7 +435,7 @@
 									"gemini"
 								],
 								"default": "openai",
-								"description": "API mode: 'openai' (Default) for OpenAI Chat Completions (/chat/completions), 'openai-responses' for OpenAI Responses (/responses), 'ollama' for Ollama (/api/chat), 'anthropic' for Anthropic (/v1/messages), 'gemini' for Gemini (*/v1beta/models/{model}:streamGenerateContent?alt=sse)."
+								"description": "API mode: 'openai' (Default) for OpenAI Chat Completions (/chat/completions; Kimi, DeepSeek, MiMo, MiniMax, etc.), 'openai-responses' for OpenAI Responses (/responses), 'ollama' for Ollama (/api/chat), 'anthropic' for Anthropic (/v1/messages), 'gemini' for Gemini (*/v1beta/models/{model}:streamGenerateContent?alt=sse)."
 							},
 							"useForCommitGeneration": {
 								"type": "boolean",

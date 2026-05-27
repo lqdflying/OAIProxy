@@ -4,7 +4,7 @@
 
 # OAIProxy
 
-**A self-maintained VS Code extension to use OpenAI/Ollama/Anthropic/Gemini API providers in GitHub Copilot Chat, with presets for OpenAI, Anthropic, Kimi, DeepSeek, and MiniMax** 🔥
+**A self-maintained VS Code extension to use OpenAI/Ollama/Anthropic/Gemini API providers in GitHub Copilot Chat, with presets for OpenAI, Anthropic, Kimi, DeepSeek, Xiaomi MiMo, and MiniMax** 🔥
 
 English | [简体中文](README.zh-CN.md)
 
@@ -13,7 +13,7 @@ English | [简体中文](README.zh-CN.md)
 [![License](https://img.shields.io/github/license/lqdflying/OAIProxy?color=orange&label=License)](https://github.com/lqdflying/OAIProxy/blob/main/LICENSE)
 
 ## Features
-- **Multi-API support**: OpenAI/Ollama/Anthropic/Gemini APIs, with OpenAI-compatible presets for Kimi, DeepSeek, MiniMax, ModelScope, SiliconFlow, and more
+- **Multi-API support**: OpenAI/Ollama/Anthropic/Gemini APIs, with OpenAI-compatible presets for Kimi, DeepSeek, Xiaomi MiMo, MiniMax, ModelScope, SiliconFlow, and more
 - **Vision models**: Full support for image understanding capabilities
 - **Vision Bridge**: Use images in chat with text-only models — OAIProxy automatically describes images via a configured vision model with LRU caching
 - **Think tag support**: Seamless display of model thinking/reasoning blocks across all providers (OpenAI, Ollama, Gemini, Anthropic)
@@ -64,7 +64,7 @@ English | [简体中文](README.zh-CN.md)
 
 The extension provides a visual configuration interface for managing providers, models, and API keys without editing JSON files manually. Open via the Command Palette (`OAIProxy: Open Configuration UI`) or click the OAIProxy status bar item.
 
-The Provider Management form includes presets for OpenAI, Anthropic, Kimi, DeepSeek, and MiniMax. Selecting a preset fills the provider ID, base URL, and API mode; you still choose the model ID from the provider's current documentation or model list. Example snippets are in `examples/openai-responses.jsonc`, `examples/openai-chat-completions.jsonc`, and `examples/anthropic.jsonc`.
+The Provider Management form includes presets for OpenAI, Anthropic, Kimi, DeepSeek, Xiaomi MiMo, and MiniMax. Selecting a preset fills the provider ID, base URL, and API mode; you still choose the model ID from the provider's current documentation or model list. Example snippets are in `examples/openai-responses.jsonc`, `examples/openai-chat-completions.jsonc`, `examples/anthropic.jsonc`, and `examples/mimo.jsonc`.
 
 The standalone Provider Usage Check table lists configured supported providers dynamically and reports credit, token-plan, or cost usage. OpenAI and Anthropic usage/admin keys are stored separately from chat API keys.
 
@@ -74,7 +74,7 @@ The standalone Provider Usage Check table lists configured supported providers d
 
 Supports five API protocols: `openai` (Chat Completions), `openai-responses` (Responses), `ollama`, `anthropic`, and `gemini`. Specify per-model via the `apiMode` parameter.
 
-Kimi, DeepSeek, and MiniMax use the existing `openai` mode because their hosted APIs are OpenAI-compatible.
+Kimi, DeepSeek, Xiaomi MiMo, and MiniMax use the existing `openai` mode because their hosted APIs are OpenAI-compatible.
 
 → [Full Multi-API Guide](doc/configuration.md#multi-api-mode)
 
@@ -116,7 +116,7 @@ Use the `extra` field to inject arbitrary JSON parameters into the API request b
 
 ## Prompt / KV Cache
 
-OAIProxy surfaces provider cache-hit usage in structured logs and applies safe cache request shaping where supported. OpenAI endpoints get a stable `prompt_cache_key` by default, while Anthropic-compatible `cache_control` writes are opt-in via `prompt_cache.anthropic.enabled` or explicit VS Code `cache_control` message parts. DeepSeek, MiniMax OpenAI mode, and Gemini continue to use provider automatic/implicit caching.
+OAIProxy surfaces provider cache-hit usage in structured logs and applies safe cache request shaping where supported. OpenAI endpoints get a stable `prompt_cache_key` by default, while Anthropic-compatible `cache_control` writes are opt-in via `prompt_cache.anthropic.enabled` or explicit VS Code `cache_control` message parts. DeepSeek, Xiaomi MiMo, MiniMax OpenAI mode, and Gemini continue to use provider automatic/implicit caching.
 
 OpenAI `previous_response_id` is kept for conversation state only; OpenAI still bills previous input tokens in the response chain. Use `oaicopilot.logLevel: "info"` or `"debug"` and inspect `cache.usage` log entries to verify actual cache reads/hits.
 

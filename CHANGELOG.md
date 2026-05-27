@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.1.5 (2026-05-27)
+
+- Add a Xiaomi MiMo provider preset using the official OpenAI-compatible endpoint.
+- Add MiMo example settings for `mimo-v2.5-pro`, `mimo-v2.5`, and `mimo-v2-flash`.
+- Document MiMo thinking-mode setup, provider-managed prompt cache behavior, and model capability notes.
+- Add regression coverage for the MiMo preset, MiMo thinking request-body pass-through, and MiMo-style cached token telemetry.
+
 ## 0.1.4 (2026-05-26)
 
 - Keep enhanced OpenAI Responses cache telemetry so `cache.usage` logs include `input_tokens_details.cached_tokens` as `cachedTokens`.
