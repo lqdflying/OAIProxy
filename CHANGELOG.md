@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.1.7 (2026-05-30)
+
+- Replace the initial status bar `# Ready` label with `OAIProxy Ready` while keeping token usage display behavior unchanged.
+
 ## 0.1.6 (2026-05-27)
 
 - Add explicit Xiaomi MiMo usage-check handling so the configuration UI shows MiMo usage as unavailable until Xiaomi documents a public API-key usage endpoint.
