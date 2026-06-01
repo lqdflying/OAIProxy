@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.1.9 (2026-06-01)
+
+- Fix Copilot model selector context badges for near-million-token model settings such as DeepSeek `1048576` by advertising a decimal-million display context while keeping request generation limits unchanged.
+
 ## 0.1.8 (2026-06-01)
 
 - Fix VS Code 1.122+ Thinking Effort picker compatibility by always advertising a resolved default reasoning effort for configurable models.

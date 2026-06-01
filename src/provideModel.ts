@@ -8,6 +8,7 @@ import { VersionManager } from "./versionManager";
 import { fetchGeminiModels } from "./gemini/geminiApi";
 import { fetchOllamaModels } from "./ollama/ollamaApi";
 import { logger } from "./logger";
+import { resolveModelTokenLimits } from "./modelTokenLimits";
 import {
 	getDefaultReasoningEffort,
 	getReasoningEffortDescription,
@@ -15,8 +16,6 @@ import {
 	shouldExposeReasoningEffort,
 } from "./reasoningEffort";
 
-const DEFAULT_CONTEXT_LENGTH = 128000;
-const DEFAULT_MAX_TOKENS = 4096;
 const EXTENSION_LABEL = "OAIProxy";
 const MODEL_PICKER_CATEGORY = { label: "OAIProxy", order: 100 };
 
@@ -41,9 +40,7 @@ export async function prepareLanguageModelChatInformation(
 		infos = userModels
 			.filter((m) => !m.id.startsWith("__provider__"))
 			.map((m) => {
-				const contextLen = m?.context_length ?? DEFAULT_CONTEXT_LENGTH;
-				const maxOutput = m?.max_completion_tokens ?? m?.max_tokens ?? DEFAULT_MAX_TOKENS;
-				const maxInput = Math.max(1, contextLen - maxOutput);
+				const tokenLimits = resolveModelTokenLimits(m);
 
 				// 使用配置ID（如果存在）来生成唯一的模型ID
 				const modelId = m.configId ? `${m.id}::${m.configId}` : m.id;
@@ -64,8 +61,8 @@ export async function prepareLanguageModelChatInformation(
 					version: "1.0.0",
 					isUserSelectable: true,
 					category: MODEL_PICKER_CATEGORY,
-					maxInputTokens: maxInput,
-					maxOutputTokens: maxOutput,
+					maxInputTokens: tokenLimits.maxInputTokens,
+					maxOutputTokens: tokenLimits.maxOutputTokens,
 					capabilities: {
 						toolCalling: m.toolCalling ?? true,
 						imageInput: nativeVision || bridgedVision,
@@ -101,9 +98,7 @@ export async function prepareLanguageModelChatInformation(
 			const entries: LanguageModelChatInformation[] = [];
 
 			for (const p of toolProviders) {
-				const contextLen = p?.context_length ?? DEFAULT_CONTEXT_LENGTH;
-				const maxOutput = DEFAULT_MAX_TOKENS;
-				const maxInput = Math.max(1, contextLen - maxOutput);
+				const tokenLimits = resolveModelTokenLimits(p);
 				const detail = p.provider ? `${p.provider} (${EXTENSION_LABEL})` : EXTENSION_LABEL;
 				entries.push({
 					id: `${m.id}:${p.provider}`,
@@ -114,8 +109,8 @@ export async function prepareLanguageModelChatInformation(
 					version: "1.0.0",
 					isUserSelectable: true,
 					category: MODEL_PICKER_CATEGORY,
-					maxInputTokens: maxInput,
-					maxOutputTokens: maxOutput,
+					maxInputTokens: tokenLimits.maxInputTokens,
+					maxOutputTokens: tokenLimits.maxOutputTokens,
 					capabilities: {
 						toolCalling: true,
 						imageInput: vision,
@@ -125,9 +120,7 @@ export async function prepareLanguageModelChatInformation(
 
 			if (entries.length === 0) {
 				const base = providers.length > 0 ? providers[0] : null;
-				const contextLen = base?.context_length ?? DEFAULT_CONTEXT_LENGTH;
-				const maxOutput = DEFAULT_MAX_TOKENS;
-				const maxInput = Math.max(1, contextLen - maxOutput);
+				const tokenLimits = resolveModelTokenLimits(base);
 				entries.push({
 					id: `${m.id}`,
 					name: `${m.id}`,
@@ -137,8 +130,8 @@ export async function prepareLanguageModelChatInformation(
 					version: "1.0.0",
 					isUserSelectable: true,
 					category: MODEL_PICKER_CATEGORY,
-					maxInputTokens: maxInput,
-					maxOutputTokens: maxOutput,
+					maxInputTokens: tokenLimits.maxInputTokens,
+					maxOutputTokens: tokenLimits.maxOutputTokens,
 					capabilities: {
 						toolCalling: true,
 						imageInput: true,
