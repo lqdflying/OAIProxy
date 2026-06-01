@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.1.8 (2026-06-01)
+
+- Fix VS Code 1.122+ Thinking Effort picker compatibility by always advertising a resolved default reasoning effort for configurable models.
+- Add Thinking Effort enum descriptions so the model picker matches VS Code's current schema expectations.
+
 ## 0.1.7 (2026-05-30)
 
 - Replace the initial status bar `# Ready` label with `OAIProxy Ready` while keeping token usage display behavior unchanged.

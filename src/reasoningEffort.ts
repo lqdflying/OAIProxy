@@ -52,7 +52,37 @@ export function getDefaultReasoningEffort(model: HFModelItem, enumValues: string
 	if (configured && enumValues.includes(configured)) {
 		return configured;
 	}
-	return undefined;
+	if (enumValues.length === 0) {
+		return undefined;
+	}
+	if (isAnthropicReasoningEffortModel(model) && enumValues.includes("high")) {
+		return "high";
+	}
+	if (enumValues.includes("medium")) {
+		return "medium";
+	}
+	return enumValues[0];
+}
+
+export function getReasoningEffortDescription(value: string): string {
+	switch (value) {
+		case "none":
+			return "No reasoning applied.";
+		case "minimal":
+			return "Minimal reasoning for fastest responses.";
+		case "low":
+			return "Faster responses with less reasoning.";
+		case "medium":
+			return "Balanced reasoning and speed.";
+		case "high":
+			return "Greater reasoning depth but slower responses.";
+		case "xhigh":
+			return "Highest reasoning depth but slowest responses.";
+		case "max":
+			return "Maximum reasoning capability with no constraints.";
+		default:
+			return value;
+	}
 }
 
 export function normalizeReasoningEffortForModel(model: HFModelItem, value: string | undefined): string | undefined {

@@ -43,6 +43,7 @@ OAIProxy 会自动为任何配置了 `reasoning_effort`、`reasoning.effort`、`
 | `default_reasoning_effort` | `string` | 初次选择模型时的预选力度值 |
 
 配置了 `reasoning_effort`、`reasoning.effort` 或 `default_reasoning_effort` 的模型也会自动显示此控件。
+如果省略 `default_reasoning_effort`，OAIProxy 也会向 VS Code 提供安全的选择器默认值（可用时为 `medium`，Claude 为 `high`，否则使用第一个支持值），以便新版 VS Code 正常打开下拉菜单。
 
 ## DeepSeek 模型
 

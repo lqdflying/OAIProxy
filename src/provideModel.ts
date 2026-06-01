@@ -8,7 +8,12 @@ import { VersionManager } from "./versionManager";
 import { fetchGeminiModels } from "./gemini/geminiApi";
 import { fetchOllamaModels } from "./ollama/ollamaApi";
 import { logger } from "./logger";
-import { getDefaultReasoningEffort, getReasoningEfforts, shouldExposeReasoningEffort } from "./reasoningEffort";
+import {
+	getDefaultReasoningEffort,
+	getReasoningEffortDescription,
+	getReasoningEfforts,
+	shouldExposeReasoningEffort,
+} from "./reasoningEffort";
 
 const DEFAULT_CONTEXT_LENGTH = 128000;
 const DEFAULT_MAX_TOKENS = 4096;
@@ -169,6 +174,7 @@ function createModelConfigurationSchema(
 				description: "Controls how much reasoning the model should use before answering.",
 				enum: enumValues,
 				enumItemLabels: enumValues.map(formatReasoningEffortLabel),
+				enumDescriptions: enumValues.map(getReasoningEffortDescription),
 				group: "navigation",
 				...(defaultValue ? { default: defaultValue } : {}),
 			},

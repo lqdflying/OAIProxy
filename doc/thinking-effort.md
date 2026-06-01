@@ -43,6 +43,7 @@ Add `supports_reasoning_effort: true` to your model config, or set `supported_re
 | `default_reasoning_effort` | `string` | Pre-selected effort value when the model is first picked |
 
 Models with `reasoning_effort`, `reasoning.effort`, or `default_reasoning_effort` also expose the control automatically.
+If `default_reasoning_effort` is omitted, OAIProxy still sends VS Code a safe picker default (`medium` when available, Claude `high`, otherwise the first supported value) so newer VS Code builds can open the dropdown correctly.
 
 ## DeepSeek models
 
