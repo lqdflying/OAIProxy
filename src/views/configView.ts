@@ -34,6 +34,33 @@ interface InitPayload {
 	providerPresets: readonly ProviderPreset[];
 }
 
+export type ProviderApiKeyChange =
+	| { kind: "store"; secretKey: string; legacySecretKey?: string; value: string }
+	| { kind: "delete"; secretKey: string; legacySecretKey?: string }
+	| { kind: "preserve"; secretKey: string; legacySecretKey?: string };
+
+export function resolveProviderApiKeyChange(
+	provider: string,
+	apiKey?: string,
+	clearApiKey = false
+): ProviderApiKeyChange {
+	const trimmedProvider = provider.trim();
+	const normalizedProvider = trimmedProvider.toLowerCase();
+	const secretKey = getProviderSecretKey(trimmedProvider);
+	const legacySecretKey = trimmedProvider !== normalizedProvider ? `oaicopilot.apiKey.${trimmedProvider}` : undefined;
+
+	if (clearApiKey) {
+		return { kind: "delete", secretKey, legacySecretKey };
+	}
+
+	const trimmedApiKey = apiKey?.trim();
+	if (trimmedApiKey) {
+		return { kind: "store", secretKey, legacySecretKey, value: trimmedApiKey };
+	}
+
+	return { kind: "preserve", secretKey, legacySecretKey };
+}
+
 interface ExportConfig {
 	version: string;
 	exportDate: string;
@@ -78,6 +105,7 @@ type IncomingMessage =
 			provider: string;
 			baseUrl?: string;
 			apiKey?: string;
+			clearApiKey?: boolean;
 			apiMode?: string;
 			headers?: Record<string, string>;
 	  }
@@ -86,6 +114,7 @@ type IncomingMessage =
 			provider: string;
 			baseUrl?: string;
 			apiKey?: string;
+			clearApiKey?: boolean;
 			apiMode?: string;
 			headers?: Record<string, string>;
 	  }
@@ -110,9 +139,14 @@ export class ConfigViewPanel {
 	private readonly panel: vscode.WebviewPanel;
 	private readonly extensionUri: vscode.Uri;
 	private readonly secrets: vscode.SecretStorage;
+	private readonly onConfigurationChanged?: () => void;
 	private disposables: vscode.Disposable[] = [];
 
-	public static openPanel(extensionUri: vscode.Uri, secrets: vscode.SecretStorage) {
+	public static openPanel(
+		extensionUri: vscode.Uri,
+		secrets: vscode.SecretStorage,
+		onConfigurationChanged?: () => void
+	) {
 		const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : undefined;
 
 		if (ConfigViewPanel.currentPanel) {
@@ -132,13 +166,19 @@ export class ConfigViewPanel {
 		);
 		panel.iconPath = vscode.Uri.joinPath(extensionUri, "assets", "icon.png");
 
-		ConfigViewPanel.currentPanel = new ConfigViewPanel(panel, extensionUri, secrets);
+		ConfigViewPanel.currentPanel = new ConfigViewPanel(panel, extensionUri, secrets, onConfigurationChanged);
 	}
 
-	private constructor(panel: vscode.WebviewPanel, extensionUri: vscode.Uri, secrets: vscode.SecretStorage) {
+	private constructor(
+		panel: vscode.WebviewPanel,
+		extensionUri: vscode.Uri,
+		secrets: vscode.SecretStorage,
+		onConfigurationChanged?: () => void
+	) {
 		this.panel = panel;
 		this.extensionUri = extensionUri;
 		this.secrets = secrets;
+		this.onConfigurationChanged = onConfigurationChanged;
 
 		this.update();
 
@@ -209,10 +249,24 @@ export class ConfigViewPanel {
 				break;
 			}
 			case "addProvider":
-				await this.addProvider(message.provider, message.baseUrl, message.apiKey, message.apiMode, message.headers);
+				await this.addProvider(
+					message.provider,
+					message.baseUrl,
+					message.apiKey,
+					message.clearApiKey,
+					message.apiMode,
+					message.headers
+				);
 				break;
 			case "updateProvider":
-				await this.updateProvider(message.provider, message.baseUrl, message.apiKey, message.apiMode, message.headers);
+				await this.updateProvider(
+					message.provider,
+					message.baseUrl,
+					message.apiKey,
+					message.clearApiKey,
+					message.apiMode,
+					message.headers
+				);
 				break;
 			case "deleteProvider":
 				await this.deleteProvider(message.provider);
@@ -367,6 +421,7 @@ export class ConfigViewPanel {
 		vscode.window.showInformationMessage(
 			"OAIProxy base URL, Delay, Retry and API Key have been saved to global settings."
 		);
+		this.refreshConfiguration();
 		// Send refresh signal to frontend
 		await this.sendInit();
 	}
@@ -400,10 +455,32 @@ export class ConfigViewPanel {
 		return randomBytes(16).toString("hex");
 	}
 
+	private refreshConfiguration() {
+		this.onConfigurationChanged?.();
+	}
+
+	private async applyProviderApiKeyChange(provider: string, apiKey?: string, clearApiKey = false): Promise<void> {
+		const change = resolveProviderApiKeyChange(provider, apiKey, clearApiKey);
+		if (change.kind === "store") {
+			await this.secrets.store(change.secretKey, change.value);
+			if (change.legacySecretKey) {
+				await this.secrets.delete(change.legacySecretKey);
+			}
+			return;
+		}
+		if (change.kind === "delete") {
+			await this.secrets.delete(change.secretKey);
+			if (change.legacySecretKey) {
+				await this.secrets.delete(change.legacySecretKey);
+			}
+		}
+	}
+
 	private async addProvider(
 		provider: string,
 		baseUrl?: string,
 		apiKey?: string,
+		clearApiKey?: boolean,
 		apiMode?: string,
 		headers?: Record<string, string>
 	) {
@@ -412,14 +489,7 @@ export class ConfigViewPanel {
 			vscode.window.showErrorMessage("Provider ID is required.");
 			return;
 		}
-		const normalizedProvider = trimmedProvider.toLowerCase();
-		// Save API key for the provider
-		if (apiKey) {
-			await this.secrets.store(`oaicopilot.apiKey.${normalizedProvider}`, apiKey);
-			if (trimmedProvider !== normalizedProvider) {
-				await this.secrets.delete(`oaicopilot.apiKey.${trimmedProvider}`);
-			}
-		}
+		await this.applyProviderApiKeyChange(trimmedProvider, apiKey, clearApiKey);
 
 		// Save provider configuration to the model list
 		const config = vscode.workspace.getConfiguration();
@@ -440,6 +510,7 @@ export class ConfigViewPanel {
 
 		await config.update("oaicopilot.models", models, vscode.ConfigurationTarget.Global);
 		vscode.window.showInformationMessage(`Provider ${provider} has been added.`);
+		this.refreshConfiguration();
 		// Send refresh signal to frontend
 		await this.sendInit();
 	}
@@ -448,6 +519,7 @@ export class ConfigViewPanel {
 		provider: string,
 		baseUrl?: string,
 		apiKey?: string,
+		clearApiKey?: boolean,
 		apiMode?: string,
 		headers?: Record<string, string>
 	) {
@@ -456,19 +528,7 @@ export class ConfigViewPanel {
 			vscode.window.showErrorMessage("Provider ID is required.");
 			return;
 		}
-		const normalizedProvider = trimmedProvider.toLowerCase();
-		// Update provider API key
-		if (apiKey) {
-			await this.secrets.store(`oaicopilot.apiKey.${normalizedProvider}`, apiKey);
-			if (trimmedProvider !== normalizedProvider) {
-				await this.secrets.delete(`oaicopilot.apiKey.${trimmedProvider}`);
-			}
-		} else {
-			await this.secrets.delete(`oaicopilot.apiKey.${normalizedProvider}`);
-			if (trimmedProvider !== normalizedProvider) {
-				await this.secrets.delete(`oaicopilot.apiKey.${trimmedProvider}`);
-			}
-		}
+		await this.applyProviderApiKeyChange(trimmedProvider, apiKey, clearApiKey);
 
 		// Update the provider's configuration in the model list
 		const config = vscode.workspace.getConfiguration();
@@ -490,6 +550,7 @@ export class ConfigViewPanel {
 
 		await config.update("oaicopilot.models", updatedModels, vscode.ConfigurationTarget.Global);
 		vscode.window.showInformationMessage(`Provider ${provider} has been updated.`);
+		this.refreshConfiguration();
 		// Send refresh signal to frontend
 		await this.sendInit();
 	}
@@ -501,11 +562,7 @@ export class ConfigViewPanel {
 			return;
 		}
 		const normalizedProvider = trimmedProvider.toLowerCase();
-		// Delete provider API key
-		await this.secrets.delete(`oaicopilot.apiKey.${normalizedProvider}`);
-		if (trimmedProvider !== normalizedProvider) {
-			await this.secrets.delete(`oaicopilot.apiKey.${trimmedProvider}`);
-		}
+		await this.applyProviderApiKeyChange(trimmedProvider, undefined, true);
 		await this.secrets.delete(getProviderUsageSecretKey(normalizedProvider));
 		if (trimmedProvider !== normalizedProvider) {
 			await this.secrets.delete(getProviderUsageSecretKey(trimmedProvider));
@@ -518,6 +575,7 @@ export class ConfigViewPanel {
 
 		await config.update("oaicopilot.models", filteredModels, vscode.ConfigurationTarget.Global);
 		vscode.window.showInformationMessage(`Provider ${provider} and all its models have been deleted.`);
+		this.refreshConfiguration();
 		// Send refresh signal to frontend
 		await this.sendInit();
 	}
@@ -590,6 +648,7 @@ export class ConfigViewPanel {
 		vscode.window.showInformationMessage(
 			`Model ${model.id}${model.configId ? "::" + model.configId : ""} has been added.`
 		);
+		this.refreshConfiguration();
 		// Send refresh signal to frontend
 		await this.sendInit();
 	}
@@ -618,6 +677,7 @@ export class ConfigViewPanel {
 		vscode.window.showInformationMessage(
 			`Model ${model.id}${model.configId ? "::" + model.configId : ""} has been updated.`
 		);
+		this.refreshConfiguration();
 		// Send refresh signal to frontend
 		await this.sendInit();
 	}
@@ -637,6 +697,7 @@ export class ConfigViewPanel {
 
 		await config.update("oaicopilot.models", filteredModels, vscode.ConfigurationTarget.Global);
 		vscode.window.showInformationMessage(`Model ${modelId} has been deleted.`);
+		this.refreshConfiguration();
 		// Send refresh signal to frontend
 		await this.sendInit();
 	}
@@ -773,6 +834,7 @@ export class ConfigViewPanel {
 			}
 
 			vscode.window.showInformationMessage("Configuration imported successfully.");
+			this.refreshConfiguration();
 			await this.sendInit();
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : "Unknown error";

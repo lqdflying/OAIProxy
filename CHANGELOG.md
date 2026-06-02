@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.1.10 (2026-06-02)
+
+- Fix Configuration UI provider API key saves so blank provider key fields preserve the existing saved key instead of clearing it.
+- Add an explicit provider `Clear Key` action and refresh language model registration after Configuration UI saves.
+- Add regression coverage for provider API key storage, preserve, and clear behavior.
+
 ## 0.1.9 (2026-06-01)
 
 - Fix Copilot model selector context badges for near-million-token model settings such as DeepSeek `1048576` by advertising a decimal-million display context while keeping request generation limits unchanged.

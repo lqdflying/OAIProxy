@@ -428,6 +428,26 @@ function renderProviderUsageChecks() {
 	});
 }
 
+function collectProviderRowData(row) {
+	const inputs = row.querySelectorAll(".provider-input");
+	const providerData = {};
+	inputs.forEach((input) => {
+		const field = input.getAttribute("data-field");
+		providerData[field] = input.value;
+	});
+
+	let headers = undefined;
+	if (providerData.headers && providerData.headers.trim()) {
+		try {
+			headers = JSON.parse(providerData.headers);
+		} catch (e) {
+			// ignore invalid JSON
+		}
+	}
+
+	return { providerData, headers };
+}
+
 // Add Provider button event listener
 document.getElementById("addProvider").addEventListener("click", () => {
 	// Add new provider row to the table
@@ -468,21 +488,7 @@ document.getElementById("addProvider").addEventListener("click", () => {
 	});
 
 	saveBtn.addEventListener("click", () => {
-		const inputs = newRow.querySelectorAll(".provider-input");
-		const providerData = {};
-		inputs.forEach((input) => {
-			const field = input.getAttribute("data-field");
-			providerData[field] = input.value;
-		});
-
-		let headers = undefined;
-		if (providerData.headers && providerData.headers.trim()) {
-			try {
-				headers = JSON.parse(providerData.headers);
-			} catch (e) {
-				// ignore invalid JSON
-			}
-		}
+		const { providerData, headers } = collectProviderRowData(newRow);
 
 		vscode.postMessage({
 			type: "addProvider",
@@ -695,6 +701,8 @@ function renderProviders() {
 			const baseUrl = firstModel.baseUrl || "";
 			const headersJson = firstModel.headers ? JSON.stringify(firstModel.headers, null, 2) : "";
 			const providerAttr = escapeHtml(provider);
+			const hasProviderKey = Boolean(state.providerKeys[provider]);
+			const keyPlaceholder = hasProviderKey ? "Saved - leave blank to keep" : "API Key";
 			const modelCount = providerEntry.modelCount;
 
 			return `
@@ -704,7 +712,7 @@ function renderProviders() {
 						<div class="provider-meta">${modelCount} ${modelCount === 1 ? "model" : "models"}</div>
 					</td>
 					<td class="provider-url-cell"><input type="text" class="provider-input" data-field="baseUrl" value="${escapeHtml(baseUrl)}" placeholder="Base URL" /></td>
-					<td class="provider-key-cell"><input type="password" class="provider-input" data-field="apiKey" value="${escapeHtml(state.providerKeys[provider] || "")}" placeholder="API Key" /></td>
+					<td class="provider-key-cell"><input type="password" class="provider-input" data-field="apiKey" value="" placeholder="${escapeHtml(keyPlaceholder)}" /></td>
 					<td class="provider-mode-cell">
 						<select class="provider-input" data-field="apiMode">
 							<option value="openai" ${firstModel.apiMode === "openai" ? "selected" : ""}>OpenAI</option>
@@ -717,6 +725,7 @@ function renderProviders() {
 					<td class="provider-headers-cell"><textarea class="provider-input provider-headers-input" data-field="headers" rows="2" placeholder='{"X-API-Version": "v1"}'>${escapeHtml(headersJson)}</textarea></td>
 					<td class="action-buttons">
 						<button class="update-provider-btn compact" data-provider="${providerAttr}">Save</button>
+						<button class="clear-provider-key-btn secondary compact" data-provider="${providerAttr}" ${hasProviderKey ? "" : "disabled"}>Clear Key</button>
 						<button class="delete-provider-btn danger compact" data-provider="${providerAttr}">Delete</button>
 					</td>
 				</tr>`;
@@ -752,27 +761,30 @@ function renderProviders() {
 		btn.addEventListener("click", (event) => {
 			const provider = event.target.getAttribute("data-provider");
 			const row = event.target.closest("tr");
-			const inputs = row.querySelectorAll(".provider-input");
-			const providerData = {};
-			inputs.forEach((input) => {
-				const field = input.getAttribute("data-field");
-				providerData[field] = input.value;
-			});
-
-			let headers = undefined;
-			if (providerData.headers && providerData.headers.trim()) {
-				try {
-					headers = JSON.parse(providerData.headers);
-				} catch (e) {
-					// ignore invalid JSON
-				}
-			}
+			const { providerData, headers } = collectProviderRowData(row);
 
 			vscode.postMessage({
 				type: "updateProvider",
 				provider: provider,
 				baseUrl: providerData.baseUrl || undefined,
 				apiKey: providerData.apiKey || undefined,
+				apiMode: providerData.apiMode || undefined,
+				headers: headers,
+			});
+		});
+	});
+
+	document.querySelectorAll(".clear-provider-key-btn").forEach((btn) => {
+		btn.addEventListener("click", (event) => {
+			const provider = event.target.getAttribute("data-provider");
+			const row = event.target.closest("tr");
+			const { providerData, headers } = collectProviderRowData(row);
+
+			vscode.postMessage({
+				type: "updateProvider",
+				provider: provider,
+				baseUrl: providerData.baseUrl || undefined,
+				clearApiKey: true,
 				apiMode: providerData.apiMode || undefined,
 				headers: headers,
 			});
