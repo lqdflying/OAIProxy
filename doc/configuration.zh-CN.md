@@ -126,7 +126,8 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 ### 重要说明
 
 - 未指定 `apiMode` 时默认为 `"openai"`。
-- Kimi、DeepSeek、小米 MiMo 和 MiniMax 通过其 OpenAI 兼容的 Chat Completions API 使用 `apiMode: "openai"`。
+- Kimi、DeepSeek 和小米 MiMo 通过其 OpenAI 兼容的 Chat Completions API 使用 `apiMode: "openai"`。
+- MiniMax 的 M 系列模型同时支持 `apiMode: "openai"` 和 `apiMode: "anthropic"`。MiniMax 推荐在 M3 思维链和交错思维工作流中使用 Anthropic 兼容端点。
 - 使用 `ollama` 模式时，OAIProxy 仍需要保存一个 API Key 值。如果本地 Ollama 不需要认证，请使用 `ollama` 作为占位值，这样不会发送 `Authorization` 请求头；其他任意值都会作为 bearer token 发送。
 - 每种 API 模式内部使用不同的消息转换逻辑，以匹配各自供应商的格式（工具、图像、思维链）。
 
@@ -157,7 +158,56 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 | MiniMax (OpenAI) | `minimax` | `https://api.minimax.io/v1` | `openai` |
 | MiniMax (Anthropic) | `minimax-anthropic` | `https://api.minimax.io/anthropic` | `anthropic` |
 
-配置示例见 `examples/openai-responses.jsonc`、`examples/openai-chat-completions.jsonc`、`examples/anthropic.jsonc` 和 `examples/mimo.jsonc`。OpenAI 和 Anthropic 的用量/费用检查需要单独的 admin key，请在配置界面的 `Usage Key` 字段中填写，不要写入 `settings.json`。小米 MiMo 用量检查会显示为不可用，因为小米目前仅在 Console 页面提供余额和用量信息，尚未公开 API key 用量端点。
+配置示例见 `examples/openai-responses.jsonc`、`examples/openai-chat-completions.jsonc`、`examples/anthropic.jsonc`、`examples/mimo.jsonc`、`examples/minimax-openai.jsonc` 和 `examples/minimax-anthropic.jsonc`。OpenAI 和 Anthropic 的用量/费用检查需要单独的 admin key，请在配置界面的 `Usage Key` 字段中填写，不要写入 `settings.json`。小米 MiMo 用量检查会显示为不可用，因为小米目前仅在 Console 页面提供余额和用量信息，尚未公开 API key 用量端点。
+
+### MiniMax M3
+
+MiniMax M3 应使用精确模型 ID `MiniMax-M3`。MiniMax 官方文档列出 1,000,000 token 上下文窗口、工具调用、代码/Agent 工作流、自适应思维链，以及原生图像/视频输入。
+
+需要 MiniMax 推荐的 M3 思维链路径时，使用 Anthropic 兼容预设：
+
+```json
+"oaicopilot.models": [
+    {
+        "id": "MiniMax-M3",
+        "displayName": "MiniMax M3 (Anthropic)",
+        "owned_by": "minimax-anthropic",
+        "baseUrl": "https://api.minimax.io/anthropic",
+        "apiMode": "anthropic",
+        "vision": true,
+        "context_length": 1000000,
+        "max_tokens": 131072,
+        "thinking": {
+            "type": "adaptive"
+        },
+        "toolCalling": true
+    }
+]
+```
+
+需要 Chat Completions 兼容路径时，使用 OpenAI 兼容预设：
+
+```json
+"oaicopilot.models": [
+    {
+        "id": "MiniMax-M3",
+        "displayName": "MiniMax M3",
+        "owned_by": "minimax",
+        "baseUrl": "https://api.minimax.io/v1",
+        "apiMode": "openai",
+        "vision": true,
+        "context_length": 1000000,
+        "max_completion_tokens": 131072,
+        "thinking": {
+            "type": "adaptive"
+        },
+        "extra": {
+            "reasoning_split": true
+        },
+        "toolCalling": true
+    }
+]
+```
 
 ### 配置示例
 

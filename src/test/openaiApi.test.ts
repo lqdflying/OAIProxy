@@ -1,8 +1,67 @@
 import * as assert from "assert";
+import * as vscode from "vscode";
 import { OpenaiApi } from "../openai/openaiApi";
 import type { HFModelItem } from "../types";
 
 suite("openaiApi", () => {
+	test("passes MiniMax M3 OpenAI thinking configuration through request body", () => {
+		const api = new OpenaiApi("MiniMax-M3");
+		const body = api.prepareRequestBody(
+			{
+				model: "MiniMax-M3",
+				messages: [],
+				stream: true,
+			},
+			model({
+				id: "MiniMax-M3",
+				owned_by: "minimax",
+				baseUrl: "https://api.minimax.io/v1",
+				apiMode: "openai",
+				max_completion_tokens: 131072,
+				thinking: {
+					type: "adaptive",
+				},
+				extra: {
+					reasoning_split: true,
+				},
+			})
+		);
+
+		assert.deepStrictEqual(body.thinking, { type: "adaptive" });
+		assert.strictEqual(body.reasoning_split, true);
+		assert.strictEqual(body.max_completion_tokens, 131072);
+	});
+
+	test("maps MiniMax M3 video data parts to OpenAI video_url content", () => {
+		const api = new OpenaiApi("MiniMax-M3");
+		const messages = api.convertMessages(
+			[
+				{
+					role: vscode.LanguageModelChatMessageRole.User,
+					name: undefined,
+					content: [
+						new vscode.LanguageModelTextPart("Describe this clip."),
+						new vscode.LanguageModelDataPart(new Uint8Array([1, 2, 3]), "video/mp4"),
+					],
+				} as unknown as vscode.LanguageModelChatRequestMessage,
+			],
+			{ includeReasoningInRequest: false }
+		);
+
+		const content = messages[0].content as unknown as Array<Record<string, unknown>>;
+		assert.strictEqual(messages[0].role, "user");
+		assert.deepStrictEqual(content[0], {
+			type: "text",
+			text: "Describe this clip.",
+		});
+		assert.deepStrictEqual(content[1], {
+			type: "video_url",
+			video_url: {
+				url: "data:video/mp4;base64,AQID",
+			},
+		});
+	});
+
 	test("passes MiMo thinking configuration through request body", () => {
 		const api = new OpenaiApi("mimo-v2.5-pro");
 		const body = api.prepareRequestBody(

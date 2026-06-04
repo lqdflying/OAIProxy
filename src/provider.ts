@@ -20,6 +20,7 @@ import {
 	normalizeUserModels,
 	getStringConfiguration,
 	isImageMimeType,
+	isVideoMimeType,
 } from "./utils";
 import { messagesContainImages, processMessagesForVision, VISION_BRIDGE_REQUEST_OPTION } from "./visionBridge";
 
@@ -892,6 +893,9 @@ function summarizeLanguageModelMessages(messages: readonly LanguageModelChatRequ
 	let imagePartCount = 0;
 	let imageBytes = 0;
 	const imageMimeTypes = new Set<string>();
+	let videoPartCount = 0;
+	let videoBytes = 0;
+	const videoMimeTypes = new Set<string>();
 
 	for (const message of messages) {
 		for (const part of message.content ?? []) {
@@ -904,6 +908,10 @@ function summarizeLanguageModelMessages(messages: readonly LanguageModelChatRequ
 					imagePartCount++;
 					imageBytes += part.data.byteLength;
 					imageMimeTypes.add(part.mimeType);
+				} else if (isVideoMimeType(part.mimeType)) {
+					videoPartCount++;
+					videoBytes += part.data.byteLength;
+					videoMimeTypes.add(part.mimeType);
 				}
 			}
 		}
@@ -918,6 +926,9 @@ function summarizeLanguageModelMessages(messages: readonly LanguageModelChatRequ
 		imagePartCount,
 		imageBytes,
 		imageMimeTypes: Array.from(imageMimeTypes),
+		videoPartCount,
+		videoBytes,
+		videoMimeTypes: Array.from(videoMimeTypes),
 	};
 }
 
@@ -946,6 +957,7 @@ function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
 		payloadSummarized: true,
 		rawBodyOmitted: true,
 		imagePayloadsOmitted: containsImagePayload(requestBody),
+		videoPayloadsOmitted: containsVideoPayload(requestBody),
 		model: typeof body.model === "string" ? body.model : undefined,
 		stream: typeof body.stream === "boolean" ? body.stream : undefined,
 		messageCount: getArrayLength(body.messages),
@@ -1024,6 +1036,37 @@ function containsImagePayload(value: unknown, depth = 0): boolean {
 	}
 
 	return Object.values(obj).some((item) => containsImagePayload(item, depth + 1));
+}
+
+function containsVideoPayload(value: unknown, depth = 0): boolean {
+	if (depth > 8 || value === undefined || value === null) {
+		return false;
+	}
+	if (typeof value === "string") {
+		return value.startsWith("data:video/");
+	}
+	if (Array.isArray(value)) {
+		return value.some((item) => containsVideoPayload(item, depth + 1));
+	}
+	if (typeof value !== "object") {
+		return false;
+	}
+
+	const obj = value as Record<string, unknown>;
+	if (
+		typeof obj.type === "string" &&
+		["video", "video_url", "input_video"].includes(obj.type)
+	) {
+		return true;
+	}
+	if (typeof obj.mime_type === "string" && obj.mime_type.startsWith("video/")) {
+		return true;
+	}
+	if (typeof obj.mimeType === "string" && obj.mimeType.startsWith("video/")) {
+		return true;
+	}
+
+	return Object.values(obj).some((item) => containsVideoPayload(item, depth + 1));
 }
 
 function createOpenAIResponsesStatefulMarkerPart(modelId: string, marker: string): vscode.LanguageModelDataPart {

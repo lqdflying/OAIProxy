@@ -19,7 +19,14 @@ import type {
 	AnthropicStreamChunk,
 } from "./anthropicTypes";
 
-import { isImageMimeType, isToolResultPart, collectToolResultText, convertToolsToOpenAI, mapRole } from "../utils";
+import {
+	isImageMimeType,
+	isVideoMimeType,
+	isToolResultPart,
+	collectToolResultText,
+	convertToolsToOpenAI,
+	mapRole,
+} from "../utils";
 
 import { CommonApi } from "../commonApi";
 import { logger } from "../logger";
@@ -66,6 +73,7 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			const role = mapRole(m);
 			const textParts: string[] = [];
 			const imageParts: vscode.LanguageModelDataPart[] = [];
+			const videoParts: vscode.LanguageModelDataPart[] = [];
 			const toolCalls: AnthropicToolUseBlock[] = [];
 			const toolResults: AnthropicToolResultBlock[] = [];
 			const thinkingParts: string[] = [];
@@ -76,6 +84,8 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 					textParts.push(part.value);
 				} else if (part instanceof vscode.LanguageModelDataPart && isImageMimeType(part.mimeType)) {
 					imageParts.push(part);
+				} else if (part instanceof vscode.LanguageModelDataPart && isVideoMimeType(part.mimeType)) {
+					videoParts.push(part);
 				} else if (isCacheControlPart(part)) {
 					cacheControl = parseCacheControlPart(part);
 				} else if (part instanceof vscode.LanguageModelToolCallPart) {
@@ -144,6 +154,19 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 					source: {
 						type: "base64",
 						media_type: imagePart.mimeType,
+						data: base64Data,
+					},
+				});
+			}
+
+			// Add video content
+			for (const videoPart of videoParts) {
+				const base64Data = Buffer.from(videoPart.data).toString("base64");
+				contentBlocks.push({
+					type: "video",
+					source: {
+						type: "base64",
+						media_type: videoPart.mimeType,
 						data: base64Data,
 					},
 				});

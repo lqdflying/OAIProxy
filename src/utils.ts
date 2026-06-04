@@ -209,7 +209,21 @@ export function isImageMimeType(mimeType: string): boolean {
 }
 
 /**
- * 创建图片的data URL
+ * Check whether a MIME type is a video format supported by MiniMax M3 multimodal chat.
+ */
+export function isVideoMimeType(mimeType: string): boolean {
+	return mimeType.startsWith("video/") && [
+		"video/mp4",
+		"video/x-msvideo",
+		"video/quicktime",
+		"video/x-matroska",
+		"video/avi",
+		"video/mkv",
+	].includes(mimeType);
+}
+
+/**
+ * Create a data URL for binary message content.
  */
 export function createDataUrl(dataPart: vscode.LanguageModelDataPart): string {
 	const base64Data = Buffer.from(dataPart.data).toString("base64");

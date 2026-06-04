@@ -58,10 +58,12 @@ OpenRouter 推理配置对象，包含以下选项：
 
 ### `thinking`
 
-Zai 供应商的思维链配置：
-- `type`：设为 `"enabled"` 开启思维链，`"disabled"` 关闭思维链
+支持显式思维链模式的供应商配置：
+- `type`：设为 `"enabled"` 开启思维链，`"disabled"` 关闭思维链，供应商支持时可设为 `"adaptive"`
 
 小米 MiMo 在 OpenAI 兼容模式下使用同样的 `thinking.type` 请求体结构。对开启思维链的 MiMo agent/工具调用会话，请保持 `include_reasoning_in_request: true`，以便后续轮次继续传回历史 assistant 的 `reasoning_content`。
+
+MiniMax M3 在 OpenAI 兼容模式和 Anthropic 兼容模式下都支持 `thinking.type: "adaptive"`。OpenAI 模式下可添加 `extra.reasoning_split: true`，将思维链与回答正文分离接收。
 
 ### `supported_reasoning_efforts`
 
@@ -86,3 +88,5 @@ Zai 供应商的思维链配置：
 - `"ollama"`：`/api/chat`，可选 `Authorization: Bearer` 请求头
 - `"anthropic"`：`/v1/messages`，使用 `x-api-key` 请求头
 - `"gemini"`：`/v1beta/models/{model}:streamGenerateContent?alt=sse`，使用 `x-goog-api-key` 请求头
+
+MiniMax M3 可使用 `"openai"` 配合 `https://api.minimax.io/v1`，也可使用 `"anthropic"` 配合 `https://api.minimax.io/anthropic`。为 M3 设置 `vision: true`，即可直接转发图像输入和受支持的视频数据片段（`video/mp4`、`video/x-msvideo`、`video/quicktime`、`video/x-matroska`）。

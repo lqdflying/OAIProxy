@@ -23,6 +23,16 @@ export interface AnthropicImageBlock {
 	cache_control?: AnthropicCacheControl;
 }
 
+export interface AnthropicVideoBlock {
+	type: "video";
+	source: {
+		type: "base64";
+		media_type: string;
+		data: string;
+	};
+	cache_control?: AnthropicCacheControl;
+}
+
 export interface AnthropicThinkingBlock {
 	type: "thinking";
 	thinking: string;
@@ -49,6 +59,7 @@ export interface AnthropicToolResultBlock {
 export type AnthropicContentBlock =
 	| AnthropicTextBlock
 	| AnthropicImageBlock
+	| AnthropicVideoBlock
 	| AnthropicThinkingBlock
 	| AnthropicToolUseBlock
 	| AnthropicToolResultBlock;
@@ -118,7 +129,7 @@ export interface AnthropicStreamChunk {
 		stop_sequence?: string;
 	};
 	content_block?: {
-		type: "text" | "thinking" | "tool_use";
+		type: "text" | "thinking" | "tool_use" | "video";
 		text?: string;
 		thinking?: string;
 		id?: string;

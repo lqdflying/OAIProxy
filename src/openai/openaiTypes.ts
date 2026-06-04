@@ -35,9 +35,12 @@ export interface OpenAIChatMessage {
  * 聊天消息内容接口（支持多模态）
  */
 export interface ChatMessageContent {
-	type: "text" | "image_url";
+	type: "text" | "image_url" | "video_url";
 	text?: string;
 	image_url?: {
+		url: string;
+	};
+	video_url?: {
 		url: string;
 	};
 }

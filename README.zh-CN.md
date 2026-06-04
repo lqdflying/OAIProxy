@@ -64,7 +64,7 @@
 
 本扩展提供可视化配置界面，用于管理供应商、模型和 API 密钥，无需手动编辑 JSON 文件。可通过命令面板（`OAIProxy: Open Configuration UI`）打开，或点击 OAIProxy 状态栏项。
 
-供应商管理表单内置 OpenAI、Anthropic、Kimi、DeepSeek、小米 MiMo、MiniMax 预设。选择预设会填入供应商 ID、Base URL 和 API 模式；模型 ID 仍以供应商当前文档或模型列表为准。示例片段见 `examples/openai-responses.jsonc`、`examples/openai-chat-completions.jsonc`、`examples/anthropic.jsonc` 和 `examples/mimo.jsonc`。
+供应商管理表单内置 OpenAI、Anthropic、Kimi、DeepSeek、小米 MiMo、MiniMax 预设。选择预设会填入供应商 ID、Base URL 和 API 模式；模型 ID 仍以供应商当前文档或模型列表为准。示例片段见 `examples/openai-responses.jsonc`、`examples/openai-chat-completions.jsonc`、`examples/anthropic.jsonc`、`examples/mimo.jsonc`、`examples/minimax-openai.jsonc` 和 `examples/minimax-anthropic.jsonc`。
 
 独立的 Provider Usage Check 表格会动态列出已配置且支持用量检查的供应商，并按余额、token 套餐或费用用量展示结果。OpenAI 和 Anthropic 的用量/admin key 会与聊天 API key 分开保存。小米 MiMo 条目会显示不可用原因，因为小米目前通过 Console 页面提供余额和用量信息，尚未公开文档化的 API key 用量端点。
 
@@ -74,9 +74,15 @@
 
 支持五种 API 协议：`openai`（Chat Completions）、`openai-responses`（Responses）、`ollama`、`anthropic` 和 `gemini`。通过 `apiMode` 参数为每个模型指定。
 
-Kimi、DeepSeek、小米 MiMo 和 MiniMax 使用现有 `openai` 模式，因为它们的托管 API 与 OpenAI 格式兼容。
+Kimi、DeepSeek 和小米 MiMo 使用现有 `openai` 模式，因为它们的托管 API 与 OpenAI 格式兼容。MiniMax 同时支持 `openai` 和 `anthropic` 模式；MiniMax 推荐在 M3 思维链和交错思维工作流中使用 Anthropic 兼容端点。
 
 → [完整多 API 指南](doc/configuration.zh-CN.md#多-api-模式)
+
+## MiniMax M3
+
+模型 ID 使用 `MiniMax-M3`。MiniMax 的 M3 文档列出 1,000,000 token 上下文窗口、工具调用、代码/Agent 工作流、自适应思维链，以及原生图像/视频输入。OAIProxy 通过现有 MiniMax OpenAI 兼容预设（`https://api.minimax.io/v1`）和 MiniMax Anthropic 兼容预设（`https://api.minimax.io/anthropic`）支持 M3。
+
+OpenAI 模式建议使用 `max_completion_tokens`、`thinking: { "type": "adaptive" }`，并设置 `extra.reasoning_split: true` 以分离流式思维内容。Anthropic 模式使用 `max_tokens` 和 `thinking: { "type": "adaptive" }`。为 M3 设置 `vision: true`，这样 OAIProxy 会直接转发图像和受支持的视频 `LanguageModelDataPart`，而不是把图像输入交给视觉桥接。
 
 ## 视觉桥接
 

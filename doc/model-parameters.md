@@ -58,10 +58,12 @@ OpenRouter reasoning configuration object with the following options:
 
 ### `thinking`
 
-Thinking configuration for Zai provider:
-- `type`: Set to `"enabled"` to enable thinking, `"disabled"` to disable thinking
+Thinking configuration for providers that expose an explicit thinking mode:
+- `type`: Set to `"enabled"` to enable thinking, `"disabled"` to disable thinking, or `"adaptive"` when supported by the provider
 
 MiMo uses the same `thinking.type` request-body shape in OpenAI-compatible mode. For MiMo thinking-enabled agent/tool sessions, keep `include_reasoning_in_request: true` so historical assistant `reasoning_content` is sent back in later turns.
+
+MiniMax M3 supports `thinking.type: "adaptive"` in both OpenAI-compatible and Anthropic-compatible modes. In OpenAI mode, add `extra.reasoning_split: true` to receive thinking separately from answer text.
 
 ### `supported_reasoning_efforts`
 
@@ -86,3 +88,5 @@ API protocol to use for this model:
 - `"ollama"`: `/api/chat` with optional `Authorization: Bearer` header
 - `"anthropic"`: `/v1/messages` with `x-api-key` header
 - `"gemini"`: `/v1beta/models/{model}:streamGenerateContent?alt=sse` with `x-goog-api-key` header
+
+MiniMax M3 can use either `"openai"` with `https://api.minimax.io/v1` or `"anthropic"` with `https://api.minimax.io/anthropic`. Set `vision: true` for M3 so image inputs and supported video data parts (`video/mp4`, `video/x-msvideo`, `video/quicktime`, `video/x-matroska`) are forwarded directly.

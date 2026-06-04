@@ -1,14 +1,17 @@
 {
     "oaicopilot.models": [
         {
-            "id": "MiniMax-M2.7",
-            "displayName": "MiniMax M2.7",
+            "id": "MiniMax-M3",
+            "displayName": "MiniMax M3 (Anthropic)",
             "owned_by": "minimax-anthropic",
             "baseUrl": "https://api.minimax.io/anthropic",
             "apiMode": "anthropic",
-            "vision": false,
-            "context_length": 204800,
-            "max_tokens": 8192,
+            "vision": true,
+            "context_length": 1000000,
+            "max_tokens": 131072,
+            "thinking": {
+                "type": "adaptive",
+            },
             "toolCalling": true,
         },
     ],

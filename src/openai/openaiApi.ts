@@ -20,6 +20,7 @@ import type {
 
 import {
 	isImageMimeType,
+	isVideoMimeType,
 	createDataUrl,
 	isToolResultPart,
 	collectToolResultText,
@@ -54,6 +55,7 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 			const role = mapRole(m);
 			const textParts: string[] = [];
 			const imageParts: vscode.LanguageModelDataPart[] = [];
+			const videoParts: vscode.LanguageModelDataPart[] = [];
 			const toolCalls: OpenAIToolCall[] = [];
 			const toolResults: { callId: string; content: string }[] = [];
 			const reasoningParts: string[] = [];
@@ -63,6 +65,8 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 					textParts.push(part.value);
 				} else if (part instanceof vscode.LanguageModelDataPart && isImageMimeType(part.mimeType)) {
 					imageParts.push(part);
+				} else if (part instanceof vscode.LanguageModelDataPart && isVideoMimeType(part.mimeType)) {
+					videoParts.push(part);
 				} else if (part instanceof vscode.LanguageModelToolCallPart) {
 					const id = part.callId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 					let args = "{}";
@@ -114,7 +118,7 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 
 			// process user messages
 			if (role === "user") {
-				if (imageParts.length > 0) {
+				if (imageParts.length > 0 || videoParts.length > 0) {
 					// multi-modal message
 					const contentArray: ChatMessageContent[] = [];
 
@@ -130,6 +134,15 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 						contentArray.push({
 							type: "image_url",
 							image_url: {
+								url: dataUrl,
+							},
+						});
+					}
+					for (const videoPart of videoParts) {
+						const dataUrl = createDataUrl(videoPart);
+						contentArray.push({
+							type: "video_url",
+							video_url: {
 								url: dataUrl,
 							},
 						});

@@ -31,7 +31,7 @@
 		"type": "git",
 		"url": "https://github.com/lqdflying/OAIProxy"
 	},
-	"version": "0.1.10",
+	"version": "0.1.11",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -245,7 +245,7 @@
 							},
 							"thinking": {
 								"type": "object",
-								"description": "Thinking configuration for providers that expose an explicit thinking mode, such as Zai and Anthropic.",
+								"description": "Thinking configuration for providers that expose an explicit thinking mode, such as Zai, Anthropic, and MiniMax M3.",
 								"properties": {
 									"type": {
 										"type": "string",

@@ -125,7 +125,8 @@ Mixed configuration with multiple API modes:
 
 ### Important Notes
 - The `apiMode` parameter defaults to `"openai"` if not specified.
-- Kimi, DeepSeek, Xiaomi MiMo, and MiniMax use `apiMode: "openai"` through their OpenAI-compatible chat completions APIs.
+- Kimi, DeepSeek, and Xiaomi MiMo use `apiMode: "openai"` through their OpenAI-compatible chat completions APIs.
+- MiniMax supports both `apiMode: "openai"` and `apiMode: "anthropic"` for M-series models. MiniMax recommends the Anthropic-compatible M3 endpoint for thinking and interleaved-thinking workflows.
 - When using `ollama` mode, OAIProxy still needs a stored API key value. Use `ollama` as a placeholder for local Ollama if you do not want an `Authorization` header to be sent; any other value is sent as a bearer token.
 - Each API mode uses different message conversion logic internally to match provider-specific formats (tools, images, thinking).
 
@@ -156,7 +157,56 @@ The configuration UI can prefill provider settings for OpenAI, Anthropic, Kimi, 
 | MiniMax (OpenAI) | `minimax` | `https://api.minimax.io/v1` | `openai` |
 | MiniMax (Anthropic) | `minimax-anthropic` | `https://api.minimax.io/anthropic` | `anthropic` |
 
-Settings snippets are available in `examples/openai-responses.jsonc`, `examples/openai-chat-completions.jsonc`, `examples/anthropic.jsonc`, and `examples/mimo.jsonc`. OpenAI and Anthropic usage/cost checks require separate admin keys; enter those in the configuration UI's `Usage Key` field instead of adding them to `settings.json`. MiMo usage checks are shown as unavailable because Xiaomi currently documents balance and usage only through Console pages, not a public API-key endpoint.
+Settings snippets are available in `examples/openai-responses.jsonc`, `examples/openai-chat-completions.jsonc`, `examples/anthropic.jsonc`, `examples/mimo.jsonc`, `examples/minimax-openai.jsonc`, and `examples/minimax-anthropic.jsonc`. OpenAI and Anthropic usage/cost checks require separate admin keys; enter those in the configuration UI's `Usage Key` field instead of adding them to `settings.json`. MiMo usage checks are shown as unavailable because Xiaomi currently documents balance and usage only through Console pages, not a public API-key endpoint.
+
+### MiniMax M3
+
+MiniMax M3 should be configured with the exact model ID `MiniMax-M3`. The official MiniMax docs list a 1,000,000-token context window, tool use, coding/agentic workflows, adaptive thinking, and native image/video input.
+
+Use the Anthropic-compatible preset when you want MiniMax's recommended M3 thinking path:
+
+```json
+"oaicopilot.models": [
+    {
+        "id": "MiniMax-M3",
+        "displayName": "MiniMax M3 (Anthropic)",
+        "owned_by": "minimax-anthropic",
+        "baseUrl": "https://api.minimax.io/anthropic",
+        "apiMode": "anthropic",
+        "vision": true,
+        "context_length": 1000000,
+        "max_tokens": 131072,
+        "thinking": {
+            "type": "adaptive"
+        },
+        "toolCalling": true
+    }
+]
+```
+
+Use the OpenAI-compatible preset when you need a Chat Completions-compatible path:
+
+```json
+"oaicopilot.models": [
+    {
+        "id": "MiniMax-M3",
+        "displayName": "MiniMax M3",
+        "owned_by": "minimax",
+        "baseUrl": "https://api.minimax.io/v1",
+        "apiMode": "openai",
+        "vision": true,
+        "context_length": 1000000,
+        "max_completion_tokens": 131072,
+        "thinking": {
+            "type": "adaptive"
+        },
+        "extra": {
+            "reasoning_split": true
+        },
+        "toolCalling": true
+    }
+]
+```
 
 ### Settings Example
 

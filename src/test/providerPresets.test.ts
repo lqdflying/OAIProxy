@@ -2,6 +2,26 @@ import * as assert from "assert";
 import { PROVIDER_PRESETS } from "../providerPresets";
 
 suite("providerPresets", () => {
+	test("includes MiniMax OpenAI-compatible preset", () => {
+		const preset = PROVIDER_PRESETS.find((item) => item.id === "minimax");
+
+		assert.ok(preset);
+		assert.strictEqual(preset.label, "MiniMax (OpenAI)");
+		assert.strictEqual(preset.provider, "minimax");
+		assert.strictEqual(preset.baseUrl, "https://api.minimax.io/v1");
+		assert.strictEqual(preset.apiMode, "openai");
+	});
+
+	test("includes MiniMax Anthropic-compatible preset", () => {
+		const preset = PROVIDER_PRESETS.find((item) => item.id === "minimax-anthropic");
+
+		assert.ok(preset);
+		assert.strictEqual(preset.label, "MiniMax (Anthropic)");
+		assert.strictEqual(preset.provider, "minimax-anthropic");
+		assert.strictEqual(preset.baseUrl, "https://api.minimax.io/anthropic");
+		assert.strictEqual(preset.apiMode, "anthropic");
+	});
+
 	test("includes Xiaomi MiMo OpenAI-compatible preset", () => {
 		const preset = PROVIDER_PRESETS.find((item) => item.id === "mimo");
 

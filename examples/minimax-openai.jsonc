@@ -1,14 +1,17 @@
 {
     "oaicopilot.models": [
         {
-            "id": "MiniMax-M2.7",
-            "displayName": "MiniMax M2.7",
+            "id": "MiniMax-M3",
+            "displayName": "MiniMax M3",
             "owned_by": "minimax",
             "baseUrl": "https://api.minimax.io/v1",
             "apiMode": "openai",
-            "vision": false,
-            "context_length": 204800,
-            "max_tokens": 8192,
+            "vision": true,
+            "context_length": 1000000,
+            "max_completion_tokens": 131072,
+            "thinking": {
+                "type": "adaptive",
+            },
             "extra": {
                 "reasoning_split": true,
             },

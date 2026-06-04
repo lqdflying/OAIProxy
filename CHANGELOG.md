@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.1.11 (2026-06-04)
+
+- Add MiniMax M3 examples and documentation for both Anthropic-compatible and OpenAI-compatible endpoints.
+- Forward supported video data parts to MiniMax-compatible providers as OpenAI `video_url` content or Anthropic `video` blocks.
+- Add debug-log summaries for video payloads and regression coverage for MiniMax M3 request shaping, video conversion, and provider presets.
+
 ## 0.1.10 (2026-06-02)
 
 - Fix Configuration UI provider API key saves so blank provider key fields preserve the existing saved key instead of clearing it.
