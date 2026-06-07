@@ -40,6 +40,9 @@ export function activate(context: vscode.ExtensionContext) {
 	context.subscriptions.push(vscode.lm.registerLanguageModelChatProvider(LANGUAGE_MODEL_VENDOR, chatProvider));
 	refreshLanguageModels(chatProvider);
 	scheduleLanguageModelWarmup(context);
+	const openConfigurationPanel = () => {
+		ConfigViewPanel.openPanel(context.extensionUri, context.secrets, () => refreshLanguageModels(chatProvider));
+	};
 
 	// Management command to configure API key
 	context.subscriptions.push(
@@ -122,7 +125,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 	context.subscriptions.push(
 		vscode.commands.registerCommand("oaiproxy.openConfig", async () => {
-			ConfigViewPanel.openPanel(context.extensionUri, context.secrets, () => refreshLanguageModels(chatProvider));
+			openConfigurationPanel();
 		})
 	);
 

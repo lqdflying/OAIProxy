@@ -230,6 +230,7 @@ button:active {
 }
 
 .table-container {
+	max-width: 100%;
 	overflow-x: auto;
 	border: 1px solid var(--vscode-editorWidget-border);
 	border-radius: 8px;
@@ -242,73 +243,73 @@ table {
 }
 
 #providerTable {
-	min-width: 1280px;
+	min-width: 900px;
 	table-layout: fixed;
 }
 
 #providerTable th:nth-child(1),
 #providerTable td:nth-child(1) {
-	width: 160px;
+	width: 13%;
 }
 
 #providerTable th:nth-child(2),
 #providerTable td:nth-child(2) {
-	width: 300px;
+	width: 26%;
 }
 
 #providerTable th:nth-child(3),
 #providerTable td:nth-child(3) {
-	width: 250px;
+	width: 21%;
 }
 
 #providerTable th:nth-child(4),
 #providerTable td:nth-child(4) {
-	width: 200px;
+	width: 14%;
 }
 
 #providerTable th:nth-child(5),
 #providerTable td:nth-child(5) {
-	width: 240px;
+	width: 15%;
 }
 
 #providerTable th:nth-child(6),
 #providerTable td:nth-child(6) {
-	width: 130px;
+	width: 11%;
 }
 
 #providerUsageTable {
-	min-width: 1180px;
+	min-width: 840px;
 	table-layout: fixed;
 }
 
 #providerUsageTable th:nth-child(1),
 #providerUsageTable td:nth-child(1) {
-	width: 170px;
+	width: 16%;
 }
 
 #providerUsageTable th:nth-child(2),
 #providerUsageTable td:nth-child(2) {
-	width: 150px;
+	width: 14%;
 }
 
 #providerUsageTable th:nth-child(3),
 #providerUsageTable td:nth-child(3) {
-	width: 350px;
+	width: 30%;
 }
 
 #providerUsageTable th:nth-child(4),
 #providerUsageTable td:nth-child(4) {
-	width: 240px;
+	width: 20%;
 }
 
 #providerUsageTable th:nth-child(5),
 #providerUsageTable td:nth-child(5) {
-	width: 120px;
+	width: 10%;
 }
 
 #providerUsageTable th:nth-child(6),
 #providerUsageTable td:nth-child(6) {
-	width: 120px;
+	width: 10%;
 }
 
 th,
@@ -370,6 +371,10 @@ tr:hover {
 	gap: 8px;
 	flex-wrap: wrap;
 	white-space: normal;
+}
+
+.action-buttons button {
+	margin-right: 0;
 }
 
 .provider-id-cell {
@@ -452,6 +457,167 @@ button:disabled {
 	opacity: 0.65;
 	transform: none;
 	box-shadow: none;
+}
+
+@media (max-width: 900px) {
+	#providerManagementSection .table-container,
+	#providerUsageCheckSection .table-container {
+		overflow-x: hidden;
+		border: none;
+		background: transparent;
+	}
+
+	#providerTable,
+	#providerTable thead,
+	#providerTable tbody,
+	#providerTable tr,
+	#providerTable td,
+	#providerUsageTable,
+	#providerUsageTable thead,
+	#providerUsageTable tbody,
+	#providerUsageTable tr,
+	#providerUsageTable td {
+		display: block;
+		width: 100%;
+		min-width: 0;
+	}
+
+	#providerTable,
+	#providerUsageTable {
+		border-collapse: separate;
+		border-spacing: 0;
+	}
+
+	#providerTable thead,
+	#providerUsageTable thead {
+		display: none;
+	}
+
+	#providerTable tr,
+	#providerUsageTable tr {
+		margin-bottom: 10px;
+		border: 1px solid var(--vscode-editorWidget-border);
+		border-radius: 8px;
+		background: var(--vscode-editor-background);
+		overflow: hidden;
+	}
+
+	#providerTable td,
+	#providerUsageTable td {
+		display: grid;
+		grid-template-columns: minmax(120px, 30%) minmax(0, 1fr);
+		gap: 10px;
+		align-items: start;
+		padding: 10px 12px;
+		border-bottom: 1px solid var(--vscode-editorWidget-border);
+		vertical-align: top;
+	}
+
+	#providerTable td:last-child,
+	#providerUsageTable td:last-child {
+		border-bottom: none;
+	}
+
+	#providerTable td::before,
+	#providerUsageTable td::before {
+		padding-top: 7px;
+		color: var(--vscode-descriptionForeground);
+		font-size: 12px;
+		font-weight: 700;
+		line-height: 1.3;
+	}
+
+	#providerTable td:nth-child(1)::before {
+		content: "Provider ID";
+	}
+
+	#providerTable td:nth-child(2)::before {
+		content: "Base URL";
+	}
+
+	#providerTable td:nth-child(3)::before {
+		content: "API Key";
+	}
+
+	#providerTable td:nth-child(4)::before {
+		content: "API Mode";
+	}
+
+	#providerTable td:nth-child(5)::before {
+		content: "Custom Headers";
+	}
+
+	#providerTable td:nth-child(6)::before {
+		content: "Actions";
+	}
+
+	#providerUsageTable td:nth-child(1)::before {
+		content: "Provider";
+	}
+
+	#providerUsageTable td:nth-child(2)::before {
+		content: "Usage Plan";
+	}
+
+	#providerUsageTable td:nth-child(3)::before {
+		content: "Remaining / Usage";
+	}
+
+	#providerUsageTable td:nth-child(4)::before {
+		content: "Usage Key";
+	}
+
+	#providerUsageTable td:nth-child(5)::before {
+		content: "Status";
+	}
+
+	#providerUsageTable td:nth-child(6)::before {
+		content: "Action";
+	}
+
+	#providerTable .provider-input,
+	#providerTable .provider-preset-select,
+	#providerUsageTable .provider-input {
+		min-width: 0;
+		margin-bottom: 0;
+	}
+
+	#providerTable .provider-preset-select {
+		margin-bottom: 6px;
+	}
+
+	#providerTable .provider-headers-input {
+		min-height: 72px;
+	}
+
+	.action-cell .action-buttons {
+		min-width: 0;
+	}
+}
+
+@media (max-width: 620px) {
+	.section-header {
+		align-items: flex-start;
+		flex-direction: column;
+		gap: 8px;
+	}
+
+	.section-actions {
+		width: 100%;
+		flex-wrap: wrap;
+	}
+
+	#providerTable td,
+	#providerUsageTable td {
+		display: block;
+	}
+
+	#providerTable td::before,
+	#providerUsageTable td::before {
+		display: block;
+		padding-top: 0;
+		margin-bottom: 6px;
+	}
 }
 
 button:not(.secondary):not(.danger) {

@@ -2,13 +2,19 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 import type { HFModelItem } from "../types";
 import { AnthropicApi } from "../anthropic/anthropicApi";
+import { getLatestCacheUsage, resetCacheUsageForTests } from "../cacheUsage";
 import {
 	applyOpenAIPromptCache,
 	extractCacheUsage,
+	logCacheUsage,
 	parseCacheControlPart,
 } from "../promptCache";
 
 suite("promptCache", () => {
+	teardown(() => {
+		resetCacheUsageForTests();
+	});
+
 	test("applies OpenAI prompt cache key only for official OpenAI by default", () => {
 		const openaiBody: Record<string, unknown> = {};
 		applyOpenAIPromptCache(openaiBody, {
@@ -179,6 +185,49 @@ suite("promptCache", () => {
 				cachedContentTokenCount: 80,
 			}
 		);
+	});
+
+	test("records cache usage hit rate across provider shapes", () => {
+		logCacheUsage("openai", "gpt-test", {
+			usage: {
+				prompt_tokens: 2000,
+				prompt_tokens_details: {
+					cached_tokens: 1500,
+				},
+			},
+		});
+
+		let latest = getLatestCacheUsage("gpt-test");
+		assert.strictEqual(latest?.status, "hit");
+		assert.strictEqual(latest?.cacheHitTokens, 1500);
+		assert.strictEqual(latest?.cacheEligibleTokens, 2000);
+		assert.strictEqual(latest?.cacheHitRate, 0.75);
+
+		logCacheUsage("deepseek", "deepseek-test", {
+			usage: {
+				prompt_cache_hit_tokens: 120,
+				prompt_cache_miss_tokens: 30,
+			},
+		});
+
+		latest = getLatestCacheUsage("deepseek-test");
+		assert.strictEqual(latest?.status, "hit");
+		assert.strictEqual(latest?.cacheHitTokens, 120);
+		assert.strictEqual(latest?.cacheEligibleTokens, 150);
+		assert.strictEqual(latest?.cacheHitRate, 0.8);
+
+		logCacheUsage("anthropic", "claude-test", {
+			usage: {
+				cache_read_input_tokens: 0,
+				cache_creation_input_tokens: 400,
+			},
+		});
+
+		latest = getLatestCacheUsage("claude-test");
+		assert.strictEqual(latest?.status, "miss");
+		assert.strictEqual(latest?.cacheHitTokens, 0);
+		assert.strictEqual(latest?.cacheEligibleTokens, 400);
+		assert.strictEqual(latest?.cacheHitRate, 0);
 	});
 
 	test("preserves Anthropic cache_control message markers", () => {

@@ -1,5 +1,13 @@
 # Change Log
 
+## 0.1.12 (2026-06-07)
+
+- Add a Copilot-style OAIProxy token usage status hover with context/input budget totals and explicit System / Project Context, User Prompt, Conversation, Tool Definitions, Tool Calls / Results, Images / Binary, and Reasoning token buckets.
+- Show provider-reported prompt cache status and hit rate in the token usage hover, including latest cross-model telemetry when switching models.
+- Keep the token usage status item compact and make clicks open the OAIProxy Configuration UI instead of dumping token details.
+- Improve Provider Management and Provider Usage Check responsiveness so narrow panels fold into labeled card rows instead of overflowing wide tables.
+- Add regression coverage for token usage categorization, hover formatting, and provider cache hit-rate telemetry.
+
 ## 0.1.11 (2026-06-04)
 
 - Add MiniMax M3 examples and documentation for both Anthropic-compatible and OpenAI-compatible endpoints.

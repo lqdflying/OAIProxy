@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import type { HFModelItem } from "./types";
 import { logger } from "./logger";
+import { recordCacheUsage } from "./cacheUsage";
 
 export const CACHE_CONTROL_MIME = "cache_control";
 
@@ -140,10 +141,12 @@ export function logCacheUsage(apiMode: string, modelId: string, payload: unknown
 	if (!usage) {
 		return;
 	}
+	const record = recordCacheUsage(apiMode, modelId, usage);
 	logger.info("cache.usage", {
 		apiMode,
 		modelId,
 		...usage,
+		cacheHitRate: record.cacheHitRate,
 	});
 }
 

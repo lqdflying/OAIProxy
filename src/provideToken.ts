@@ -2,7 +2,7 @@ import * as vscode from "vscode";
 import { LanguageModelChatRequestMessage, LanguageModelChatTool } from "vscode";
 import { tokenizerManager } from "./tokenizer/tokenizerManager";
 import { getImageDimensions } from "./tokenizer/imageUtils";
-import { createDataUrl } from "./utils";
+import { createDataUrl, isToolResultPart } from "./utils";
 import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "./vscodeCompat";
 import { logger } from "./logger";
 
@@ -15,48 +15,74 @@ export const BaseTokensPerMessage = 3;
  */
 export const BaseTokensPerName = 1;
 
+export interface MessageTokenDetails {
+	totalTokens: number;
+	overheadTokens: number;
+	textTokens: number;
+	imageTokens: number;
+	binaryTokens: number;
+	toolCallTokens: number;
+	toolResultTokens: number;
+	reasoningTokens: number;
+}
+
 export async function countMessageTokens(
 	text: string | LanguageModelChatRequestMessage,
 	modelConfig: { includeReasoningInRequest: boolean }
 ): Promise<number> {
-	if (typeof text === "string") {
-		return textTokenLength(text);
-	} else {
-		// For complex messages, calculate tokens for each part separately
-		let totalTokens = BaseTokensPerMessage + BaseTokensPerName;
+	return (await countMessageTokenDetails(text, modelConfig)).totalTokens;
+}
 
-		for (const part of text.content) {
-			if (part instanceof vscode.LanguageModelTextPart) {
-				// Estimate tokens directly for plain text
-				totalTokens += await textTokenLength(part.value);
-			} else if (part instanceof vscode.LanguageModelDataPart) {
-				// Estimate tokens for image or data parts based on type
-				if (part.mimeType.startsWith("image/")) {
-					totalTokens += calculateImageTokenCost(createDataUrl(part));
-				} else if (part.mimeType === "cache_control") {
-					/* ignore */
-				} else {
-					// For other binary data, use a more conservative estimate
-					totalTokens += calculateNonImageBinaryTokens(part.data.byteLength);
-				}
-			} else if (part instanceof vscode.LanguageModelToolCallPart) {
-				// Tool call token calculation
-				totalTokens += BaseTokensPerName;
-				totalTokens += await textTokenLength(JSON.stringify(part.input));
-			} else if (part instanceof vscode.LanguageModelToolResultPart) {
-				// Tool result token calculation
-				totalTokens += await textTokenLength(JSON.stringify(part.content));
-			} else if (isLanguageModelThinkingPart(part)) {
-				// Thinking Token
-				if (modelConfig.includeReasoningInRequest) {
-					totalTokens += await textTokenLength(getLanguageModelThinkingText(part));
-				}
-			} else {
-				console.warn(`Unknown part type: ${JSON.stringify(part)}`);
-			}
-		}
-		return totalTokens;
+export async function countMessageTokenDetails(
+	text: string | LanguageModelChatRequestMessage,
+	modelConfig: { includeReasoningInRequest: boolean }
+): Promise<MessageTokenDetails> {
+	if (typeof text === "string") {
+		const textTokens = await textTokenLength(text);
+		return {
+			...emptyMessageTokenDetails(),
+			totalTokens: textTokens,
+			textTokens,
+		};
 	}
+
+	// For complex messages, calculate tokens for each part separately
+	const details = emptyMessageTokenDetails();
+	details.overheadTokens = BaseTokensPerMessage + BaseTokensPerName;
+
+	for (const part of text.content) {
+		if (part instanceof vscode.LanguageModelTextPart) {
+			// Estimate tokens directly for plain text
+			details.textTokens += await textTokenLength(part.value);
+		} else if (part instanceof vscode.LanguageModelDataPart) {
+			// Estimate tokens for image or data parts based on type
+			if (part.mimeType.startsWith("image/")) {
+				details.imageTokens += calculateImageTokenCost(createDataUrl(part));
+			} else if (part.mimeType === "cache_control") {
+				/* ignore */
+			} else {
+				// For other binary data, use a more conservative estimate
+				details.binaryTokens += calculateNonImageBinaryTokens(part.data.byteLength);
+			}
+		} else if (part instanceof vscode.LanguageModelToolCallPart) {
+			// Tool call token calculation
+			details.toolCallTokens += BaseTokensPerName;
+			details.toolCallTokens += await textTokenLength(JSON.stringify(part.input));
+		} else if (isToolResultPart(part)) {
+			// Tool result token calculation
+			details.toolResultTokens += await textTokenLength(JSON.stringify(part.content));
+		} else if (isLanguageModelThinkingPart(part)) {
+			// Thinking Token
+			if (modelConfig.includeReasoningInRequest) {
+				details.reasoningTokens += await textTokenLength(getLanguageModelThinkingText(part));
+			}
+		} else {
+			console.warn(`Unknown part type: ${JSON.stringify(part)}`);
+		}
+	}
+
+	details.totalTokens = sumMessageTokenDetails(details);
+	return details;
 }
 
 export async function textTokenLength(text: string): Promise<number> {
@@ -118,4 +144,27 @@ function calculateNonImageBinaryTokens(byteLength: number): number {
 	const base = 20;
 	const per16Kb = Math.ceil(byteLength / 16384);
 	return Math.min(200, base + per16Kb);
+}
+
+function emptyMessageTokenDetails(): MessageTokenDetails {
+	return {
+		totalTokens: 0,
+		overheadTokens: 0,
+		textTokens: 0,
+		imageTokens: 0,
+		binaryTokens: 0,
+		toolCallTokens: 0,
+		toolResultTokens: 0,
+		reasoningTokens: 0,
+	};
+}
+
+function sumMessageTokenDetails(details: MessageTokenDetails): number {
+	return details.overheadTokens +
+		details.textTokens +
+		details.imageTokens +
+		details.binaryTokens +
+		details.toolCallTokens +
+		details.toolResultTokens +
+		details.reasoningTokens;
 }

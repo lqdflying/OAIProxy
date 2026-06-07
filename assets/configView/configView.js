@@ -394,14 +394,16 @@ function renderProviderUsageChecks() {
 					<td>${renderProviderUsageValue(usageState, target.usageKind, target.unsupportedReason)}</td>
 					<td>${renderProviderUsageKeyCell(target.provider, target.usageKind, target.unsupportedReason)}</td>
 					<td>${renderProviderUsageStatus(usageState, target.unsupportedReason)}</td>
-					<td class="action-buttons">
-						${
-							isUnsupported
-								? '<span class="usage-key-note">No API endpoint</span>'
-								: `<button class="check-provider-usage-btn compact" data-provider="${providerAttr}" ${isLoading ? "disabled" : ""}>${
-										isLoading ? "Checking..." : "Check"
-									}</button>`
-						}
+					<td class="action-cell">
+						<div class="action-buttons">
+							${
+								isUnsupported
+									? '<span class="usage-key-note">No API endpoint</span>'
+									: `<button class="check-provider-usage-btn compact" data-provider="${providerAttr}" ${isLoading ? "disabled" : ""}>${
+											isLoading ? "Checking..." : "Check"
+										}</button>`
+							}
+						</div>
 					</td>
 				</tr>`;
 		})
@@ -471,9 +473,11 @@ document.getElementById("addProvider").addEventListener("click", () => {
 			</select>
 		</td>
 		<td><textarea class="provider-input" data-field="headers" rows="2" placeholder='{"X-API-Version": "v1"}' style="width: 100%; font-family: monospace; font-size: 12px;"></textarea></td>
-		<td>
-			<button class="save-provider-btn secondary">Save</button>
-			<button class="cancel-provider-btn secondary">Cancel</button>
+		<td class="action-cell">
+			<div class="action-buttons">
+				<button class="save-provider-btn secondary">Save</button>
+				<button class="cancel-provider-btn secondary">Cancel</button>
+			</div>
 		</td>
 	`;
 	providerTableBody.appendChild(newRow);
@@ -723,10 +727,12 @@ function renderProviders() {
 						</select>
 					</td>
 					<td class="provider-headers-cell"><textarea class="provider-input provider-headers-input" data-field="headers" rows="2" placeholder='{"X-API-Version": "v1"}'>${escapeHtml(headersJson)}</textarea></td>
-					<td class="action-buttons">
-						<button class="update-provider-btn compact" data-provider="${providerAttr}">Save</button>
-						<button class="clear-provider-key-btn secondary compact" data-provider="${providerAttr}" ${hasProviderKey ? "" : "disabled"}>Clear Key</button>
-						<button class="delete-provider-btn danger compact" data-provider="${providerAttr}">Delete</button>
+					<td class="action-cell">
+						<div class="action-buttons">
+							<button class="update-provider-btn compact" data-provider="${providerAttr}">Save</button>
+							<button class="clear-provider-key-btn secondary compact" data-provider="${providerAttr}" ${hasProviderKey ? "" : "disabled"}>Clear Key</button>
+							<button class="delete-provider-btn danger compact" data-provider="${providerAttr}">Delete</button>
+						</div>
 					</td>
 				</tr>`;
 		})
