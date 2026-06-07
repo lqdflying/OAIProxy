@@ -9,8 +9,12 @@ const state = {
 	providerKeys: {},
 	providerUsageKeys: {},
 	providerInfo: {},
+	providers: [],
 	providerPresets: [],
+	modelPresets: [],
 	providerUsage: {},
+	modelFormMode: "quick",
+	selectedModelPresetIds: new Set(),
 };
 
 // Store the action to be performed after confirmation
@@ -35,9 +39,24 @@ const checkAllProviderUsageBtn = document.getElementById("checkAllProviderUsage"
 const modelTableBody = document.getElementById("modelTableBody");
 const modelFormSection = document.getElementById("modelFormSection");
 const modelFormTitle = document.getElementById("modelFormTitle");
+const addModelModeTabs = document.getElementById("addModelModeTabs");
+const quickSetupModeBtn = document.getElementById("quickSetupMode");
+const manualSetupModeBtn = document.getElementById("manualSetupMode");
+const quickSetupPanel = document.getElementById("quickSetupPanel");
+const modelPresetSearchInput = document.getElementById("modelPresetSearch");
+const modelPresetProviderFilterInput = document.getElementById("modelPresetProviderFilter");
+const modelPresetCategoryFilterInput = document.getElementById("modelPresetCategoryFilter");
+const modelPresetList = document.getElementById("modelPresetList");
+const selectedPresetSummary = document.getElementById("selectedPresetSummary");
+const addSelectedPresetsBtn = document.getElementById("addSelectedPresets");
+const removeSelectedPresetsBtn = document.getElementById("removeSelectedPresets");
+const clearPresetSelectionBtn = document.getElementById("clearPresetSelection");
+const customizePresetBtn = document.getElementById("customizePreset");
+const modelDetailsFields = document.getElementById("modelDetailsFields");
 const modelIdInput = document.getElementById("modelIdInput");
 const modelIdDropdown = document.getElementById("modelIdDropdown");
 const modelProviderInput = document.getElementById("modelProvider");
+const modelProviderApiKeyInput = document.getElementById("modelProviderApiKey");
 const modelDisplayNameInput = document.getElementById("modelDisplayName");
 const modelConfigIdInput = document.getElementById("modelConfigId");
 const modelBaseUrlInput = document.getElementById("modelBaseUrl");
@@ -65,8 +84,12 @@ const modelReasoningExcludeInput = document.getElementById("modelReasoningExclud
 const modelReasoningEffortORInput = document.getElementById("modelReasoningEffortOR");
 const modelReasoningMaxTokensInput = document.getElementById("modelReasoningMaxTokens");
 const modelThinkingTypeInput = document.getElementById("modelThinkingType");
+const modelSupportsReasoningEffortInput = document.getElementById("modelSupportsReasoningEffort");
+const modelSupportedReasoningEffortsInput = document.getElementById("modelSupportedReasoningEfforts");
+const modelDefaultReasoningEffortInput = document.getElementById("modelDefaultReasoningEffort");
 const modelHeadersInput = document.getElementById("modelHeaders");
 const modelExtraInput = document.getElementById("modelExtra");
+const modelPromptCacheInput = document.getElementById("modelPromptCache");
 const saveModelBtn = document.getElementById("saveModel");
 const cancelModelBtn = document.getElementById("cancelModel");
 const toggleAdvancedSettingsBtn = document.getElementById("toggleAdvancedSettings");
@@ -266,8 +289,231 @@ function escapeHtml(value) {
 		.replaceAll("'", "&#39;");
 }
 
+function cloneModel(model) {
+	return JSON.parse(JSON.stringify(model || {}));
+}
+
+function isProviderPlaceholderModel(model) {
+	return Boolean(model?.id?.startsWith("__provider__"));
+}
+
+function toProviderBackedModel(model) {
+	const next = cloneModel(model);
+	const providerInfo = state.providerInfo[next.owned_by] || {};
+	next.baseUrl = providerInfo.baseUrl || next.baseUrl;
+	next.apiMode = providerInfo.apiMode || next.apiMode || "openai";
+	if (providerInfo.headers !== undefined) {
+		next.headers = providerInfo.headers;
+	}
+	delete next.inheritProvider;
+	return next;
+}
+
+function getFullModelId(model) {
+	if (!model) {
+		return "";
+	}
+	return `${model.id || ""}${model.configId ? "::" + model.configId : ""}`;
+}
+
+function getSelectedModelPresets() {
+	return state.modelPresets.filter((preset) => state.selectedModelPresetIds.has(preset.id));
+}
+
+function getSelectedModelPreset() {
+	const presets = getSelectedModelPresets();
+	return presets.length === 1 ? presets[0] : undefined;
+}
+
+function hasConfiguredModel(model) {
+	return state.models.some((m) => {
+		return (
+			m.id === model.id &&
+			((model.configId && m.configId === model.configId) || (!model.configId && !m.configId))
+		);
+	});
+}
+
+function requiresProviderKey(model) {
+	const providerInfo = state.providerInfo[model.owned_by] || {};
+	const baseUrl = providerInfo.baseUrl || model.baseUrl;
+	const apiMode = providerInfo.apiMode || model.apiMode || "openai";
+	return Boolean(baseUrl && apiMode !== "ollama" && !state.providerKeys[model.owned_by]);
+}
+
+function getSelectedPresetBatch() {
+	const selectedPresets = getSelectedModelPresets();
+	const addPresets = selectedPresets.filter((preset) => !hasConfiguredModel(preset.model));
+	const removePresets = selectedPresets.filter((preset) => hasConfiguredModel(preset.model));
+	const missingProviders = Array.from(
+		new Set(addPresets.filter((preset) => requiresProviderKey(preset.model)).map((preset) => preset.model.owned_by))
+	).sort((a, b) => getProviderLabel(a).localeCompare(getProviderLabel(b)));
+
+	return {
+		selectedPresets,
+		addPresets,
+		removePresets,
+		missingProviders,
+	};
+}
+
+function clearModelPresetSelection() {
+	state.selectedModelPresetIds.clear();
+	renderModelPresets();
+}
+
+function requestDeleteModel(modelId) {
+	const confirmId = "deleteModel_" + Date.now();
+
+	pendingConfirmations.set(confirmId, {
+		action: () => vscode.postMessage({ type: "deleteModel", modelId: modelId }),
+	});
+
+	vscode.postMessage({
+		type: "requestConfirm",
+		id: confirmId,
+		message: `Are you sure you want to delete model ${modelId}?`,
+		action: "deleteModel",
+	});
+}
+
+function requestDeleteModels(modelIds) {
+	const confirmId = "deleteModels_" + Date.now();
+
+	pendingConfirmations.set(confirmId, {
+		action: () => {
+			vscode.postMessage({ type: "deleteModels", modelIds: modelIds });
+			state.selectedModelPresetIds.clear();
+			renderModelPresets();
+		},
+	});
+
+	vscode.postMessage({
+		type: "requestConfirm",
+		id: confirmId,
+		message: `Remove ${modelIds.length} selected configured model(s)?`,
+		action: "deleteModels",
+	});
+}
+
+function getProviderLabel(provider) {
+	const preset = state.providerPresets.find((item) => item.provider === provider);
+	return preset ? preset.label : provider;
+}
+
+function getProviderTransportModel(provider) {
+	const normalizedProvider = (provider || "").trim().toLowerCase();
+	if (!normalizedProvider) {
+		return undefined;
+	}
+	const providerConfig = state.providers.find((item) => (item.provider || "").trim().toLowerCase() === normalizedProvider);
+	if (providerConfig) {
+		return {
+			id: `__provider__${providerConfig.provider}`,
+			owned_by: providerConfig.provider,
+			baseUrl: providerConfig.baseUrl,
+			apiMode: providerConfig.apiMode,
+			headers: providerConfig.headers,
+		};
+	}
+	const providerModels = state.models.filter((m) => (m.owned_by || "").trim().toLowerCase() === normalizedProvider);
+	return (
+		providerModels.find((model) => isProviderPlaceholderModel(model)) ||
+		providerModels.find((model) => model.baseUrl || model.apiMode || model.headers)
+	);
+}
+
+function getKnownProviderEntries(configuredProviders) {
+	const entries = new Map();
+
+	for (const providerEntry of configuredProviders) {
+		const provider = providerEntry.provider;
+		const transportModel = getProviderTransportModel(provider) || {};
+		entries.set(provider, {
+			provider,
+			label: getProviderLabel(provider),
+			baseUrl: transportModel.baseUrl || providerEntry.baseUrl || state.baseUrl,
+			apiMode: transportModel.apiMode || providerEntry.apiMode || "openai",
+			headers: transportModel.headers ?? providerEntry.headers,
+		});
+	}
+
+	for (const preset of state.providerPresets) {
+		if (!entries.has(preset.provider)) {
+			entries.set(preset.provider, {
+				provider: preset.provider,
+				label: preset.label,
+				baseUrl: preset.baseUrl || state.baseUrl,
+				apiMode: preset.apiMode || "openai",
+				headers: undefined,
+			});
+		}
+	}
+
+	for (const preset of state.modelPresets) {
+		const model = preset.model || {};
+		const provider = model.owned_by;
+		if (provider && !entries.has(provider)) {
+			entries.set(provider, {
+				provider,
+				label: getProviderLabel(provider),
+				baseUrl: model.baseUrl || state.baseUrl,
+				apiMode: model.apiMode || "openai",
+				headers: model.headers,
+			});
+		}
+	}
+
+	return Array.from(entries.values()).sort((a, b) => a.label.localeCompare(b.label));
+}
+
+function syncModelProviderOptions(configuredProviders) {
+	const entries = getKnownProviderEntries(configuredProviders);
+	state.providerInfo = {};
+	const providerOptions = entries
+		.map((entry) => {
+			state.providerInfo[entry.provider] = {
+				baseUrl: entry.baseUrl || state.baseUrl,
+				apiMode: entry.apiMode || "openai",
+				apiKey: state.providerKeys[entry.provider] || state.apiKey,
+				headers: entry.headers,
+			};
+			return `<option value="${escapeHtml(entry.provider)}">${escapeHtml(entry.label)}</option>`;
+		})
+		.join("");
+	modelProviderInput.innerHTML = '<option value="">Select Provider</option>' + providerOptions;
+}
+
+function updateModelProviderKeyPlaceholder() {
+	const provider = modelProviderInput.value;
+	const hasProviderKey = Boolean(state.providerKeys[provider]);
+	if (hasProviderKey) {
+		modelProviderApiKeyInput.placeholder = "Saved - leave blank to keep";
+		return;
+	}
+	if (modelApiModeInput.value === "ollama") {
+		modelProviderApiKeyInput.placeholder = "Optional; defaults to ollama";
+		return;
+	}
+	modelProviderApiKeyInput.placeholder = "Enter provider API key";
+}
+
 function getConfiguredProviders() {
 	const providers = new Map();
+	for (const providerConfig of state.providers) {
+		const provider = providerConfig.provider;
+		if (!provider) {
+			continue;
+		}
+		providers.set(provider, {
+			provider,
+			baseUrl: providerConfig.baseUrl || "",
+			apiMode: providerConfig.apiMode || "",
+			headers: providerConfig.headers,
+			modelCount: 0,
+			modelIds: [],
+		});
+	}
 	for (const model of state.models) {
 		const provider = model.owned_by;
 		if (!provider) {
@@ -276,13 +522,19 @@ function getConfiguredProviders() {
 		const current = providers.get(provider) || {
 			provider,
 			baseUrl: model.baseUrl || "",
+			apiMode: model.apiMode || "",
+			headers: model.headers,
 			modelCount: 0,
 			modelIds: [],
 		};
-		if (!current.baseUrl && model.baseUrl) {
+		if (isProviderPlaceholderModel(model)) {
+			current.baseUrl = model.baseUrl || "";
+			current.apiMode = model.apiMode || "";
+			current.headers = model.headers;
+		} else if (!current.baseUrl && model.baseUrl) {
 			current.baseUrl = model.baseUrl;
 		}
-		if (!model.id.startsWith("__provider__")) {
+		if (!isProviderPlaceholderModel(model)) {
 			current.modelCount += 1;
 			current.modelIds.push(model.displayName || model.id);
 		}
@@ -430,6 +682,331 @@ function renderProviderUsageChecks() {
 	});
 }
 
+function formatPresetCategory(value) {
+	if (!value) {
+		return "";
+	}
+	return value.charAt(0).toUpperCase() + value.slice(1);
+}
+
+function getModelOutputLimit(model) {
+	return model.max_tokens ?? model.max_completion_tokens ?? "";
+}
+
+function renderModelPresetFilters() {
+	const currentProvider = modelPresetProviderFilterInput.value;
+	const providers = Array.from(new Set(state.modelPresets.map((preset) => preset.model?.owned_by).filter(Boolean))).sort(
+		(a, b) => getProviderLabel(a).localeCompare(getProviderLabel(b))
+	);
+	modelPresetProviderFilterInput.innerHTML =
+		'<option value="">All providers</option>' +
+		providers
+			.map((provider) => `<option value="${escapeHtml(provider)}">${escapeHtml(getProviderLabel(provider))}</option>`)
+			.join("");
+	if (providers.includes(currentProvider)) {
+		modelPresetProviderFilterInput.value = currentProvider;
+	}
+}
+
+function renderSelectedPresetSummary() {
+	const batch = getSelectedPresetBatch();
+	if (!batch.selectedPresets.length) {
+		selectedPresetSummary.classList.add("muted");
+		selectedPresetSummary.innerHTML = "Select one or more presets to add or remove configured models.";
+		addSelectedPresetsBtn.disabled = true;
+		removeSelectedPresetsBtn.disabled = true;
+		clearPresetSelectionBtn.disabled = true;
+		customizePresetBtn.disabled = true;
+		return;
+	}
+
+	const singlePreset = getSelectedModelPreset();
+	const missingProviderText = batch.missingProviders.map((provider) => getProviderLabel(provider)).join(", ");
+	selectedPresetSummary.classList.remove("muted");
+	const detailHtml = singlePreset
+		? (() => {
+				const model = singlePreset.model;
+				const providerInfo = state.providerInfo[model.owned_by] || {};
+				const apiMode = providerInfo.apiMode || model.apiMode || "openai";
+				const hasKey = Boolean(state.providerKeys[model.owned_by]) || apiMode === "ollama";
+				const outputField = model.max_completion_tokens !== undefined ? "max_completion_tokens" : "max_tokens";
+				return `
+					<div class="selected-preset-title">${escapeHtml(singlePreset.label)}</div>
+					<div class="selected-preset-grid">
+						<span>Provider: ${escapeHtml(getProviderLabel(model.owned_by))}</span>
+						<span>API: ${escapeHtml(apiMode)} inherited</span>
+						<span>Context: ${escapeHtml(model.context_length || "")}</span>
+						<span>${escapeHtml(outputField)}: ${escapeHtml(getModelOutputLimit(model))}</span>
+						<span>Key: ${hasKey ? "Saved/optional" : "Required"}</span>
+					</div>
+				`;
+			})()
+		: "";
+	selectedPresetSummary.innerHTML = `
+		<div class="selected-preset-title">${batch.selectedPresets.length} preset(s) selected</div>
+		<div class="selected-preset-grid">
+			<span>Add ready: ${batch.addPresets.length}</span>
+			<span>Remove ready: ${batch.removePresets.length}</span>
+			<span>Missing keys: ${batch.missingProviders.length ? escapeHtml(missingProviderText) : "None"}</span>
+		</div>
+		${detailHtml}
+	`;
+	addSelectedPresetsBtn.disabled = batch.addPresets.length === 0 || batch.missingProviders.length > 0;
+	removeSelectedPresetsBtn.disabled = batch.removePresets.length === 0;
+	clearPresetSelectionBtn.disabled = false;
+	customizePresetBtn.disabled = batch.selectedPresets.length !== 1;
+}
+
+function renderModelPresets() {
+	const search = modelPresetSearchInput.value.trim().toLowerCase();
+	const providerFilter = modelPresetProviderFilterInput.value;
+	const categoryFilter = modelPresetCategoryFilterInput.value;
+	const presets = state.modelPresets
+		.filter((preset) => {
+			const model = preset.model || {};
+			if (providerFilter && model.owned_by !== providerFilter) {
+				return false;
+			}
+			if (categoryFilter && preset.category !== categoryFilter) {
+				return false;
+			}
+			if (!search) {
+				return true;
+			}
+			const haystack = [
+				preset.label,
+				preset.description,
+				preset.category,
+				model.id,
+				model.displayName,
+				model.owned_by,
+				model.apiMode,
+				...(preset.tags || []),
+			]
+				.filter(Boolean)
+				.join(" ")
+				.toLowerCase();
+			return haystack.includes(search);
+		})
+		.sort((a, b) => {
+			const providerCompare = getProviderLabel(a.model.owned_by).localeCompare(getProviderLabel(b.model.owned_by));
+			return providerCompare || a.label.localeCompare(b.label);
+		});
+
+	if (!presets.length) {
+		modelPresetList.innerHTML = '<div class="no-data">No matching model presets</div>';
+		renderSelectedPresetSummary();
+		return;
+	}
+
+	modelPresetList.innerHTML = presets
+		.map((preset) => {
+			const model = preset.model || {};
+			const providerInfo = state.providerInfo[model.owned_by] || {};
+			const apiMode = providerInfo.apiMode || model.apiMode || "openai";
+			const selected = state.selectedModelPresetIds.has(preset.id);
+			const configured = hasConfiguredModel(model);
+			const fullModelId = getFullModelId(model);
+			const tags = [formatPresetCategory(preset.category), ...(preset.tags || [])].filter(Boolean);
+			return `
+				<div class="preset-card ${selected ? "selected" : ""}" tabindex="0" data-preset-id="${escapeHtml(preset.id)}">
+					<div class="preset-card-top">
+						<label class="preset-card-check">
+							<input type="checkbox" class="preset-select-checkbox" data-preset-id="${escapeHtml(preset.id)}" ${selected ? "checked" : ""} />
+							<span class="preset-title">${escapeHtml(preset.label)}</span>
+						</label>
+						<div class="preset-card-state">
+							<span class="status-pill ${configured ? "success" : "idle"}">${configured ? "Configured" : "Ready"}</span>
+							${
+								configured
+									? `<button type="button" class="remove-preset-model-btn danger compact" data-model-id="${escapeHtml(fullModelId)}">Remove</button>`
+									: ""
+							}
+						</div>
+					</div>
+					<div class="preset-model-id">${escapeHtml(fullModelId)}</div>
+					<div class="preset-description">${escapeHtml(preset.description)}</div>
+					<div class="preset-meta">
+						<span>${escapeHtml(getProviderLabel(model.owned_by))}</span>
+						<span>${escapeHtml(apiMode)}</span>
+						<span>${escapeHtml(model.context_length || "")} ctx</span>
+						<span>${escapeHtml(getModelOutputLimit(model))} out</span>
+					</div>
+					<div class="preset-tags">
+						${tags.map((tag) => `<span>${escapeHtml(tag)}</span>`).join("")}
+					</div>
+				</div>
+			`;
+		})
+		.join("");
+
+	modelPresetList.querySelectorAll(".preset-card").forEach((card) => {
+		card.addEventListener("click", (event) => {
+			if (event.target.closest(".remove-preset-model-btn") || event.target.closest(".preset-card-check")) {
+				return;
+			}
+			toggleModelPresetSelection(card.getAttribute("data-preset-id"));
+		});
+		card.addEventListener("keydown", (event) => {
+			if (event.target.closest(".remove-preset-model-btn") || event.target.closest(".preset-card-check")) {
+				return;
+			}
+			if (event.key !== "Enter" && event.key !== " ") {
+				return;
+			}
+			event.preventDefault();
+			toggleModelPresetSelection(card.getAttribute("data-preset-id"));
+		});
+	});
+	modelPresetList.querySelectorAll(".preset-select-checkbox").forEach((checkbox) => {
+		checkbox.addEventListener("change", (event) => {
+			toggleModelPresetSelection(event.currentTarget.getAttribute("data-preset-id"));
+		});
+	});
+	modelPresetList.querySelectorAll(".remove-preset-model-btn").forEach((btn) => {
+		btn.addEventListener("click", (event) => {
+			event.stopPropagation();
+			requestDeleteModel(event.currentTarget.getAttribute("data-model-id"));
+		});
+	});
+	renderSelectedPresetSummary();
+}
+
+function ensureProviderOption(provider) {
+	if (!provider) {
+		return;
+	}
+	const providerExists = Array.from(modelProviderInput.options).some((option) => option.value === provider);
+	if (providerExists) {
+		return;
+	}
+	const newOption = document.createElement("option");
+	newOption.value = provider;
+	newOption.textContent = provider;
+	modelProviderInput.appendChild(newOption);
+}
+
+function setJsonInput(input, value) {
+	input.value = value ? JSON.stringify(value, null, 2) : "";
+}
+
+function setOptionalBooleanInput(input, value) {
+	input.value = value !== undefined ? String(value) : "";
+}
+
+function setOptionalNumberInput(input, value) {
+	input.value = value !== undefined && value !== null ? value : "";
+}
+
+function applyModelToForm(model) {
+	const currentProvider = model.owned_by || "";
+	ensureProviderOption(currentProvider);
+	const providerInfo = state.providerInfo[currentProvider] || {};
+
+	modelIdInput.value = model.id || "";
+	modelProviderInput.value = currentProvider;
+	modelProviderApiKeyInput.value = "";
+	modelDisplayNameInput.value = model.displayName || "";
+	modelConfigIdInput.value = model.configId || "";
+	modelBaseUrlInput.value = providerInfo.baseUrl || model.baseUrl || "";
+	modelFamilyInput.value = model.family || "";
+	setOptionalNumberInput(modelContextLengthInput, model.context_length);
+	setOptionalNumberInput(modelMaxTokensInput, model.max_tokens);
+	setOptionalNumberInput(modelMaxCompletionTokensInput, model.max_completion_tokens);
+	setOptionalBooleanInput(modelVisionInput, model.vision);
+	setOptionalBooleanInput(modelToolCallingInput, model.toolCalling);
+	modelApiModeInput.value = providerInfo.apiMode || model.apiMode || "openai";
+	setOptionalNumberInput(modelTemperatureInput, model.temperature);
+	setOptionalNumberInput(modelTopPInput, model.top_p);
+	setOptionalNumberInput(modelDelayInput, model.delay);
+	setOptionalNumberInput(modelTopKInput, model.top_k);
+	setOptionalNumberInput(modelMinPInput, model.min_p);
+	setOptionalNumberInput(modelFrequencyPenaltyInput, model.frequency_penalty);
+	setOptionalNumberInput(modelPresencePenaltyInput, model.presence_penalty);
+	setOptionalNumberInput(modelRepetitionPenaltyInput, model.repetition_penalty);
+	modelReasoningEffortInput.value = model.reasoning_effort || "";
+	setOptionalBooleanInput(modelEnableThinkingInput, model.enable_thinking);
+	setOptionalNumberInput(modelThinkingBudgetInput, model.thinking_budget);
+	setOptionalBooleanInput(modelIncludeReasoningInput, model.include_reasoning_in_request);
+	setOptionalBooleanInput(modelSupportsReasoningEffortInput, model.supports_reasoning_effort);
+	modelSupportedReasoningEffortsInput.value = Array.isArray(model.supported_reasoning_efforts)
+		? model.supported_reasoning_efforts.join(",")
+		: "";
+	modelDefaultReasoningEffortInput.value = model.default_reasoning_effort || "";
+
+	if (model.reasoning) {
+		setOptionalBooleanInput(modelReasoningEnabledInput, model.reasoning.enabled);
+		modelReasoningEffortORInput.value = model.reasoning.effort || "";
+		setOptionalBooleanInput(modelReasoningExcludeInput, model.reasoning.exclude);
+		setOptionalNumberInput(modelReasoningMaxTokensInput, model.reasoning.max_tokens);
+	} else {
+		modelReasoningEnabledInput.value = "";
+		modelReasoningEffortORInput.value = "";
+		modelReasoningExcludeInput.value = "";
+		modelReasoningMaxTokensInput.value = "";
+	}
+
+	modelThinkingTypeInput.value = model.thinking?.type || "";
+	setJsonInput(modelHeadersInput, providerInfo.headers ?? model.headers);
+	setJsonInput(modelExtraInput, model.extra);
+	setJsonInput(modelPromptCacheInput, model.prompt_cache);
+	updateModelProviderKeyPlaceholder();
+}
+
+function toggleModelPresetSelection(presetId) {
+	const preset = state.modelPresets.find((item) => item.id === presetId);
+	if (!preset) {
+		return;
+	}
+	if (state.selectedModelPresetIds.has(preset.id)) {
+		state.selectedModelPresetIds.delete(preset.id);
+	} else {
+		state.selectedModelPresetIds.add(preset.id);
+	}
+	showModelError("");
+	renderModelPresets();
+}
+
+function setModelFormMode(mode) {
+	state.modelFormMode = mode;
+	const isQuick = mode === "quick";
+	const isCustomize = mode === "customize";
+	const isEdit = mode === "edit";
+
+	addModelModeTabs.style.display = isEdit ? "none" : "flex";
+	quickSetupPanel.style.display = isQuick || isCustomize ? "block" : "none";
+	modelDetailsFields.style.display = isQuick ? "none" : "block";
+	saveModelBtn.style.display = isQuick ? "none" : "";
+	cancelModelBtn.textContent = isQuick ? "Close" : "Cancel";
+	quickSetupModeBtn.classList.toggle("active", isQuick || isCustomize);
+	manualSetupModeBtn.classList.toggle("active", mode === "manual");
+
+	if (mode === "manual") {
+		state.selectedModelPresetIds.clear();
+		modelBaseUrlInput.disabled = false;
+		modelApiModeInput.disabled = false;
+		modelHeadersInput.disabled = false;
+		renderModelPresets();
+		return;
+	}
+
+	if (mode === "customize") {
+		modelBaseUrlInput.disabled = true;
+		modelApiModeInput.disabled = true;
+		modelHeadersInput.disabled = true;
+		return;
+	}
+
+	modelBaseUrlInput.disabled = !isEdit;
+	modelApiModeInput.disabled = !isEdit;
+	modelHeadersInput.disabled = false;
+	if (isEdit) {
+		modelBaseUrlInput.disabled = true;
+		modelApiModeInput.disabled = true;
+		modelHeadersInput.disabled = getOriginalEditingModel().inheritProvider === true;
+	}
+}
+
 function collectProviderRowData(row) {
 	const inputs = row.querySelectorAll(".provider-input");
 	const providerData = {};
@@ -515,10 +1092,74 @@ document.getElementById("addProvider").addEventListener("click", () => {
 document.getElementById("addModel").addEventListener("click", () => {
 	// Show the model form
 	modelFormSection.style.display = "block";
-	modelFormTitle.textContent = "Add New Model";
+	modelFormTitle.textContent = "Add Model";
 	// Reset form
 	resetModelForm();
+	setModelFormMode("quick");
+	renderModelPresetFilters();
+	renderModelPresets();
 });
+
+quickSetupModeBtn.addEventListener("click", () => {
+	resetModelForm();
+	setModelFormMode("quick");
+	renderModelPresets();
+});
+
+manualSetupModeBtn.addEventListener("click", () => {
+	resetModelForm();
+	setModelFormMode("manual");
+});
+
+addSelectedPresetsBtn.addEventListener("click", () => {
+	const batch = getSelectedPresetBatch();
+	if (batch.missingProviders.length) {
+		showModelError(
+			`Provider API Key is required for: ${batch.missingProviders.map((provider) => getProviderLabel(provider)).join(", ")}.`
+		);
+		return;
+	}
+	if (!batch.addPresets.length) {
+		showModelError("No selected unconfigured presets to add.");
+		return;
+	}
+
+	vscode.postMessage({
+		type: "addModels",
+		models: batch.addPresets.map((preset) => toProviderBackedModel(preset.model)),
+	});
+	state.selectedModelPresetIds.clear();
+	renderModelPresets();
+});
+
+removeSelectedPresetsBtn.addEventListener("click", () => {
+	const batch = getSelectedPresetBatch();
+	if (!batch.removePresets.length) {
+		showModelError("No selected configured presets to remove.");
+		return;
+	}
+
+	requestDeleteModels(batch.removePresets.map((preset) => getFullModelId(preset.model)));
+});
+
+clearPresetSelectionBtn.addEventListener("click", () => {
+	clearModelPresetSelection();
+});
+
+customizePresetBtn.addEventListener("click", () => {
+	const preset = getSelectedModelPreset();
+	if (!preset) {
+		return;
+	}
+	applyModelToForm(cloneModel(preset.model));
+	setModelFormMode("customize");
+	advancedSettingsContent.style.display = "block";
+	toggleAdvancedSettingsBtn.textContent = "Hide Advanced Settings";
+});
+
+modelPresetSearchInput.addEventListener("input", renderModelPresets);
+modelPresetProviderFilterInput.addEventListener("change", renderModelPresets);
+modelPresetCategoryFilterInput.addEventListener("change", renderModelPresets);
 
 // Provider dropdown change event listener for auto-fill
 modelProviderInput.addEventListener("change", () => {
@@ -541,7 +1182,10 @@ modelProviderInput.addEventListener("change", () => {
 			headers,
 		});
 	}
+	updateModelProviderKeyPlaceholder();
 });
+
+modelApiModeInput.addEventListener("change", updateModelProviderKeyPlaceholder);
 
 // Toggle advanced settings
 toggleAdvancedSettingsBtn.addEventListener("click", () => {
@@ -556,6 +1200,8 @@ saveModelBtn.addEventListener("click", () => {
 	if (!validateModelData(modelData)) {
 		return;
 	}
+	const providerApiKey = collectModelProviderApiKey(modelData);
+	const inheritProvider = modelData.inheritProvider === true;
 
 	// For updates, ensure the model ID remains unchanged
 	const isEditing = modelIdInput.hasAttribute("data-editing");
@@ -571,11 +1217,15 @@ saveModelBtn.addEventListener("click", () => {
 			model: modelData,
 			originalModelId: originalModelId,
 			originalConfigId: originalConfigId,
+			providerApiKey,
+			inheritProvider,
 		});
 	} else {
 		vscode.postMessage({
 			type: "addModel",
 			model: modelData,
+			providerApiKey,
+			inheritProvider,
 		});
 	}
 
@@ -604,9 +1254,11 @@ window.addEventListener("message", (event) => {
 				retry,
 				commitModel,
 				models,
+				providers,
 				providerKeys,
 				providerUsageKeys,
 				providerPresets,
+				modelPresets,
 				commitLanguage,
 			} = message.payload;
 			state.baseUrl = baseUrl;
@@ -620,10 +1272,12 @@ window.addEventListener("message", (event) => {
 				status_codes: [],
 			};
 			state.models = models || [];
+			state.providers = providers || [];
 			state.commitModel = commitModel || "";
 			state.providerKeys = providerKeys || {};
 			state.providerUsageKeys = providerUsageKeys || {};
 			state.providerPresets = providerPresets || [];
+			state.modelPresets = modelPresets || [];
 
 			// Update base configuration
 			baseUrlInput.value = baseUrl || "";
@@ -642,6 +1296,8 @@ window.addEventListener("message", (event) => {
 
 			// Render provider and model management
 			renderProviders();
+			renderModelPresetFilters();
+			renderModelPresets();
 			renderModels();
 			renderProviderUsageChecks();
 			break;
@@ -688,22 +1344,20 @@ window.addEventListener("message", (event) => {
 
 function renderProviders() {
 	const providers = getConfiguredProviders();
+	syncModelProviderOptions(providers);
 
 	if (!providers.length) {
 		providerTableBody.innerHTML = '<tr><td colspan="6" class="no-data">No providers</td></tr>';
-		// Clear the provider dropdown as well
-		modelProviderInput.innerHTML = '<option value="">Select Provider</option>';
 		return;
 	}
 
 	const rows = providers
 		.map((providerEntry) => {
 			const provider = providerEntry.provider;
-			// Get the provider's configuration information
-			const providerModels = state.models.filter((m) => m.owned_by === provider);
-			const firstModel = providerModels[0];
-			const baseUrl = firstModel.baseUrl || "";
-			const headersJson = firstModel.headers ? JSON.stringify(firstModel.headers, null, 2) : "";
+			const providerConfig = getProviderTransportModel(provider) || providerEntry;
+			const apiMode = providerConfig.apiMode || "openai";
+			const baseUrl = providerConfig.baseUrl || "";
+			const headersJson = providerConfig.headers ? JSON.stringify(providerConfig.headers, null, 2) : "";
 			const providerAttr = escapeHtml(provider);
 			const hasProviderKey = Boolean(state.providerKeys[provider]);
 			const keyPlaceholder = hasProviderKey ? "Saved - leave blank to keep" : "API Key";
@@ -719,11 +1373,11 @@ function renderProviders() {
 					<td class="provider-key-cell"><input type="password" class="provider-input" data-field="apiKey" value="" placeholder="${escapeHtml(keyPlaceholder)}" /></td>
 					<td class="provider-mode-cell">
 						<select class="provider-input" data-field="apiMode">
-							<option value="openai" ${firstModel.apiMode === "openai" ? "selected" : ""}>OpenAI</option>
-							<option value="openai-responses" ${firstModel.apiMode === "openai-responses" ? "selected" : ""}>OpenAI Responses</option>
-							<option value="ollama" ${firstModel.apiMode === "ollama" ? "selected" : ""}>Ollama</option>
-							<option value="anthropic" ${firstModel.apiMode === "anthropic" ? "selected" : ""}>Anthropic</option>
-							<option value="gemini" ${firstModel.apiMode === "gemini" ? "selected" : ""}>Gemini</option>
+							<option value="openai" ${apiMode === "openai" ? "selected" : ""}>OpenAI</option>
+							<option value="openai-responses" ${apiMode === "openai-responses" ? "selected" : ""}>OpenAI Responses</option>
+							<option value="ollama" ${apiMode === "ollama" ? "selected" : ""}>Ollama</option>
+							<option value="anthropic" ${apiMode === "anthropic" ? "selected" : ""}>Anthropic</option>
+							<option value="gemini" ${apiMode === "gemini" ? "selected" : ""}>Gemini</option>
 						</select>
 					</td>
 					<td class="provider-headers-cell"><textarea class="provider-input provider-headers-input" data-field="headers" rows="2" placeholder='{"X-API-Version": "v1"}'>${escapeHtml(headersJson)}</textarea></td>
@@ -739,28 +1393,6 @@ function renderProviders() {
 		.join("");
 
 	providerTableBody.innerHTML = rows;
-
-	// Populate the provider dropdown in the model form and provider info
-	state.providerInfo = {}; // Reset provider info
-	const providerOptions = providers
-		.map((providerEntry) => {
-			const provider = providerEntry.provider;
-			// Get the provider's configuration information
-			const providerModels = state.models.filter((m) => m.owned_by === provider);
-			const firstModel = providerModels[0];
-
-			// Store provider info for auto-fill
-			state.providerInfo[provider] = {
-				baseUrl: firstModel.baseUrl || state.baseUrl,
-				apiMode: firstModel.apiMode || "openai",
-				apiKey: state.providerKeys[provider] || state.apiKey,
-				headers: firstModel.headers,
-			};
-
-			return `<option value="${provider}">${provider}</option>`;
-		})
-		.join("");
-	modelProviderInput.innerHTML = '<option value="">Select Provider</option>' + providerOptions;
 
 	// Add event listeners for provider rows
 	document.querySelectorAll(".update-provider-btn").forEach((btn) => {
@@ -818,9 +1450,9 @@ function renderProviders() {
 }
 
 function renderModels() {
-	const models = state.models.filter((m) => !m.id.startsWith("__provider__")).sort((a, b) => a.id.localeCompare(b.id));
+	const models = state.models.filter((m) => !isProviderPlaceholderModel(m)).sort((a, b) => a.id.localeCompare(b.id));
 	if (!models.length) {
-		modelTableBody.innerHTML = '<tr><td colspan="11" class="no-data">No models</td></tr>';
+		modelTableBody.innerHTML = '<tr><td colspan="8" class="no-data">No models</td></tr>';
 		return;
 	}
 
@@ -835,9 +1467,6 @@ function renderModels() {
 				<td>${model.context_length || ""}</td>
 				<td>${model.max_tokens || model.max_completion_tokens || ""}</td>
 				<td>${model.vision ? "True" : ""}</td>
-				<td>${model.temperature !== undefined && model.temperature !== null ? model.temperature : ""}</td>
-				<td>${model.top_p !== undefined && model.top_p !== null ? model.top_p : ""}</td>
-				<td>${model.delay || ""}</td>
 				<td class="action-buttons">
 					<button class="update-model-btn" data-model-id="${model.id}${model.configId ? "::" + model.configId : ""}">Edit</button>
 					<button class="delete-model-btn danger" data-model-id="${model.id}${model.configId ? "::" + model.configId : ""}">Delete</button>
@@ -876,19 +1505,7 @@ function renderModels() {
 	document.querySelectorAll(".delete-model-btn").forEach((btn) => {
 		btn.addEventListener("click", (event) => {
 			const modelId = event.target.getAttribute("data-model-id");
-			const confirmId = "deleteModel_" + Date.now();
-
-			// Store the action to be performed after confirmation
-			pendingConfirmations.set(confirmId, {
-				action: () => vscode.postMessage({ type: "deleteModel", modelId: modelId }),
-			});
-
-			vscode.postMessage({
-				type: "requestConfirm",
-				id: confirmId,
-				message: `Are you sure you want to delete model ${modelId}?`,
-				action: "deleteModel",
-			});
+			requestDeleteModel(modelId);
 		});
 	});
 }
@@ -900,6 +1517,7 @@ function resetModelForm() {
 
 	modelIdInput.value = "";
 	modelProviderInput.value = "";
+	modelProviderApiKeyInput.value = "";
 	modelDisplayNameInput.value = "";
 	modelConfigIdInput.value = "";
 	modelBaseUrlInput.value = "";
@@ -927,10 +1545,15 @@ function resetModelForm() {
 	modelReasoningEffortORInput.value = "";
 	modelReasoningMaxTokensInput.value = "";
 	modelThinkingTypeInput.value = "";
+	modelSupportsReasoningEffortInput.value = "";
+	modelSupportedReasoningEffortsInput.value = "";
+	modelDefaultReasoningEffortInput.value = "";
 	modelHeadersInput.value = "";
 	modelExtraInput.value = "";
+	modelPromptCacheInput.value = "";
 	advancedSettingsContent.style.display = "none";
 	toggleAdvancedSettingsBtn.textContent = "Show Advanced Settings";
+	state.selectedModelPresetIds.clear();
 	// Remove editing attribute
 	modelIdInput.removeAttribute("data-editing");
 	modelIdInput.removeAttribute("data-original-id");
@@ -938,14 +1561,36 @@ function resetModelForm() {
 	// disbale fields when form is reset
 	modelBaseUrlInput.disabled = true;
 	modelApiModeInput.disabled = true;
+	modelHeadersInput.disabled = false;
 	// Clear dropdown options
 	dropdownContent.innerHTML = "";
+	updateModelProviderKeyPlaceholder();
+	renderSelectedPresetSummary();
+}
+
+function parseCommaSeparatedList(value) {
+	return value
+		.split(",")
+		.map((item) => item.trim())
+		.filter(Boolean);
+}
+
+function collectModelProviderApiKey(modelData) {
+	const trimmed = modelProviderApiKeyInput.value.trim();
+	if (trimmed) {
+		return trimmed;
+	}
+	if (modelData.apiMode === "ollama" && modelData.baseUrl && !state.providerKeys[modelData.owned_by]) {
+		return "ollama";
+	}
+	return undefined;
 }
 
 // Collect model form data
 function collectModelFormData() {
 	const isEditing = modelIdInput.hasAttribute("data-editing");
 	const originalModel = isEditing ? getOriginalEditingModel() : {};
+	const supportedReasoningEfforts = parseCommaSeparatedList(modelSupportedReasoningEffortsInput.value);
 
 	return {
 		...originalModel,
@@ -971,6 +1616,11 @@ function collectModelFormData() {
 		repetition_penalty:
 			modelRepetitionPenaltyInput.value !== "" ? parseFloat(modelRepetitionPenaltyInput.value) : undefined,
 		reasoning_effort: modelReasoningEffortInput.value || undefined,
+		supports_reasoning_effort: modelSupportsReasoningEffortInput.value
+			? modelSupportsReasoningEffortInput.value === "true"
+			: undefined,
+		supported_reasoning_efforts: supportedReasoningEfforts.length ? supportedReasoningEfforts : undefined,
+		default_reasoning_effort: modelDefaultReasoningEffortInput.value || undefined,
 		enable_thinking: modelEnableThinkingInput.value ? modelEnableThinkingInput.value === "true" : undefined,
 		thinking_budget: modelThinkingBudgetInput.value ? parseInt(modelThinkingBudgetInput.value) : undefined,
 		include_reasoning_in_request: modelIncludeReasoningInput.value
@@ -986,6 +1636,7 @@ function collectModelFormData() {
 		// Parse headers and extra JSON
 		headers: parseJsonField(modelHeadersInput.value),
 		extra: parseJsonField(modelExtraInput.value),
+		prompt_cache: parseJsonField(modelPromptCacheInput.value),
 		// Include original modelId and configId for update operations
 		originalModelId: isEditing ? modelIdInput.getAttribute("data-original-id") : undefined,
 		originalConfigId: isEditing ? modelIdInput.getAttribute("data-original-configId") : undefined,
@@ -1046,6 +1697,24 @@ function parseJsonField(value) {
 	}
 }
 
+function validateJsonObjectInput(input, label) {
+	const value = input.value.trim();
+	if (!value) {
+		return true;
+	}
+	try {
+		const parsed = JSON.parse(value);
+		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+			showModelError(`${label} must be a valid JSON object.`);
+			return false;
+		}
+		return true;
+	} catch (_error) {
+		showModelError(`${label} must be a valid JSON object.`);
+		return false;
+	}
+}
+
 // Show error message in the UI
 function showModelError(message) {
 	if (modelErrorElement) {
@@ -1070,6 +1739,15 @@ function validateModelData(modelData) {
 	}
 	if (!modelData.owned_by) {
 		showModelError("Provider ID is required.");
+		return false;
+	}
+	if (
+		modelData.baseUrl &&
+		modelData.apiMode !== "ollama" &&
+		!state.providerKeys[modelData.owned_by] &&
+		!modelProviderApiKeyInput.value.trim()
+	) {
+		showModelError("Provider API Key is required for models with a provider Base URL.");
 		return false;
 	}
 
@@ -1140,12 +1818,13 @@ function validateModelData(modelData) {
 	}
 
 	// Validate JSON fields
-	if (modelData.headers && typeof modelData.headers !== "object") {
-		showModelError("Custom Headers must be a valid JSON object.");
+	if (!validateJsonObjectInput(modelHeadersInput, "Custom Headers")) {
 		return false;
 	}
-	if (modelData.extra && typeof modelData.extra !== "object") {
-		showModelError("Extra Parameters must be a valid JSON object.");
+	if (!validateJsonObjectInput(modelExtraInput, "Extra Parameters")) {
+		return false;
+	}
+	if (!validateJsonObjectInput(modelPromptCacheInput, "Prompt Cache")) {
 		return false;
 	}
 
@@ -1201,8 +1880,8 @@ function populateCommitModelDropdown() {
 	// Filter models that support commit generation (openai, openai-responses, anthropic, ollama apiMode)
 	const commitCompatibleModels = state.models
 		.filter((model) => {
-			const apiMode = model.apiMode || "openai";
-			return apiMode !== "gemini" && !model.id.startsWith("__provider__");
+			const apiMode = model.apiMode || state.providerInfo[model.owned_by]?.apiMode || "openai";
+			return apiMode !== "gemini" && !isProviderPlaceholderModel(model);
 		})
 		.sort((a, b) => a.id.localeCompare(b.id));
 
@@ -1259,7 +1938,7 @@ function populateModelForm(model) {
 	}
 
 	const providerInfo = state.providerInfo[currentProvider];
-	const fetchBaseUrl = model.baseUrl || state.baseUrl;
+	const fetchBaseUrl = providerInfo?.baseUrl || model.baseUrl || state.baseUrl;
 	const fetchApiKey = state.providerKeys[currentProvider] || state.apiKey;
 	const fetchApiMode = providerInfo?.apiMode || model.apiMode || modelApiModeInput.value || "openai";
 
@@ -1269,19 +1948,20 @@ function populateModelForm(model) {
 		baseUrl: fetchBaseUrl,
 		apiKey: fetchApiKey,
 		apiMode: fetchApiMode,
-		headers: model.headers,
+		headers: providerInfo?.headers ?? model.headers,
 	});
 
 	modelProviderInput.value = currentProvider;
+	modelProviderApiKeyInput.value = "";
 	modelDisplayNameInput.value = model.displayName || "";
 	modelConfigIdInput.value = model.configId || "";
-	modelBaseUrlInput.value = model.baseUrl || "";
+	modelBaseUrlInput.value = model.baseUrl || providerInfo?.baseUrl || "";
 	modelFamilyInput.value = model.family || "";
 	modelContextLengthInput.value = model.context_length || "";
 	modelMaxTokensInput.value = model.max_tokens || "";
 	modelVisionInput.value = model.vision !== undefined ? String(model.vision) : "";
 	modelToolCallingInput.value = model.toolCalling !== undefined ? String(model.toolCalling) : "";
-	modelApiModeInput.value = model.apiMode || "openai";
+	modelApiModeInput.value = model.apiMode || providerInfo?.apiMode || "openai";
 	modelTemperatureInput.value = model.temperature !== undefined && model.temperature !== null ? model.temperature : "";
 	modelTopPInput.value = model.top_p !== undefined && model.top_p !== null ? model.top_p : "";
 	modelDelayInput.value = model.delay || "";
@@ -1291,6 +1971,12 @@ function populateModelForm(model) {
 	modelPresencePenaltyInput.value = model.presence_penalty || "";
 	modelRepetitionPenaltyInput.value = model.repetition_penalty || "";
 	modelReasoningEffortInput.value = model.reasoning_effort || "";
+	modelSupportsReasoningEffortInput.value =
+		model.supports_reasoning_effort !== undefined ? String(model.supports_reasoning_effort) : "";
+	modelSupportedReasoningEffortsInput.value = Array.isArray(model.supported_reasoning_efforts)
+		? model.supported_reasoning_efforts.join(",")
+		: "";
+	modelDefaultReasoningEffortInput.value = model.default_reasoning_effort || "";
 	modelEnableThinkingInput.value = model.enable_thinking !== undefined ? String(model.enable_thinking) : "";
 	modelThinkingBudgetInput.value = model.thinking_budget || "";
 	modelIncludeReasoningInput.value =
@@ -1308,13 +1994,17 @@ function populateModelForm(model) {
 		modelThinkingTypeInput.value = model.thinking.type || "";
 	}
 	// Populate headers and extra
-	modelHeadersInput.value = model.headers ? JSON.stringify(model.headers, null, 2) : "";
+	const headers = model.headers ?? providerInfo?.headers;
+	modelHeadersInput.value = headers ? JSON.stringify(headers, null, 2) : "";
 	modelExtraInput.value = model.extra ? JSON.stringify(model.extra, null, 2) : "";
+	modelPromptCacheInput.value = model.prompt_cache ? JSON.stringify(model.prompt_cache, null, 2) : "";
 	// Mark that we're in editing mode by setting an attribute
 	modelIdInput.setAttribute("data-editing", "true");
 	// Disable BaseURL and apiMode fields when editing
 	modelBaseUrlInput.disabled = true;
 	modelApiModeInput.disabled = true;
+	setModelFormMode("edit");
+	updateModelProviderKeyPlaceholder();
 }
 
 // Initialize dropdown event listeners

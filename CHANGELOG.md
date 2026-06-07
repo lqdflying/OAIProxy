@@ -1,5 +1,14 @@
 # Change Log
 
+## 0.1.13 (2026-06-08)
+
+- Redesign Add Model around Quick Setup presets with multi-select add/remove, configured/ready state actions, best-practice model parameters, context limits, and an advanced customize path.
+- Add predefined provider/model presets for OpenAI, Anthropic, Kimi, DeepSeek, Xiaomi MiMo, MiniMax, Gemini, and Ollama, including MiniMax Anthropic cache-control defaults and MiMo limited to `mimo-v2.5-pro`.
+- Keep Provider Management data local to each VS Code instance instead of writing hidden `__provider__...` model rows into synced JSON settings, while migrating old hidden provider rows out of `oaicopilot.models`.
+- Save Quick Setup models as real model JSON with effective provider URL/API mode, preserve manual custom model setup, and show a clear Provider Management setup reminder when synced inherited models are used on a new VS Code instance without local provider config.
+- Simplify Model Management by removing legacy Temperature, Top P, and Delay columns, and add batch model removal from Quick Setup.
+- Update OAIProxy branding in the status bar to use `$(server-process)`, remove the logo image from the token usage hover, and add the OAIProxy sample screenshot to the extension README pages.
+
 ## 0.1.12 (2026-06-07)
 
 - Add a Copilot-style OAIProxy token usage status hover with context/input budget totals and explicit System / Project Context, User Prompt, Conversation, Tool Definitions, Tool Calls / Results, Images / Binary, and Reasoning token buckets.

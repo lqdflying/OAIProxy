@@ -1,10 +1,16 @@
 import * as vscode from "vscode";
 import { HuggingFaceChatModelProvider } from "./provider";
-import type { HFModelItem } from "./types";
+import type { HFModelItem, ProviderConfigItem } from "./types";
 import { initStatusBar } from "./statusBar";
 import { ConfigViewPanel } from "./views/configView";
 import { logger } from "./logger";
 import { getModelProviderId, normalizeUserModels, parseModelId } from "./utils";
+import {
+	isProviderPlaceholderModel,
+	normalizeProviderConfigs,
+	PROVIDER_CONFIG_STORAGE_KEY,
+	resolveProviderBackedModel,
+} from "./providerTransport";
 import { abortCommitGeneration, generateCommitMsg } from "./gitCommit/commitMessageGenerator";
 import { TokenizerManager } from "./tokenizer/tokenizerManager";
 import { VersionManager } from "./versionManager";
@@ -34,14 +40,16 @@ export function activate(context: vscode.ExtensionContext) {
 	const tokenCountStatusBarItem: vscode.StatusBarItem = initStatusBar(context);
 	const usageOutputChannel = vscode.window.createOutputChannel("OAIProxy Usage");
 	context.subscriptions.push(usageOutputChannel);
-	const chatProvider = new HuggingFaceChatModelProvider(context.secrets, tokenCountStatusBarItem);
+	const chatProvider = new HuggingFaceChatModelProvider(context.secrets, context.globalState, tokenCountStatusBarItem);
 	context.subscriptions.push(chatProvider);
 	// Register the provider under the vendor id used in package.json.
 	context.subscriptions.push(vscode.lm.registerLanguageModelChatProvider(LANGUAGE_MODEL_VENDOR, chatProvider));
 	refreshLanguageModels(chatProvider);
 	scheduleLanguageModelWarmup(context);
 	const openConfigurationPanel = () => {
-		ConfigViewPanel.openPanel(context.extensionUri, context.secrets, () => refreshLanguageModels(chatProvider));
+		ConfigViewPanel.openPanel(context.extensionUri, context.secrets, context.globalState, () =>
+			refreshLanguageModels(chatProvider)
+		);
 	};
 
 	// Management command to configure API key
@@ -49,14 +57,15 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand("oaiproxy.setApikey", async (...args: unknown[]) => {
 			const config = vscode.workspace.getConfiguration();
 			const userModels = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
-			const providerFromArgs = getProviderFromCommandArgs(args, userModels);
+			const providerConfigs = normalizeProviderConfigs(context.globalState.get<unknown>(PROVIDER_CONFIG_STORAGE_KEY, []));
+			const providerFromArgs = getProviderFromCommandArgs(args, userModels, providerConfigs);
 
 			if (providerFromArgs) {
 				await configureApiKey(context, chatProvider, providerFromArgs);
 				return;
 			}
 
-			const providerTargets = getProviderKeyTargets(userModels);
+			const providerTargets = getProviderKeyTargets(userModels, providerConfigs);
 			if (providerTargets.length > 0) {
 				const selectedTarget = await vscode.window.showQuickPick(
 					[
@@ -93,11 +102,12 @@ export function activate(context: vscode.ExtensionContext) {
 			// Get provider list from configuration
 			const config = vscode.workspace.getConfiguration();
 			const userModels = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
-			const providers = getProviderKeyTargets(userModels);
+			const providerConfigs = normalizeProviderConfigs(context.globalState.get<unknown>(PROVIDER_CONFIG_STORAGE_KEY, []));
+			const providers = getProviderKeyTargets(userModels, providerConfigs);
 
 			if (providers.length === 0) {
 				vscode.window.showErrorMessage(
-					"No provider-specific models found in oaicopilot.models. Configure at least one model with owned_by and baseUrl first."
+					"No providers found. Add a provider in OAIProxy Provider Management first."
 				);
 				return;
 			}
@@ -133,11 +143,12 @@ export function activate(context: vscode.ExtensionContext) {
 		vscode.commands.registerCommand("oaiproxy.checkProviderUsage", async () => {
 			const config = vscode.workspace.getConfiguration();
 			const userModels = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
-			const providers = getProviderUsageTargets(userModels);
+			const providerConfigs = normalizeProviderConfigs(context.globalState.get<unknown>(PROVIDER_CONFIG_STORAGE_KEY, []));
+			const providers = getProviderUsageTargets(userModels, providerConfigs);
 
 			if (providers.length === 0) {
 				vscode.window.showInformationMessage(
-					"No configured OpenAI, Anthropic, DeepSeek, Kimi/Moonshot, or MiniMax providers found in oaicopilot.models."
+					"No configured OpenAI, Anthropic, DeepSeek, Kimi/Moonshot, or MiniMax providers found."
 				);
 				return;
 			}
@@ -165,9 +176,9 @@ export function activate(context: vscode.ExtensionContext) {
 
 	// Register the generateGitCommitMessage command handler
 	context.subscriptions.push(
-		vscode.commands.registerCommand("oaiproxy.generateGitCommitMessage", async (scm) => {
-			generateCommitMsg(context.secrets, scm);
-		}),
+			vscode.commands.registerCommand("oaiproxy.generateGitCommitMessage", async (scm) => {
+				generateCommitMsg(context.secrets, context.globalState, scm);
+			}),
 		vscode.commands.registerCommand("oaiproxy.abortGitCommitMessage", () => {
 			abortCommitGeneration();
 		})
@@ -179,7 +190,10 @@ export function activate(context: vscode.ExtensionContext) {
 			if (e.affectsConfiguration("oaicopilot.logLevel")) {
 				logger.reloadConfig();
 			}
-			if (e.affectsConfiguration("oaicopilot.models") || e.affectsConfiguration("oaicopilot.baseUrl")) {
+			if (
+				e.affectsConfiguration("oaicopilot.models") ||
+				e.affectsConfiguration("oaicopilot.baseUrl")
+			) {
 				refreshLanguageModels(chatProvider);
 			}
 		})
@@ -237,9 +251,32 @@ async function configureApiKey(
 	);
 }
 
-function getProviderKeyTargets(userModels: HFModelItem[]): ProviderKeyTarget[] {
+function getProviderKeyTargets(
+	userModels: HFModelItem[],
+	providerConfigs: readonly ProviderConfigItem[] = []
+): ProviderKeyTarget[] {
 	const providers = new Map<string, ProviderKeyTarget>();
-	for (const model of userModels) {
+	for (const providerConfig of providerConfigs) {
+		const provider = providerConfig.provider.trim();
+		if (!provider || !providerConfig.baseUrl) {
+			continue;
+		}
+		const normalizedProvider = provider.toLowerCase();
+		if (!providers.has(normalizedProvider)) {
+			providers.set(normalizedProvider, {
+				provider: normalizedProvider,
+				label: provider,
+				baseUrl: providerConfig.baseUrl,
+			});
+		}
+	}
+	const sortedModels = [...userModels].sort((a, b) => {
+		if (isProviderPlaceholderModel(a) === isProviderPlaceholderModel(b)) {
+			return 0;
+		}
+		return isProviderPlaceholderModel(a) ? -1 : 1;
+	});
+	for (const model of sortedModels) {
 		const provider = model.owned_by?.trim();
 		if (!provider || !model.baseUrl) {
 			continue;
@@ -257,8 +294,11 @@ function getProviderKeyTargets(userModels: HFModelItem[]): ProviderKeyTarget[] {
 	return Array.from(providers.values()).sort((a, b) => a.label.localeCompare(b.label));
 }
 
-function getProviderUsageTargets(userModels: HFModelItem[]): ProviderUsageTarget[] {
-	return getProviderKeyTargets(userModels)
+function getProviderUsageTargets(
+	userModels: HFModelItem[],
+	providerConfigs: readonly ProviderConfigItem[] = []
+): ProviderUsageTarget[] {
+	return getProviderKeyTargets(userModels, providerConfigs)
 		.map((target) => {
 			const adapter = getProviderUsageAdapter(target.provider, target.baseUrl);
 			return adapter ? { ...target, adapter } : undefined;
@@ -339,9 +379,13 @@ async function promptForUsageApiKey(
 	return trimmed;
 }
 
-function getProviderFromCommandArgs(args: readonly unknown[], userModels: HFModelItem[]): string | undefined {
+function getProviderFromCommandArgs(
+	args: readonly unknown[],
+	userModels: HFModelItem[],
+	providerConfigs: readonly ProviderConfigItem[] = []
+): string | undefined {
 	for (const arg of args) {
-		const provider = getProviderFromCommandArg(arg, userModels);
+		const provider = getProviderFromCommandArg(arg, userModels, providerConfigs);
 		if (provider) {
 			return provider;
 		}
@@ -349,9 +393,13 @@ function getProviderFromCommandArgs(args: readonly unknown[], userModels: HFMode
 	return undefined;
 }
 
-function getProviderFromCommandArg(arg: unknown, userModels: HFModelItem[]): string | undefined {
+function getProviderFromCommandArg(
+	arg: unknown,
+	userModels: HFModelItem[],
+	providerConfigs: readonly ProviderConfigItem[] = []
+): string | undefined {
 	if (typeof arg === "string") {
-		return getProviderFromString(arg, userModels);
+		return getProviderFromString(arg, userModels, providerConfigs);
 	}
 	if (!arg || typeof arg !== "object") {
 		return undefined;
@@ -359,19 +407,19 @@ function getProviderFromCommandArg(arg: unknown, userModels: HFModelItem[]): str
 
 	const directProvider = getModelProviderId(arg);
 	if (directProvider) {
-		return getProviderFromString(directProvider, userModels);
+		return getProviderFromString(directProvider, userModels, providerConfigs);
 	}
 
 	const obj = arg as Record<string, unknown>;
 	for (const key of ["id", "modelId", "name"]) {
-		const provider = getProviderFromString(obj[key], userModels);
+		const provider = getProviderFromString(obj[key], userModels, providerConfigs);
 		if (provider) {
 			return provider;
 		}
 	}
 
 	for (const key of ["model", "item"]) {
-		const provider = getProviderFromCommandArg(obj[key], userModels);
+		const provider = getProviderFromCommandArg(obj[key], userModels, providerConfigs);
 		if (provider) {
 			return provider;
 		}
@@ -380,14 +428,18 @@ function getProviderFromCommandArg(arg: unknown, userModels: HFModelItem[]): str
 	return undefined;
 }
 
-function getProviderFromString(value: unknown, userModels: HFModelItem[]): string | undefined {
+function getProviderFromString(
+	value: unknown,
+	userModels: HFModelItem[],
+	providerConfigs: readonly ProviderConfigItem[] = []
+): string | undefined {
 	if (typeof value !== "string" || !value.trim()) {
 		return undefined;
 	}
 
 	const trimmed = value.trim();
 	const normalized = trimmed.toLowerCase();
-	const providerTargets = getProviderKeyTargets(userModels);
+	const providerTargets = getProviderKeyTargets(userModels, providerConfigs);
 	const matchedProvider = providerTargets.find((target) => target.provider === normalized);
 	if (matchedProvider) {
 		return matchedProvider.provider;
@@ -395,7 +447,8 @@ function getProviderFromString(value: unknown, userModels: HFModelItem[]): strin
 
 	const parsedModelId = parseModelId(trimmed);
 	const matchedModel = userModels.find((model) => {
-		if (model.id !== parsedModelId.baseId || !model.baseUrl) {
+		const resolvedModel = resolveProviderBackedModel(model, userModels, providerConfigs);
+		if (resolvedModel?.id !== parsedModelId.baseId || !resolvedModel.baseUrl) {
 			return false;
 		}
 		return parsedModelId.configId ? model.configId === parsedModelId.configId : true;

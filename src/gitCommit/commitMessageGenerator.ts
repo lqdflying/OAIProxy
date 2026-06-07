@@ -6,6 +6,12 @@ import { OpenaiResponsesApi } from "../openai/openaiResponsesApi";
 import { AnthropicApi } from "../anthropic/anthropicApi";
 import { OllamaApi } from "../ollama/ollamaApi";
 import { normalizeUserModels } from "../utils";
+import {
+	getMissingProviderSetupMessage,
+	normalizeProviderConfigs,
+	PROVIDER_CONFIG_STORAGE_KEY,
+	resolveProviderBackedModel,
+} from "../providerTransport";
 import { logger } from "../logger";
 import type { HFModelItem } from "../types";
 
@@ -35,7 +41,11 @@ const DEFAULT_PROMPT = {
 	user: "Notes from developer (ignore if not relevant): {{USER_CURRENT_INPUT}}",
 };
 
-export async function generateCommitMsg(secrets: vscode.SecretStorage, scm?: vscode.SourceControl) {
+export async function generateCommitMsg(
+	secrets: vscode.SecretStorage,
+	globalState: vscode.Memento,
+	scm?: vscode.SourceControl
+) {
 	try {
 		const gitExtension = vscode.extensions.getExtension("vscode.git")?.exports;
 		if (!gitExtension) {
@@ -58,18 +68,22 @@ export async function generateCommitMsg(secrets: vscode.SecretStorage, scm?: vsc
 				throw new Error("Repository not found for provided SCM");
 			}
 
-			await generateCommitMsgForRepository(secrets, repository);
+			await generateCommitMsgForRepository(secrets, globalState, repository);
 			return;
 		}
 
-		await orchestrateWorkspaceCommitMsgGeneration(secrets, git.repositories);
+		await orchestrateWorkspaceCommitMsgGeneration(secrets, globalState, git.repositories);
 	} catch (error) {
 		const errorMessage = error instanceof Error ? error.message : String(error);
 		vscode.window.showErrorMessage(`[Commit Generation Failed] ${errorMessage}`);
 	}
 }
 
-async function orchestrateWorkspaceCommitMsgGeneration(secrets: vscode.SecretStorage, repos: GitRepository[]) {
+async function orchestrateWorkspaceCommitMsgGeneration(
+	secrets: vscode.SecretStorage,
+	globalState: vscode.Memento,
+	repos: GitRepository[]
+) {
 	const reposWithChanges = await filterForReposWithChanges(repos);
 
 	if (reposWithChanges.length === 0) {
@@ -80,7 +94,7 @@ async function orchestrateWorkspaceCommitMsgGeneration(secrets: vscode.SecretSto
 	if (reposWithChanges.length === 1) {
 		// Only one repo with changes, generate for it
 		const repo = reposWithChanges[0];
-		await generateCommitMsgForRepository(secrets, repo);
+		await generateCommitMsgForRepository(secrets, globalState, repo);
 		return;
 	}
 
@@ -95,14 +109,14 @@ async function orchestrateWorkspaceCommitMsgGeneration(secrets: vscode.SecretSto
 		// Generate for all repositories with changes
 		for (const repo of reposWithChanges) {
 			try {
-				await generateCommitMsgForRepository(secrets, repo);
+					await generateCommitMsgForRepository(secrets, globalState, repo);
 			} catch (error) {
 				console.error(`Failed to generate commit message for ${repo.rootUri.fsPath}:`, error);
 			}
 		}
 	} else {
 		// Generate for selected repository
-		await generateCommitMsgForRepository(secrets, selection.repo);
+		await generateCommitMsgForRepository(secrets, globalState, selection.repo);
 	}
 }
 
@@ -142,7 +156,11 @@ async function promptRepoSelection(repos: GitRepository[]) {
 	});
 }
 
-async function generateCommitMsgForRepository(secrets: vscode.SecretStorage, repository: GitRepository) {
+async function generateCommitMsgForRepository(
+	secrets: vscode.SecretStorage,
+	globalState: vscode.Memento,
+	repository: GitRepository
+) {
 	const inputBox = repository.inputBox;
 	const repoPath = repository.rootUri.fsPath;
 	const gitDiff = await getGitDiff(repoPath);
@@ -157,11 +175,16 @@ async function generateCommitMsgForRepository(secrets: vscode.SecretStorage, rep
 			title: `Generating commit message for ${repoPath.split(path.sep).pop() || "repository"}...`,
 			cancellable: true,
 		},
-		() => performCommitMsgGeneration(secrets, gitDiff, inputBox)
+			() => performCommitMsgGeneration(secrets, globalState, gitDiff, inputBox)
 	);
 }
 
-async function performCommitMsgGeneration(secrets: vscode.SecretStorage, gitDiff: string, inputBox: GitInputBox) {
+async function performCommitMsgGeneration(
+	secrets: vscode.SecretStorage,
+	globalState: vscode.Memento,
+	gitDiff: string,
+	inputBox: GitInputBox
+) {
 	const startTime = Date.now();
 	let modelId: string | undefined;
 	try {
@@ -189,6 +212,7 @@ async function performCommitMsgGeneration(secrets: vscode.SecretStorage, gitDiff
 
 		// Get user models from configuration
 		const userModels = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+		const providerConfigs = normalizeProviderConfigs(globalState.get<unknown>(PROVIDER_CONFIG_STORAGE_KEY, []));
 
 		// Filter models that are marked for commit generation
 		const commitModels = userModels.filter((model: HFModelItem) => model.useForCommitGeneration === true);
@@ -200,7 +224,11 @@ async function performCommitMsgGeneration(secrets: vscode.SecretStorage, gitDiff
 		}
 
 		// Use the first model marked for commit generation
-		const selectedModel = commitModels[0];
+		const missingProviderSetupMessage = getMissingProviderSetupMessage(commitModels[0], userModels, providerConfigs);
+		if (missingProviderSetupMessage) {
+			throw new Error(missingProviderSetupMessage);
+		}
+		const selectedModel = resolveProviderBackedModel(commitModels[0], userModels, providerConfigs) ?? commitModels[0];
 		modelId = selectedModel.id;
 		logger.info("commit.start", { modelId });
 

@@ -6,6 +6,7 @@ import { getLatestCacheUsage, resetCacheUsageForTests } from "../cacheUsage";
 import {
 	applyOpenAIPromptCache,
 	extractCacheUsage,
+	isAnthropicPromptCacheEnabled,
 	logCacheUsage,
 	parseCacheControlPart,
 } from "../promptCache";
@@ -63,6 +64,39 @@ suite("promptCache", () => {
 
 		assert.strictEqual(body.prompt_cache_key, "from-extra");
 		assert.strictEqual(body.prompt_cache_retention, "24h");
+	});
+
+	test("enables Anthropic cache control for known Anthropic-compatible endpoints by default", () => {
+		assert.strictEqual(
+			isAnthropicPromptCacheEnabled(model({
+				id: "MiniMax-M3",
+				owned_by: "minimax-anthropic",
+				apiMode: "anthropic",
+				baseUrl: "https://api.minimax.io/anthropic",
+			})),
+			true
+		);
+		assert.strictEqual(
+			isAnthropicPromptCacheEnabled(model({
+				id: "custom",
+				owned_by: "custom",
+				apiMode: "anthropic",
+				baseUrl: "https://example.test/anthropic",
+			})),
+			false
+		);
+		assert.strictEqual(
+			isAnthropicPromptCacheEnabled(model({
+				id: "MiniMax-M3",
+				owned_by: "minimax-anthropic",
+				apiMode: "anthropic",
+				baseUrl: "https://api.minimax.io/anthropic",
+				prompt_cache: {
+					enabled: false,
+				},
+			})),
+			false
+		);
 	});
 
 	test("parses cache_control data parts", () => {

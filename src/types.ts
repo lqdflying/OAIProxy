@@ -25,6 +25,11 @@ export interface HFModelItem {
 	configId?: string;
 	displayName?: string;
 	baseUrl?: string;
+	/**
+	 * If true, provider transport fields (baseUrl, apiMode, headers) are resolved
+	 * from Provider Management instead of this model row.
+	 */
+	inheritProvider?: boolean;
 	providers?: HFProvider[];
 	architecture?: HFArchitecture;
 	context_length?: number;
@@ -105,6 +110,13 @@ export interface HFModelItem {
 	delay?: number;
 }
 
+export interface ProviderConfigItem {
+	provider: string;
+	baseUrl?: string;
+	apiMode?: HFApiMode;
+	headers?: Record<string, string>;
+}
+
 /**
  * OpenRouter reasoning configuration
  */
@@ -117,8 +129,9 @@ export interface ReasoningConfig {
 
 /**
  * Prompt/KV cache configuration. Defaults are intentionally conservative:
- * automatic provider caching can still happen, while explicit cache-control
- * write behavior is opt-in unless the caller sends cache_control parts.
+ * automatic provider caching can still happen, and known first-party
+ * Anthropic-compatible endpoints get stable-prefix cache_control unless
+ * disabled explicitly.
  */
 export interface PromptCacheConfig {
 	enabled?: boolean;

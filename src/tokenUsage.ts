@@ -162,7 +162,7 @@ export function formatTokenUsageTooltip(report: TokenUsageReport): vscode.Markdo
 	const warning = getWarningText(report);
 	const markdown = new vscode.MarkdownString(undefined, true);
 	markdown.supportThemeIcons = true;
-	markdown.appendMarkdown(`$(copilot) **OAIProxy**\n\n`);
+	markdown.appendMarkdown(`$(server-process) **OAIProxy**\n\n`);
 	markdown.appendMarkdown(`**${formatTokenPercentage(report.inputTokens, report.maxContextTokens)}** of context used\n\n`);
 	markdown.appendMarkdown(
 		`${formatTokenCount(report.inputTokens)} / ${formatTokenCount(report.maxContextTokens)} context · ${formatTokenCount(report.maxOutputTokens)} output reserve\n\n`

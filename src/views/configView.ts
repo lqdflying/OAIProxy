@@ -1,10 +1,21 @@
 import * as vscode from "vscode";
 import { randomBytes } from "crypto";
-import type { HFApiMode, HFModelItem } from "../types";
+import type { HFApiMode, HFModelItem, ProviderConfigItem } from "../types";
 import { normalizeUserModels, parseModelId } from "../utils";
 import { fetchModels } from "../provideModel";
 import { VersionManager } from "../versionManager";
 import { PROVIDER_PRESETS, type ProviderPreset } from "../providerPresets";
+import { MODEL_PRESETS, type ModelPreset } from "../modelPresets";
+import {
+	deleteProviderConfig,
+	findProviderPlaceholderModel,
+	findProviderTransportModel,
+	normalizeProviderConfigs,
+	PROVIDER_CONFIG_STORAGE_KEY,
+	resolveInheritedProviderModels,
+	toProviderInheritedModel,
+	upsertProviderConfig,
+} from "../providerTransport";
 import {
 	checkProviderUsage,
 	getProviderSecretKey,
@@ -29,9 +40,11 @@ interface InitPayload {
 	commitModel: string;
 	commitLanguage: string;
 	models: HFModelItem[];
+	providers: ProviderConfigItem[];
 	providerKeys: Record<string, string>;
 	providerUsageKeys: Record<string, string>;
 	providerPresets: readonly ProviderPreset[];
+	modelPresets: readonly ModelPreset[];
 }
 
 export type ProviderApiKeyChange =
@@ -61,6 +74,98 @@ export function resolveProviderApiKeyChange(
 	return { kind: "preserve", secretKey, legacySecretKey };
 }
 
+export interface BatchAddModelsResult {
+	models: HFModelItem[];
+	added: HFModelItem[];
+	skipped: HFModelItem[];
+}
+
+export interface BatchDeleteModelsResult {
+	models: HFModelItem[];
+	removedIds: string[];
+}
+
+export interface BatchAddModelsOptions {
+	inheritProvider?: boolean;
+	providerConfigs?: readonly ProviderConfigItem[];
+}
+
+export function getModelConfigKey(model: Pick<HFModelItem, "id" | "configId">): string {
+	return `${model.id}${model.configId ? "::" + model.configId : ""}`;
+}
+
+export function resolveBatchAddModels(
+	existingModels: HFModelItem[],
+	candidateModels: HFModelItem[],
+	options: BatchAddModelsOptions = {}
+): BatchAddModelsResult {
+	const prepared = options.inheritProvider
+		? resolveInheritedProviderModels(existingModels, candidateModels, options.providerConfigs ?? [])
+		: { models: [...existingModels], inheritedModels: candidateModels };
+	const existingKeys = new Set(prepared.models.map(getModelConfigKey));
+	const models = [...prepared.models];
+	const added: HFModelItem[] = [];
+	const skipped: HFModelItem[] = [];
+
+	for (const model of prepared.inheritedModels) {
+		const key = getModelConfigKey(model);
+		if (existingKeys.has(key)) {
+			skipped.push(model);
+			continue;
+		}
+
+		existingKeys.add(key);
+		models.push(model);
+		added.push(model);
+	}
+
+	return { models, added, skipped };
+}
+
+export function resolveBatchDeleteModels(existingModels: HFModelItem[], modelIds: string[]): BatchDeleteModelsResult {
+	const targets = modelIds.map(parseModelId);
+	const removedIds: string[] = [];
+	const models = existingModels.filter((model) => {
+		const shouldRemove = targets.some((target) => {
+			return (
+				model.id === target.baseId &&
+				((target.configId && model.configId === target.configId) || (!target.configId && !model.configId))
+			);
+		});
+		if (shouldRemove) {
+			removedIds.push(getModelConfigKey(model));
+		}
+		return !shouldRemove;
+	});
+
+	return { models, removedIds };
+}
+
+function migrateProviderPlaceholderModels(
+	models: readonly HFModelItem[],
+	providers: readonly ProviderConfigItem[]
+): { models: HFModelItem[]; providers: ProviderConfigItem[]; changed: boolean } {
+	let nextProviders = [...providers];
+	const nextModels: HFModelItem[] = [];
+	let changed = false;
+
+	for (const model of models) {
+		if (!findProviderPlaceholderModel([model], model.owned_by)) {
+			nextModels.push(model);
+			continue;
+		}
+
+		changed = true;
+		nextProviders = upsertProviderConfig(nextProviders, model.owned_by, {
+			baseUrl: model.baseUrl,
+			apiMode: model.apiMode,
+			headers: model.headers,
+		});
+	}
+
+	return { models: nextModels, providers: nextProviders, changed };
+}
+
 interface ExportConfig {
 	version: string;
 	exportDate: string;
@@ -76,6 +181,7 @@ interface ExportConfig {
 	commitLanguage: string;
 	commitModel: string;
 	models: HFModelItem[];
+	providers?: ProviderConfigItem[];
 	providerKeys: Record<string, string>;
 	providerUsageKeys?: Record<string, string>;
 	readFileLines: number;
@@ -120,9 +226,18 @@ type IncomingMessage =
 	  }
 	| { type: "deleteProvider"; provider: string }
 	| { type: "checkProviderUsage"; provider: string; usageApiKey?: string }
-	| { type: "addModel"; model: HFModelItem }
-	| { type: "updateModel"; model: HFModelItem; originalModelId?: string; originalConfigId?: string }
+	| { type: "addModel"; model: HFModelItem; providerApiKey?: string; inheritProvider?: boolean }
+	| { type: "addModels"; models: HFModelItem[]; providerApiKeys?: Record<string, string>; inheritProvider?: boolean }
+	| {
+			type: "updateModel";
+			model: HFModelItem;
+			originalModelId?: string;
+			originalConfigId?: string;
+			providerApiKey?: string;
+			inheritProvider?: boolean;
+	  }
 	| { type: "deleteModel"; modelId: string }
+	| { type: "deleteModels"; modelIds: string[] }
 	| { type: "requestConfirm"; id: string; message: string; action: string }
 	| { type: "exportConfig" }
 	| { type: "importConfig" };
@@ -145,6 +260,7 @@ export class ConfigViewPanel {
 	public static openPanel(
 		extensionUri: vscode.Uri,
 		secrets: vscode.SecretStorage,
+		globalState: vscode.Memento,
 		onConfigurationChanged?: () => void
 	) {
 		const column = vscode.window.activeTextEditor ? vscode.window.activeTextEditor.viewColumn : undefined;
@@ -166,13 +282,14 @@ export class ConfigViewPanel {
 		);
 		panel.iconPath = vscode.Uri.joinPath(extensionUri, "assets", "icon.png");
 
-		ConfigViewPanel.currentPanel = new ConfigViewPanel(panel, extensionUri, secrets, onConfigurationChanged);
+		ConfigViewPanel.currentPanel = new ConfigViewPanel(panel, extensionUri, secrets, globalState, onConfigurationChanged);
 	}
 
 	private constructor(
 		panel: vscode.WebviewPanel,
 		extensionUri: vscode.Uri,
 		secrets: vscode.SecretStorage,
+		private readonly globalState: vscode.Memento,
 		onConfigurationChanged?: () => void
 	) {
 		this.panel = panel;
@@ -275,16 +392,28 @@ export class ConfigViewPanel {
 				await this.checkProviderUsage(message.provider, message.usageApiKey);
 				break;
 			case "addModel":
-				await this.addModel(message.model);
+				await this.addModel(message.model, message.providerApiKey, message.inheritProvider);
+				break;
+			case "addModels":
+				await this.addModels(message.models, message.providerApiKeys, message.inheritProvider);
 				break;
 			case "updateModel":
-				await this.updateModel(message.model, message.originalModelId, message.originalConfigId);
+				await this.updateModel(
+					message.model,
+					message.originalModelId,
+					message.originalConfigId,
+					message.providerApiKey,
+					message.inheritProvider
+				);
 				break;
 			case "requestConfirm":
 				await this.handleConfirmRequest(message.id, message.message, message.action);
 				break;
 			case "deleteModel":
 				await this.deleteModel(message.modelId);
+				break;
+			case "deleteModels":
+				await this.deleteModels(message.modelIds);
 				break;
 			case "exportConfig":
 				await this.exportConfig();
@@ -320,13 +449,28 @@ export class ConfigViewPanel {
 	private async sendInit() {
 		const config = vscode.workspace.getConfiguration();
 		const baseUrl = config.get<string>("oaicopilot.baseUrl", "https://api.openai.com/v1");
-		const models = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+		let models = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+		let providerConfigs = this.getProviderConfigs();
+		const migrated = migrateProviderPlaceholderModels(models, providerConfigs);
+		if (migrated.changed) {
+			models = migrated.models;
+			providerConfigs = migrated.providers;
+			await config.update("oaicopilot.models", models, vscode.ConfigurationTarget.Global);
+			await this.updateProviderConfigs(providerConfigs);
+		}
 
 		const apiKey = (await this.secrets.get("oaicopilot.apiKey")) ?? "";
 		const providerKeys: Record<string, string> = {};
 		const providerUsageKeys: Record<string, string> = {};
-		const providers = Array.from(new Set(models.map((m) => m.owned_by).filter(Boolean)));
-		for (const provider of providers) {
+		const providerIds = Array.from(
+			new Set([
+				...models.map((m) => m.owned_by).filter(Boolean),
+				...providerConfigs.map((provider) => provider.provider).filter(Boolean),
+				...PROVIDER_PRESETS.map((preset) => preset.provider),
+				...MODEL_PRESETS.map((preset) => preset.model.owned_by).filter(Boolean),
+			])
+		);
+		for (const provider of providerIds) {
 			const normalized = provider.toLowerCase();
 			let key = await this.secrets.get(`oaicopilot.apiKey.${normalized}`);
 			if (!key && normalized !== provider) {
@@ -372,9 +516,11 @@ export class ConfigViewPanel {
 			commitModel,
 			commitLanguage,
 			models,
+			providers: providerConfigs,
 			providerKeys,
 			providerUsageKeys,
 			providerPresets: PROVIDER_PRESETS,
+			modelPresets: MODEL_PRESETS,
 		};
 		this.panel.webview.postMessage({ type: "init", payload });
 	}
@@ -459,6 +605,14 @@ export class ConfigViewPanel {
 		this.onConfigurationChanged?.();
 	}
 
+	private getProviderConfigs(): ProviderConfigItem[] {
+		return normalizeProviderConfigs(this.globalState.get<unknown>(PROVIDER_CONFIG_STORAGE_KEY, []));
+	}
+
+	private async updateProviderConfigs(providers: readonly ProviderConfigItem[]): Promise<void> {
+		await this.globalState.update(PROVIDER_CONFIG_STORAGE_KEY, providers);
+	}
+
 	private async applyProviderApiKeyChange(provider: string, apiKey?: string, clearApiKey = false): Promise<void> {
 		const change = resolveProviderApiKeyChange(provider, apiKey, clearApiKey);
 		if (change.kind === "store") {
@@ -491,24 +645,20 @@ export class ConfigViewPanel {
 		}
 		await this.applyProviderApiKeyChange(trimmedProvider, apiKey, clearApiKey);
 
-		// Save provider configuration to the model list
 		const config = vscode.workspace.getConfiguration();
 		const models = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+		const providers = this.getProviderConfigs();
+		const migrated = migrateProviderPlaceholderModels(models, providers);
+		const updatedProviders = upsertProviderConfig(migrated.providers, trimmedProvider, {
+			baseUrl,
+			apiMode: (apiMode as HFApiMode) || "openai",
+			headers,
+		});
 
-		// If the provider doesn't have models yet, add a default model
-		const hasProviderModels = models.some((model) => model.owned_by === trimmedProvider);
-		if (!hasProviderModels) {
-			const defaultModel: HFModelItem = {
-				id: `__provider__${trimmedProvider}`,
-				owned_by: trimmedProvider,
-				baseUrl: baseUrl,
-				apiMode: (apiMode as HFApiMode) || "openai",
-				headers: headers,
-			};
-			models.push(defaultModel);
+		if (migrated.changed) {
+			await config.update("oaicopilot.models", migrated.models, vscode.ConfigurationTarget.Global);
 		}
-
-		await config.update("oaicopilot.models", models, vscode.ConfigurationTarget.Global);
+		await this.updateProviderConfigs(updatedProviders);
 		vscode.window.showInformationMessage(`Provider ${provider} has been added.`);
 		this.refreshConfiguration();
 		// Send refresh signal to frontend
@@ -530,25 +680,21 @@ export class ConfigViewPanel {
 		}
 		await this.applyProviderApiKeyChange(trimmedProvider, apiKey, clearApiKey);
 
-		// Update the provider's configuration in the model list
 		const config = vscode.workspace.getConfiguration();
 		const models = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
-
-		const updatedModels = models.map((model) => {
-			if (model.owned_by === trimmedProvider) {
-				const rest = { ...model };
-				delete rest.headers;
-				return {
-					...rest,
-					baseUrl: baseUrl || model.baseUrl,
-					apiMode: (apiMode as HFApiMode) || model.apiMode,
-					...(headers !== undefined && { headers }),
-				};
-			}
-			return model;
+		const providers = this.getProviderConfigs();
+		const migrated = migrateProviderPlaceholderModels(models, providers);
+		const existingProviderModel = findProviderTransportModel(migrated.models, trimmedProvider, migrated.providers);
+		const updatedProviders = upsertProviderConfig(migrated.providers, trimmedProvider, {
+			baseUrl: baseUrl || existingProviderModel?.baseUrl,
+			apiMode: ((apiMode as HFApiMode) || existingProviderModel?.apiMode || "openai") as HFApiMode,
+			headers,
 		});
 
-		await config.update("oaicopilot.models", updatedModels, vscode.ConfigurationTarget.Global);
+		if (migrated.changed) {
+			await config.update("oaicopilot.models", migrated.models, vscode.ConfigurationTarget.Global);
+		}
+		await this.updateProviderConfigs(updatedProviders);
 		vscode.window.showInformationMessage(`Provider ${provider} has been updated.`);
 		this.refreshConfiguration();
 		// Send refresh signal to frontend
@@ -571,9 +717,12 @@ export class ConfigViewPanel {
 		// Remove all models of this provider from the model list
 		const config = vscode.workspace.getConfiguration();
 		const models = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+		const providers = this.getProviderConfigs();
 		const filteredModels = models.filter((model) => model.owned_by !== trimmedProvider);
+		const updatedProviders = deleteProviderConfig(providers, trimmedProvider);
 
 		await config.update("oaicopilot.models", filteredModels, vscode.ConfigurationTarget.Global);
+		await this.updateProviderConfigs(updatedProviders);
 		vscode.window.showInformationMessage(`Provider ${provider} and all its models have been deleted.`);
 		this.refreshConfiguration();
 		// Send refresh signal to frontend
@@ -586,7 +735,10 @@ export class ConfigViewPanel {
 		try {
 			const config = vscode.workspace.getConfiguration();
 			const models = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
-			const model = models.find((item) => item.owned_by?.trim().toLowerCase() === normalizedProvider && item.baseUrl);
+			const providers = this.getProviderConfigs();
+			const model =
+				findProviderTransportModel(models, trimmedProvider, providers) ??
+				models.find((item) => item.owned_by?.trim().toLowerCase() === normalizedProvider && item.baseUrl);
 			const baseUrl = model?.baseUrl;
 			const adapter = getProviderUsageAdapter(trimmedProvider, baseUrl);
 			if (!adapter) {
@@ -629,33 +781,95 @@ export class ConfigViewPanel {
 		}
 	}
 
-	private async addModel(model: HFModelItem) {
+	private async applyModelApiKey(model: HFModelItem, providerApiKey?: string, inheritProvider = false) {
+		const trimmedApiKey = providerApiKey?.trim();
+		if (!trimmedApiKey) {
+			return;
+		}
+
+		if (inheritProvider || model.inheritProvider === true || model.baseUrl) {
+			await this.applyProviderApiKeyChange(model.owned_by, trimmedApiKey);
+			return;
+		}
+
+		await this.secrets.store("oaicopilot.apiKey", trimmedApiKey);
+	}
+
+	private async addModel(model: HFModelItem, providerApiKey?: string, inheritProvider = false) {
 		const config = vscode.workspace.getConfiguration();
-		const models = config.get<HFModelItem[]>("oaicopilot.models", []);
+		let models = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+		const providers = this.getProviderConfigs();
+		const modelToAdd = inheritProvider ? toProviderInheritedModel(model) : model;
+		if (inheritProvider) {
+			models = resolveInheritedProviderModels(models, [model], providers).models;
+		}
 
 		// Check if model with same id and configId already exists
 		const existingIndex = models.findIndex(
 			(m) =>
-				m.id === model.id && ((model.configId && m.configId === model.configId) || (!model.configId && !m.configId))
+				m.id === modelToAdd.id &&
+				((modelToAdd.configId && m.configId === modelToAdd.configId) || (!modelToAdd.configId && !m.configId))
 		);
 		if (existingIndex !== -1) {
-			vscode.window.showErrorMessage(`Model ${model.id}${model.configId ? "::" + model.configId : ""} already exists.`);
+			vscode.window.showErrorMessage(
+				`Model ${modelToAdd.id}${modelToAdd.configId ? "::" + modelToAdd.configId : ""} already exists.`
+			);
 			return;
 		}
 
-		models.push(model);
+		await this.applyModelApiKey(modelToAdd, providerApiKey, inheritProvider);
+		models.push(modelToAdd);
 		await config.update("oaicopilot.models", models, vscode.ConfigurationTarget.Global);
 		vscode.window.showInformationMessage(
-			`Model ${model.id}${model.configId ? "::" + model.configId : ""} has been added.`
+			`Model ${modelToAdd.id}${modelToAdd.configId ? "::" + modelToAdd.configId : ""} has been added.`
 		);
 		this.refreshConfiguration();
 		// Send refresh signal to frontend
 		await this.sendInit();
 	}
 
-	private async updateModel(model: HFModelItem, originalModelId?: string, originalConfigId?: string) {
+	private async addModels(
+		modelsToAdd: HFModelItem[],
+		providerApiKeys?: Record<string, string>,
+		inheritProvider = false
+	) {
 		const config = vscode.workspace.getConfiguration();
-		const models = config.get<HFModelItem[]>("oaicopilot.models", []);
+		const models = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+		const providers = this.getProviderConfigs();
+		const result = resolveBatchAddModels(models, modelsToAdd, { inheritProvider, providerConfigs: providers });
+
+		if (result.added.length === 0) {
+			vscode.window.showInformationMessage("No new models were added.");
+			await this.sendInit();
+			return;
+		}
+
+		for (const model of result.added) {
+			await this.applyModelApiKey(model, providerApiKeys?.[model.owned_by], inheritProvider);
+		}
+
+		await config.update("oaicopilot.models", result.models, vscode.ConfigurationTarget.Global);
+		const skippedSuffix = result.skipped.length ? ` ${result.skipped.length} already configured.` : "";
+		vscode.window.showInformationMessage(`${result.added.length} model(s) have been added.${skippedSuffix}`);
+		this.refreshConfiguration();
+		await this.sendInit();
+	}
+
+	private async updateModel(
+		model: HFModelItem,
+		originalModelId?: string,
+		originalConfigId?: string,
+		providerApiKey?: string,
+		inheritProvider = false
+	) {
+		const config = vscode.workspace.getConfiguration();
+		let models = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+		const providers = this.getProviderConfigs();
+		const shouldInheritProvider = inheritProvider || model.inheritProvider === true;
+		const modelToUpdate = shouldInheritProvider ? toProviderInheritedModel(model) : model;
+		if (shouldInheritProvider) {
+			models = resolveInheritedProviderModels(models, [model], providers).models;
+		}
 
 		// Find the model to update based on original id and configId
 		const updatedModels = models.map((m) => {
@@ -668,14 +882,15 @@ export class ConfigViewPanel {
 
 			if (isTargetModel) {
 				// Update with new values
-				return model;
+				return modelToUpdate;
 			}
 			return m;
 		});
 
+		await this.applyModelApiKey(modelToUpdate, providerApiKey, shouldInheritProvider);
 		await config.update("oaicopilot.models", updatedModels, vscode.ConfigurationTarget.Global);
 		vscode.window.showInformationMessage(
-			`Model ${model.id}${model.configId ? "::" + model.configId : ""} has been updated.`
+			`Model ${modelToUpdate.id}${modelToUpdate.configId ? "::" + modelToUpdate.configId : ""} has been updated.`
 		);
 		this.refreshConfiguration();
 		// Send refresh signal to frontend
@@ -702,6 +917,23 @@ export class ConfigViewPanel {
 		await this.sendInit();
 	}
 
+	private async deleteModels(modelIds: string[]) {
+		const config = vscode.workspace.getConfiguration();
+		const models = config.get<HFModelItem[]>("oaicopilot.models", []);
+		const result = resolveBatchDeleteModels(models, modelIds);
+
+		if (result.removedIds.length === 0) {
+			vscode.window.showInformationMessage("No matching models were deleted.");
+			await this.sendInit();
+			return;
+		}
+
+		await config.update("oaicopilot.models", result.models, vscode.ConfigurationTarget.Global);
+		vscode.window.showInformationMessage(`${result.removedIds.length} model(s) have been deleted.`);
+		this.refreshConfiguration();
+		await this.sendInit();
+	}
+
 	private async exportConfig() {
 		try {
 			const config = vscode.workspace.getConfiguration();
@@ -721,14 +953,17 @@ export class ConfigViewPanel {
 			const commitLanguage = config.get<string>("oaicopilot.commitLanguage", "English");
 			const readFileLines = config.get<number>("oaicopilot.readFileLines", 0);
 			const models = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+			const providerConfigs = this.getProviderConfigs();
 
 			const foundModel = models.find((model) => model.useForCommitGeneration === true);
 			const commitModel = foundModel ? `${foundModel.id}${foundModel.configId ? "::" + foundModel.configId : ""}` : "";
 
 			const providerKeys: Record<string, string> = {};
 			const providerUsageKeys: Record<string, string> = {};
-			const providers = Array.from(new Set(models.map((m) => m.owned_by).filter(Boolean)));
-			for (const provider of providers) {
+			const providerIds = Array.from(
+				new Set([...models.map((m) => m.owned_by).filter(Boolean), ...providerConfigs.map((item) => item.provider)])
+			);
+			for (const provider of providerIds) {
 				const normalized = provider.toLowerCase();
 				const key = await this.secrets.get(`oaicopilot.apiKey.${normalized}`);
 				if (key) {
@@ -750,6 +985,7 @@ export class ConfigViewPanel {
 				commitLanguage,
 				commitModel,
 				models,
+				providers: providerConfigs,
 				readFileLines,
 				providerKeys,
 				providerUsageKeys,
@@ -799,6 +1035,8 @@ export class ConfigViewPanel {
 			if (!Array.isArray(importData.models)) {
 				throw new Error("Invalid configuration file: models must be an array");
 			}
+			const importedProviders = normalizeProviderConfigs(importData.providers ?? []);
+			const migratedImport = migrateProviderPlaceholderModels(normalizeUserModels(importData.models), importedProviders);
 
 			const config = vscode.workspace.getConfiguration();
 
@@ -814,7 +1052,8 @@ export class ConfigViewPanel {
 				await this.secrets.delete("oaicopilot.apiKey");
 			}
 
-			await config.update("oaicopilot.models", importData.models, vscode.ConfigurationTarget.Global);
+			await config.update("oaicopilot.models", migratedImport.models, vscode.ConfigurationTarget.Global);
+			await this.updateProviderConfigs(migratedImport.providers);
 
 			for (const [provider, key] of Object.entries(importData.providerKeys)) {
 				const normalized = provider.toLowerCase();

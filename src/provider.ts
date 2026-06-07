@@ -22,6 +22,12 @@ import {
 	isImageMimeType,
 	isVideoMimeType,
 } from "./utils";
+import {
+	getMissingProviderSetupMessage,
+	normalizeProviderConfigs,
+	PROVIDER_CONFIG_STORAGE_KEY,
+	resolveProviderBackedModel,
+} from "./providerTransport";
 import { messagesContainImages, processMessagesForVision, VISION_BRIDGE_REQUEST_OPTION } from "./visionBridge";
 
 import { prepareLanguageModelChatInformation } from "./provideModel";
@@ -38,7 +44,7 @@ import type { GeminiGenerateContentRequest } from "./gemini/geminiTypes";
 import { CommonApi } from "./commonApi";
 import { logger } from "./logger";
 import { normalizeReasoningEffortForModel } from "./reasoningEffort";
-import { applyOpenAIPromptCache } from "./promptCache";
+import { applyOpenAIPromptCache, hasCacheControl } from "./promptCache";
 
 interface ChatInformationOptions {
 	readonly silent?: boolean;
@@ -67,6 +73,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 	 */
 	constructor(
 		private readonly secrets: vscode.SecretStorage,
+		private readonly globalState: vscode.Memento,
 		private readonly statusBarItem: vscode.StatusBarItem
 	) {}
 
@@ -146,6 +153,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			// get model config from user settings
 			const config = vscode.workspace.getConfiguration();
 			const userModels = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+			const providerConfigs = normalizeProviderConfigs(this.globalState.get<unknown>(PROVIDER_CONFIG_STORAGE_KEY, []));
 
 			// Parse model ID to handle config ID
 			const parsedModelId = parseModelId(model.id);
@@ -164,6 +172,15 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			if (!um) {
 				um = userModels.find((um) => um.id === parsedModelId.baseId);
 			}
+			const missingProviderSetupMessage = getMissingProviderSetupMessage(um, userModels, providerConfigs);
+			if (missingProviderSetupMessage) {
+				logger.warn("provider.setupMissing", {
+					modelId: model.id,
+					provider: um?.owned_by ?? "",
+				});
+				throw new Error(missingProviderSetupMessage);
+			}
+			um = resolveProviderBackedModel(um, userModels, providerConfigs);
 			um = applyModelConfiguration(um, options.modelConfiguration);
 
 			// Check if using Ollama native API mode
@@ -952,6 +969,10 @@ function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
 	const body = requestBody && typeof requestBody === "object"
 		? requestBody as Record<string, unknown>
 		: {};
+	const cacheControlCount = countCacheControlMarkers(requestBody);
+	const systemCacheControlCount = countCacheControlMarkers(body.system);
+	const toolCacheControlCount = countCacheControlMarkers(body.tools);
+	const messageCacheControlCount = countCacheControlMarkers(body.messages);
 
 	return {
 		payloadSummarized: true,
@@ -971,6 +992,11 @@ function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
 		promptCacheKeyLength: typeof body.prompt_cache_key === "string" ? body.prompt_cache_key.length : undefined,
 		hasPromptCacheRetention: body.prompt_cache_retention !== undefined,
 		promptCacheRetention: typeof body.prompt_cache_retention === "string" ? body.prompt_cache_retention : undefined,
+		hasCacheControl: cacheControlCount > 0,
+		cacheControlCount: cacheControlCount > 0 ? cacheControlCount : undefined,
+		systemCacheControlCount: systemCacheControlCount > 0 ? systemCacheControlCount : undefined,
+		toolCacheControlCount: toolCacheControlCount > 0 ? toolCacheControlCount : undefined,
+		messageCacheControlCount: messageCacheControlCount > 0 ? messageCacheControlCount : undefined,
 		hasPreviousResponseId: body.previous_response_id !== undefined,
 		previousResponseIdPrefix: typeof body.previous_response_id === "string"
 			? body.previous_response_id.slice(0, 8)
@@ -985,6 +1011,29 @@ function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
 		hasOutputConfig: body.output_config !== undefined,
 		outputConfigEffort: getNestedString(body.output_config, "effort"),
 	};
+}
+
+function countCacheControlMarkers(value: unknown, depth = 0): number {
+	if (depth > 8 || value === undefined || value === null) {
+		return 0;
+	}
+	if (Array.isArray(value)) {
+		let total = 0;
+		for (const item of value) {
+			total += countCacheControlMarkers(item, depth + 1);
+		}
+		return total;
+	}
+	if (typeof value !== "object") {
+		return 0;
+	}
+
+	const obj = value as Record<string, unknown>;
+	let total = hasCacheControl(obj) ? 1 : 0;
+	for (const item of Object.values(obj)) {
+		total += countCacheControlMarkers(item, depth + 1);
+	}
+	return total;
 }
 
 function getArrayLength(value: unknown): number | undefined {

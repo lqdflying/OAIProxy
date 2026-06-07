@@ -31,7 +31,7 @@
 		"type": "git",
 		"url": "https://github.com/lqdflying/OAIProxy"
 	},
-	"version": "0.1.12",
+	"version": "0.1.13",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -359,7 +359,7 @@
 							},
 							"prompt_cache": {
 								"type": "object",
-								"description": "Prompt/KV cache configuration. OpenAI prompt-cache keys are auto-applied only for official OpenAI endpoints unless explicitly configured. Anthropic cache-control writes are opt-in unless cache_control message parts are present. Providers such as DeepSeek, MiMo, MiniMax, and Gemini use provider-managed cache hits.",
+								"description": "Prompt/KV cache configuration. OpenAI prompt-cache keys are auto-applied only for official OpenAI endpoints unless explicitly configured. Known Anthropic-compatible endpoints add stable-prefix cache_control unless disabled. Providers such as DeepSeek, MiMo, MiniMax OpenAI mode, and Gemini use provider-managed cache hits.",
 								"properties": {
 									"enabled": {
 										"type": "boolean",
@@ -385,7 +385,7 @@
 											"enabled": {
 												"type": "boolean",
 												"default": false,
-												"description": "Opt in to adding Anthropic cache_control to stable system/tool prefixes."
+												"description": "Enable Anthropic cache_control on stable system/tool prefixes. Known first-party Anthropic-compatible endpoints enable this by default unless prompt_cache.enabled is false."
 											},
 											"ttl": {
 												"type": "string",

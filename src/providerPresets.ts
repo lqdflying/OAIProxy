@@ -58,4 +58,18 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
 		baseUrl: "https://api.minimax.io/anthropic",
 		apiMode: "anthropic",
 	},
+	{
+		id: "gemini",
+		label: "Google Gemini",
+		provider: "google",
+		baseUrl: "https://generativelanguage.googleapis.com",
+		apiMode: "gemini",
+	},
+	{
+		id: "ollama",
+		label: "Ollama",
+		provider: "ollama",
+		baseUrl: "http://localhost:11434",
+		apiMode: "ollama",
+	},
 ];

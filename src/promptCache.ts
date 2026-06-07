@@ -104,7 +104,10 @@ export function isAnthropicPromptCacheEnabled(model: HFModelItem | undefined): b
 	if (model?.prompt_cache?.enabled === false) {
 		return false;
 	}
-	return model?.prompt_cache?.anthropic?.enabled === true;
+	if (model?.prompt_cache?.anthropic?.enabled !== undefined) {
+		return model.prompt_cache.anthropic.enabled === true;
+	}
+	return isKnownAnthropicCacheEndpoint(model);
 }
 
 export function shouldCacheAnthropicSystem(model: HFModelItem | undefined): boolean {
@@ -189,6 +192,20 @@ function createDefaultPromptCacheKey(model: HFModelItem | undefined, modelId: st
 	const provider = model?.owned_by?.trim() || "openai";
 	const raw = `oaiproxy-${provider}-${modelId}`;
 	return raw.replace(/[^A-Za-z0-9_.:-]+/g, "-").slice(0, 128);
+}
+
+function isKnownAnthropicCacheEndpoint(model: HFModelItem | undefined): boolean {
+	if (model?.apiMode !== "anthropic") {
+		return false;
+	}
+
+	const provider = model.owned_by?.trim().toLowerCase();
+	if (provider === "anthropic" || provider === "minimax-anthropic") {
+		return true;
+	}
+
+	const baseUrl = model.baseUrl?.trim().toLowerCase();
+	return Boolean(baseUrl?.startsWith("https://api.anthropic.com") || baseUrl?.startsWith("https://api.minimax.io/anthropic"));
 }
 
 function normalizeAnthropicCacheControl(value: unknown): AnthropicCacheControl | null {

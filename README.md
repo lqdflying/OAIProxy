@@ -12,6 +12,8 @@ English | [简体中文](README.zh-CN.md)
 
 [![License](https://img.shields.io/github/license/lqdflying/OAIProxy?color=orange&label=License)](https://github.com/lqdflying/OAIProxy/blob/main/LICENSE)
 
+![OAIProxy configuration sample](assets/OAIProxy-Sample.png)
+
 ## Features
 - **Multi-API support**: OpenAI/Ollama/Anthropic/Gemini APIs, with OpenAI-compatible presets for Kimi, DeepSeek, Xiaomi MiMo, MiniMax, ModelScope, SiliconFlow, and more
 - **Vision models**: Full support for image understanding capabilities

@@ -117,7 +117,8 @@ suite("tokenUsage", () => {
 		const tooltip = formatTokenUsageTooltip(report).value;
 		const details = formatTokenUsageDetails(report);
 
-		assert.ok(tooltip.includes("$(copilot) **OAIProxy**"));
+		assert.ok(tooltip.includes("$(server-process) **OAIProxy**"));
+		assert.ok(!tooltip.includes("<img"));
 		assert.ok(tooltip.includes("**63.3%** of context used"));
 		assert.ok(tooltip.includes("$(graph-line) **Input budget** 95.0%"));
 		assert.ok(tooltip.includes("$(database) **Cache** **25.0% hit** · working"));

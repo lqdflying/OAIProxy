@@ -158,9 +158,6 @@
 							<th>Context Length</th>
 							<th>Max Tokens</th>
 							<th>Supports Vision</th>
-							<th>Temperature</th>
-							<th>TopP</th>
-							<th>Delay (ms)</th>
 							<th>Actions</th>
 						</tr>
 					</thead>
@@ -172,7 +169,46 @@
 			<!-- Model Form Section -->
 			<div id="modelFormSection" style="display: none; margin-top: 20px">
 				<h3 id="modelFormTitle">Add New Model</h3>
+				<div id="addModelModeTabs" class="mode-tabs">
+					<button id="quickSetupMode" type="button" class="mode-tab active">Quick Setup</button>
+					<button id="manualSetupMode" type="button" class="mode-tab">Manual Setup</button>
+				</div>
+				<div id="quickSetupPanel" class="quick-setup-panel">
+					<div class="quick-setup-controls">
+						<div class="field">
+							<label for="modelPresetSearch">Search Presets</label>
+							<input id="modelPresetSearch" type="text" class="model-input" placeholder="Search model or provider" />
+						</div>
+						<div class="field">
+							<label for="modelPresetProviderFilter">Provider</label>
+							<select id="modelPresetProviderFilter" class="model-input">
+								<option value="">All providers</option>
+							</select>
+						</div>
+						<div class="field">
+							<label for="modelPresetCategoryFilter">Category</label>
+							<select id="modelPresetCategoryFilter" class="model-input">
+								<option value="">All categories</option>
+								<option value="latest">Latest</option>
+								<option value="recommended">Recommended</option>
+								<option value="fast">Fast</option>
+								<option value="local">Local</option>
+							</select>
+						</div>
+					</div>
+					<div id="modelPresetList" class="preset-grid"></div>
+					<div id="selectedPresetSummary" class="selected-preset-summary muted">
+						Select a preset to review its ready-to-save configuration.
+					</div>
+					<div class="quick-setup-actions">
+						<button id="addSelectedPresets" type="button" disabled>Add Selected</button>
+						<button id="removeSelectedPresets" type="button" class="danger" disabled>Remove Selected</button>
+						<button id="clearPresetSelection" type="button" class="secondary" disabled>Clear Selection</button>
+						<button id="customizePreset" type="button" class="secondary" disabled>Customize Preset</button>
+					</div>
+				</div>
 				<div class="form-container">
+					<div id="modelDetailsFields">
 					<div class="row">
 						<div class="field">
 							<label for="modelProvider">Provider ID *</label>
@@ -180,6 +216,11 @@
 							<select id="modelProvider" class="model-input" required>
 								<option value="">Select Provider</option>
 							</select>
+						</div>
+						<div class="field">
+							<label for="modelProviderApiKey">Provider API Key</label>
+							<div class="field-description">Stored under the selected provider. Leave blank to keep a saved key.</div>
+							<input id="modelProviderApiKey" type="password" class="model-input" placeholder="Saved - leave blank" />
 						</div>
 						<div class="field">
 							<label for="modelVision">Supports Vision</label>
@@ -308,6 +349,36 @@
 									<input id="modelFamily" type="text" class="model-input" placeholder="e.g., gpt-4, claude-3" />
 								</div>
 								<div class="field">
+									<label for="modelSupportsReasoningEffort">Expose Thinking Effort</label>
+									<div class="field-description">Expose VS Code's per-model Thinking Effort picker.</div>
+									<select id="modelSupportsReasoningEffort" class="model-input">
+										<option value=""></option>
+										<option value="true">True</option>
+										<option value="false">False</option>
+									</select>
+								</div>
+								<div class="field">
+									<label for="modelSupportedReasoningEfforts">Supported Thinking Efforts</label>
+									<div class="field-description">Comma-separated values such as low, medium, high.</div>
+									<input id="modelSupportedReasoningEfforts" type="text" class="model-input" placeholder="low,medium,high" />
+								</div>
+							</div>
+							<div class="row">
+								<div class="field">
+									<label for="modelDefaultReasoningEffort">Default Thinking Effort</label>
+									<div class="field-description">Default value for VS Code's Thinking Effort picker.</div>
+									<select id="modelDefaultReasoningEffort" class="model-input">
+										<option value=""></option>
+										<option value="none">None</option>
+										<option value="minimal">Minimal</option>
+										<option value="low">Low</option>
+										<option value="medium">Medium</option>
+										<option value="high">High</option>
+										<option value="xhigh">XHigh</option>
+										<option value="max">Max</option>
+									</select>
+								</div>
+								<div class="field">
 									<label for="modelTopK">Top K</label>
 									<div class="field-description">Top-k sampling value (range: [1, Infinity)).</div>
 									<input id="modelTopK" type="number" class="model-input" min="1" />
@@ -374,6 +445,7 @@
 									<div class="field-description">Include "reasoning_effort" in request body.</div>
 									<select id="modelReasoningEffort" class="model-input">
 										<option value=""></option>
+										<option value="none">None</option>
 										<option value="max">Max</option>
 										<option value="xhigh">XHigh</option>
 										<option value="high">High</option>
@@ -450,8 +522,19 @@
 										placeholder='{"key1": "value", "key2": "value"}'
 									></textarea>
 								</div>
+								<div class="field">
+									<label for="modelPromptCache">Prompt Cache (JSON)</label>
+									<div class="field-description">Provider-aware prompt/KV cache configuration.</div>
+									<textarea
+										id="modelPromptCache"
+										class="model-input"
+										rows="3"
+										placeholder='{"enabled": true}'
+									></textarea>
+								</div>
 							</div>
 						</div>
+					</div>
 					</div>
 					<div id="modelError" class="error-message" style="display: none"></div>
 					<div class="actions">

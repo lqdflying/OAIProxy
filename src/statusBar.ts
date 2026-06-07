@@ -16,7 +16,7 @@ export function initStatusBar(context: vscode.ExtensionContext): vscode.StatusBa
 	// Create status bar item for token count display
 	const tokenCountStatusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
 	tokenCountStatusBarItem.name = "OAIProxy Usage";
-	tokenCountStatusBarItem.text = "OAIProxy Ready";
+	tokenCountStatusBarItem.text = "$(server-process) OAIProxy Ready";
 	tokenCountStatusBarItem.tooltip = "Current model token usage - Click to Open Configuration UI";
 	tokenCountStatusBarItem.command = "oaiproxy.openConfig";
 	context.subscriptions.push(tokenCountStatusBarItem);
@@ -61,7 +61,7 @@ export async function updateContextStatusBar(
 
 	// Keep the status bar compact; detailed usage lives in the hover.
 	const progressBar = createProgressBar(report.inputTokens, report.maxContextTokens);
-	const displayText = `$(copilot) ${progressBar}`;
+	const displayText = `$(server-process) ${progressBar}`;
 	statusBarItem.text = displayText;
 	statusBarItem.tooltip = formatTokenUsageTooltip(report);
 

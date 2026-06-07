@@ -12,6 +12,8 @@
 
 [![License](https://img.shields.io/github/license/lqdflying/OAIProxy?color=orange&label=License)](https://github.com/lqdflying/OAIProxy/blob/main/LICENSE)
 
+![OAIProxy 配置界面示例](assets/OAIProxy-Sample.png)
+
 ## 特性
 - **多 API 支持**：OpenAI/Ollama/Anthropic/Gemini API，并内置 Kimi、DeepSeek、小米 MiMo、MiniMax、ModelScope、SiliconFlow 等 OpenAI 兼容供应商预设
 - **视觉模型**：完整支持图像理解能力
