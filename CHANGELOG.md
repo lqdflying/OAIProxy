@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.1.14 (2026-06-08)
+
+- Add Quick Setup provider-state badges for unconfigured presets: `Provider Needed`, `Key Needed`, `Provider Ready`, and `Configured`.
+- Keep `Add Selected` clickable for selected presets, but block the add with a clear popup when provider setup or provider API key is missing.
+- Add Xiaomi MiMo `mimo-v2.5` and `mimo-v2-flash` presets, and update `mimo-v2.5-pro` to Xiaomi's documented 128K output limit.
+- Improve Quick Setup preset card readability and layout in Tokyo Night and similar themes by using high-contrast card text and moving status/actions below the model title.
+
 ## 0.1.13 (2026-06-08)
 
 - Redesign Add Model around Quick Setup presets with multi-select add/remove, configured/ready state actions, best-practice model parameters, context limits, and an advanced customize path.

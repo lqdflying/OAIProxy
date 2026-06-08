@@ -335,16 +335,45 @@ function hasConfiguredModel(model) {
 }
 
 function requiresProviderKey(model) {
-	const providerInfo = state.providerInfo[model.owned_by] || {};
-	const baseUrl = providerInfo.baseUrl || model.baseUrl;
-	const apiMode = providerInfo.apiMode || model.apiMode || "openai";
-	return Boolean(baseUrl && apiMode !== "ollama" && !state.providerKeys[model.owned_by]);
+	if (!isProviderConfigured(model)) {
+		return false;
+	}
+	const providerTransport = getProviderTransportModel(model.owned_by) || {};
+	const apiMode = providerTransport.apiMode || model.apiMode || "openai";
+	return Boolean(apiMode !== "ollama" && !state.providerKeys[model.owned_by]);
+}
+
+function isProviderConfigured(model) {
+	const providerTransport = getProviderTransportModel(model.owned_by) || {};
+	return Boolean(providerTransport.baseUrl);
+}
+
+function getPresetProviderState(model) {
+	if (!isProviderConfigured(model)) {
+		return {
+			className: "error",
+			label: "Provider Needed",
+		};
+	}
+	if (requiresProviderKey(model)) {
+		return {
+			className: "warning",
+			label: "Key Needed",
+		};
+	}
+	return {
+		className: "success",
+		label: "Provider Ready",
+	};
 }
 
 function getSelectedPresetBatch() {
 	const selectedPresets = getSelectedModelPresets();
 	const addPresets = selectedPresets.filter((preset) => !hasConfiguredModel(preset.model));
 	const removePresets = selectedPresets.filter((preset) => hasConfiguredModel(preset.model));
+	const missingSetupProviders = Array.from(
+		new Set(addPresets.filter((preset) => !isProviderConfigured(preset.model)).map((preset) => preset.model.owned_by))
+	).sort((a, b) => getProviderLabel(a).localeCompare(getProviderLabel(b)));
 	const missingProviders = Array.from(
 		new Set(addPresets.filter((preset) => requiresProviderKey(preset.model)).map((preset) => preset.model.owned_by))
 	).sort((a, b) => getProviderLabel(a).localeCompare(getProviderLabel(b)));
@@ -353,8 +382,35 @@ function getSelectedPresetBatch() {
 		selectedPresets,
 		addPresets,
 		removePresets,
+		missingSetupProviders,
 		missingProviders,
 	};
+}
+
+function showQuickSetupProviderBlocker(batch) {
+	if (!batch.missingSetupProviders.length && !batch.missingProviders.length) {
+		return false;
+	}
+
+	const details = [];
+	if (batch.missingSetupProviders.length) {
+		details.push(
+			`provider setup is missing for ${batch.missingSetupProviders.map((provider) => getProviderLabel(provider)).join(", ")}`
+		);
+	}
+	if (batch.missingProviders.length) {
+		details.push(`API key is not saved for ${batch.missingProviders.map((provider) => getProviderLabel(provider)).join(", ")}`);
+	}
+
+	const confirmId = "quickSetupProviderReminder_" + Date.now();
+	pendingConfirmations.set(confirmId, { action: () => {} });
+	vscode.postMessage({
+		type: "requestConfirm",
+		id: confirmId,
+		message: `Cannot add selected model(s): ${details.join("; ")}. Open OAIProxy Configuration > Provider Management and add the provider base URL/API mode/API key, or use the provider API key command, then try Add Selected again.`,
+		action: "showInfo",
+	});
+	return true;
 }
 
 function clearModelPresetSelection() {
@@ -721,6 +777,7 @@ function renderSelectedPresetSummary() {
 	}
 
 	const singlePreset = getSelectedModelPreset();
+	const missingSetupProviderText = batch.missingSetupProviders.map((provider) => getProviderLabel(provider)).join(", ");
 	const missingProviderText = batch.missingProviders.map((provider) => getProviderLabel(provider)).join(", ");
 	selectedPresetSummary.classList.remove("muted");
 	const detailHtml = singlePreset
@@ -737,7 +794,7 @@ function renderSelectedPresetSummary() {
 						<span>API: ${escapeHtml(apiMode)} inherited</span>
 						<span>Context: ${escapeHtml(model.context_length || "")}</span>
 						<span>${escapeHtml(outputField)}: ${escapeHtml(getModelOutputLimit(model))}</span>
-						<span>Key: ${hasKey ? "Saved/optional" : "Required"}</span>
+						<span>Key: ${hasKey ? "Saved/optional" : "Not saved"}</span>
 					</div>
 				`;
 			})()
@@ -747,11 +804,12 @@ function renderSelectedPresetSummary() {
 		<div class="selected-preset-grid">
 			<span>Add ready: ${batch.addPresets.length}</span>
 			<span>Remove ready: ${batch.removePresets.length}</span>
-			<span>Missing keys: ${batch.missingProviders.length ? escapeHtml(missingProviderText) : "None"}</span>
+			<span>Providers needed: ${batch.missingSetupProviders.length ? escapeHtml(missingSetupProviderText) : "None"}</span>
+			<span>Keys not saved: ${batch.missingProviders.length ? escapeHtml(missingProviderText) : "None"}</span>
 		</div>
 		${detailHtml}
 	`;
-	addSelectedPresetsBtn.disabled = batch.addPresets.length === 0 || batch.missingProviders.length > 0;
+	addSelectedPresetsBtn.disabled = batch.addPresets.length === 0;
 	removeSelectedPresetsBtn.disabled = batch.removePresets.length === 0;
 	clearPresetSelectionBtn.disabled = false;
 	customizePresetBtn.disabled = batch.selectedPresets.length !== 1;
@@ -806,6 +864,7 @@ function renderModelPresets() {
 			const apiMode = providerInfo.apiMode || model.apiMode || "openai";
 			const selected = state.selectedModelPresetIds.has(preset.id);
 			const configured = hasConfiguredModel(model);
+			const providerState = getPresetProviderState(model);
 			const fullModelId = getFullModelId(model);
 			const tags = [formatPresetCategory(preset.category), ...(preset.tags || [])].filter(Boolean);
 			return `
@@ -816,7 +875,9 @@ function renderModelPresets() {
 							<span class="preset-title">${escapeHtml(preset.label)}</span>
 						</label>
 						<div class="preset-card-state">
-							<span class="status-pill ${configured ? "success" : "idle"}">${configured ? "Configured" : "Ready"}</span>
+							<span class="status-pill ${configured ? "success" : providerState.className}">${
+								configured ? "Configured" : providerState.label
+							}</span>
 							${
 								configured
 									? `<button type="button" class="remove-preset-model-btn danger compact" data-model-id="${escapeHtml(fullModelId)}">Remove</button>`
@@ -1113,14 +1174,11 @@ manualSetupModeBtn.addEventListener("click", () => {
 
 addSelectedPresetsBtn.addEventListener("click", () => {
 	const batch = getSelectedPresetBatch();
-	if (batch.missingProviders.length) {
-		showModelError(
-			`Provider API Key is required for: ${batch.missingProviders.map((provider) => getProviderLabel(provider)).join(", ")}.`
-		);
-		return;
-	}
 	if (!batch.addPresets.length) {
 		showModelError("No selected unconfigured presets to add.");
+		return;
+	}
+	if (showQuickSetupProviderBlocker(batch)) {
 		return;
 	}
 

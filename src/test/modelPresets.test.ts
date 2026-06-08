@@ -29,9 +29,9 @@ suite("modelPresets", () => {
 		}
 	});
 
-	test("contains only the approved MiMo model", () => {
+	test("contains the approved MiMo chat presets", () => {
 		const mimoIds = MODEL_PRESETS.filter((preset) => preset.model.owned_by === "mimo").map((preset) => preset.model.id);
-		assert.deepStrictEqual(mimoIds, ["mimo-v2.5-pro"]);
+		assert.deepStrictEqual(mimoIds, ["mimo-v2.5-pro", "mimo-v2.5", "mimo-v2-flash"]);
 	});
 
 	test("uses config IDs to keep duplicate model IDs saveable", () => {
