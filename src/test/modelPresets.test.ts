@@ -34,6 +34,23 @@ suite("modelPresets", () => {
 		assert.deepStrictEqual(mimoIds, ["mimo-v2.5-pro", "mimo-v2.5", "mimo-v2-flash"]);
 	});
 
+	test("contains LiteLLM Kimi K2.6 quick setup preset", () => {
+		const preset = MODEL_PRESETS.find((item) => item.id === "litellm-kimi-k2-6");
+
+		assert.ok(preset);
+		assert.strictEqual(preset.providerPresetId, "litellm");
+		assert.strictEqual(preset.model.id, "Kimi-K2.6");
+		assert.strictEqual(preset.model.owned_by, "litellm");
+		assert.strictEqual(preset.model.baseUrl, "https://ai.nube.sh/api/v1");
+		assert.strictEqual(preset.model.apiMode, "litellm");
+		assert.deepStrictEqual(preset.model.extra_body, {
+			thinking: {
+				type: "enabled",
+				keep: "all",
+			},
+		});
+	});
+
 	test("uses config IDs to keep duplicate model IDs saveable", () => {
 		const fullIds = MODEL_PRESETS.map((preset) => {
 			const model = preset.model;

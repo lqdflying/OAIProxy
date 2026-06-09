@@ -2,7 +2,7 @@
 	"name": "oaiproxy",
 	"publisher": "lqdflying",
 	"displayName": "OAIProxy",
-	"description": "OpenAI/Ollama/Anthropic/Gemini provider for Copilot Chat, with OpenAI, Anthropic, Kimi, DeepSeek, Xiaomi MiMo, and MiniMax presets",
+	"description": "OpenAI/LiteLLM/Ollama/Anthropic/Gemini provider for Copilot Chat, with OpenAI, Anthropic, Kimi, DeepSeek, Xiaomi MiMo, and MiniMax presets",
 	"icon": "assets/icon.png",
 	"keywords": [
 		"ai",
@@ -22,6 +22,7 @@
 		"anthropic",
 		"claude",
 		"gemini",
+		"litellm",
 		"openai-compatible",
 		"openai-responses",
 		"git-commit",
@@ -31,7 +32,7 @@
 		"type": "git",
 		"url": "https://github.com/lqdflying/OAIProxy"
 	},
-	"version": "0.1.14",
+	"version": "0.1.15",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -165,15 +166,15 @@
 							},
 							"owned_by": {
 								"type": "string",
-								"description": "Model provider (e.g., 'zai', 'openai', 'kimi', 'deepseek', 'mimo', 'minimax')."
+								"description": "Model provider (e.g., 'zai', 'openai', 'litellm', 'kimi', 'deepseek', 'mimo', 'minimax')."
 							},
 							"provider": {
 								"type": "string",
-								"description": "(Alias of owned_by) Model provider (e.g., 'zai', 'openai', 'kimi', 'deepseek', 'mimo', 'minimax')."
+								"description": "(Alias of owned_by) Model provider (e.g., 'zai', 'openai', 'litellm', 'kimi', 'deepseek', 'mimo', 'minimax')."
 							},
 							"provide": {
 								"type": "string",
-								"description": "(Alias of owned_by) Model provider (e.g., 'zai', 'openai', 'kimi', 'deepseek', 'mimo', 'minimax')."
+								"description": "(Alias of owned_by) Model provider (e.g., 'zai', 'openai', 'litellm', 'kimi', 'deepseek', 'mimo', 'minimax')."
 							},
 							"family": {
 								"type": "string",
@@ -414,6 +415,10 @@
 								"type": "object",
 								"description": "Extra request body parameters."
 							},
+							"extra_body": {
+								"type": "object",
+								"description": "LiteLLM/OpenAI-SDK-style provider-specific request body parameters. In apiMode 'litellm', these are sent as the literal extra_body field."
+							},
 							"headers": {
 								"type": "object",
 								"additionalProperties": {
@@ -430,13 +435,14 @@
 								"type": "string",
 								"enum": [
 									"openai",
+									"litellm",
 									"openai-responses",
 									"ollama",
 									"anthropic",
 									"gemini"
 								],
 								"default": "openai",
-								"description": "API mode: 'openai' (Default) for OpenAI Chat Completions (/chat/completions; Kimi, DeepSeek, MiMo, MiniMax, etc.), 'openai-responses' for OpenAI Responses (/responses), 'ollama' for Ollama (/api/chat), 'anthropic' for Anthropic (/v1/messages), 'gemini' for Gemini (*/v1beta/models/{model}:streamGenerateContent?alt=sse)."
+								"description": "API mode: 'openai' (Default) for OpenAI Chat Completions (/chat/completions; Kimi, DeepSeek, MiMo, MiniMax, etc.), 'litellm' for LiteLLM Proxy Chat Completions (/chat/completions with extra_body support), 'openai-responses' for OpenAI Responses (/responses), 'ollama' for Ollama (/api/chat), 'anthropic' for Anthropic (/v1/messages), 'gemini' for Gemini (*/v1beta/models/{model}:streamGenerateContent?alt=sse)."
 							},
 							"useForCommitGeneration": {
 								"type": "boolean",

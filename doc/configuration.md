@@ -69,7 +69,7 @@ Below are the model family settings supported by Copilot:
 
 ## Multi-API Mode
 
-The extension supports five different API protocols to work with various model providers. You can specify which API mode to use for each model via the `apiMode` parameter.
+The extension supports multiple API protocols to work with various model providers. You can specify which API mode to use for each model via the `apiMode` parameter.
 
 ### Supported API Modes
 
@@ -78,22 +78,27 @@ The extension supports five different API protocols to work with various model p
    - Header: `Authorization: Bearer <apiKey>`
    - Use for: Most OpenAI-compatible providers (Kimi, DeepSeek, Xiaomi MiMo, MiniMax, ModelScope, SiliconFlow, etc.)
 
-2. **`openai-responses`** - OpenAI Responses API
+2. **`litellm`** - LiteLLM Proxy Chat Completions API
+   - Endpoint: `/chat/completions`
+   - Header: `Authorization: Bearer <apiKey>`
+   - Use for: LiteLLM proxy endpoints that need literal `extra_body` provider/proxy parameters
+
+3. **`openai-responses`** - OpenAI Responses API
    - Endpoint: `/responses`
    - Header: `Authorization: Bearer <apiKey>`
    - Use for: OpenAI official Responses API (and compatible gateways like rsp4copilot)
 
-3. **`ollama`** - Ollama native API
+4. **`ollama`** - Ollama native API
    - Endpoint: `/api/chat`
    - Header: `Authorization: Bearer <apiKey>` (omitted when the stored API key is exactly `ollama`)
    - Use for: Local Ollama instances
 
-4. **`anthropic`** - Anthropic Claude API
+5. **`anthropic`** - Anthropic Claude API
    - Endpoint: `/v1/messages`
    - Header: `x-api-key: <apiKey>`
    - Use for: Anthropic Claude models
 
-5. **`gemini`** - Gemini native API
+6. **`gemini`** - Gemini native API
    - Endpoint: `/v1beta/models/{model}:streamGenerateContent?alt=sse`
    - Header: `x-goog-api-key: <apiKey>`
    - Use for: Google Gemini models (and compatible gateways like rsp4copilot)
@@ -125,6 +130,7 @@ Mixed configuration with multiple API modes:
 
 ### Important Notes
 - The `apiMode` parameter defaults to `"openai"` if not specified.
+- LiteLLM Proxy uses `apiMode: "litellm"` when provider-specific parameters must be sent in the literal `extra_body` field.
 - Kimi, DeepSeek, and Xiaomi MiMo use `apiMode: "openai"` through their OpenAI-compatible chat completions APIs.
 - MiniMax supports both `apiMode: "openai"` and `apiMode: "anthropic"` for M-series models. MiniMax recommends the Anthropic-compatible M3 endpoint for thinking and interleaved-thinking workflows.
 - When using `ollama` mode, OAIProxy still needs a stored API key value. Use `ollama` as a placeholder for local Ollama if you do not want an `Authorization` header to be sent; any other value is sent as a bearer token.

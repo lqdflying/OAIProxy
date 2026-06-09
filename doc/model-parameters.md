@@ -33,8 +33,9 @@ All parameters support individual configuration for different models, providing 
 | `headers` | no | `object` | — | Custom HTTP headers per request |
 | `prompt_cache` | no | `object` | safe auto | Prompt/KV cache configuration and telemetry |
 | `extra` | no | `object` | — | Extra request body parameters |
+| `extra_body` | no | `object` | — | LiteLLM provider/proxy-specific request body parameters |
 | `include_reasoning_in_request` | no | `boolean` | — | Include `reasoning_content` in assistant messages |
-| `apiMode` | no | `string` | `openai` | API protocol: `openai`, `openai-responses`, `ollama`, `anthropic`, `gemini` |
+| `apiMode` | no | `string` | `openai` | API protocol: `openai`, `litellm`, `openai-responses`, `ollama`, `anthropic`, `gemini` |
 | `delay` | no | `number` | global `oaicopilot.delay` | Per-model delay (ms) between consecutive requests |
 | `useForCommitGeneration` | no | `boolean` | — | Use this model for Git commit message generation (not supported for `gemini`) |
 
@@ -65,6 +66,8 @@ MiMo uses the same `thinking.type` request-body shape in OpenAI-compatible mode.
 
 MiniMax M3 supports `thinking.type: "adaptive"` in both OpenAI-compatible and Anthropic-compatible modes. In OpenAI mode, add `extra.reasoning_split: true` to receive thinking separately from answer text.
 
+For `apiMode: "litellm"`, OAIProxy sends thinking controls through LiteLLM's literal `extra_body` field. Use `thinking.type` for the common enabled/disabled toggle, and put LiteLLM/provider-specific thinking options such as `keep` in `extra_body.thinking`.
+
 ### `supported_reasoning_efforts`
 
 Custom list of Thinking Effort values shown in the model picker dropdown. DeepSeek models default to `["high", "max"]`; other models default to `["minimal", "low", "medium", "high", "xhigh", "max"]`.
@@ -84,9 +87,14 @@ Provider-aware prompt/KV cache configuration:
 
 API protocol to use for this model:
 - `"openai"` (default): `/chat/completions` with `Authorization: Bearer` header. Use this for OpenAI-compatible providers such as Kimi, DeepSeek, Xiaomi MiMo, and MiniMax.
+- `"litellm"`: LiteLLM Proxy `/chat/completions` with `Authorization: Bearer` header. OAIProxy maps thinking/reasoning provider options into `extra_body`.
 - `"openai-responses"`: `/responses` with `Authorization: Bearer` header
 - `"ollama"`: `/api/chat` with optional `Authorization: Bearer` header
 - `"anthropic"`: `/v1/messages` with `x-api-key` header
 - `"gemini"`: `/v1beta/models/{model}:streamGenerateContent?alt=sse` with `x-goog-api-key` header
 
 MiniMax M3 can use either `"openai"` with `https://api.minimax.io/v1` or `"anthropic"` with `https://api.minimax.io/anthropic`. Set `vision: true` for M3 so image inputs and supported video data parts (`video/mp4`, `video/x-msvideo`, `video/quicktime`, `video/x-matroska`) are forwarded directly.
+
+### `extra_body`
+
+LiteLLM Proxy supports provider/proxy-specific parameters in the literal `extra_body` request field. In `apiMode: "litellm"`, use `extra_body` for values such as `reasoning_split`, `allowed_openai_params`, `drop_params`, `metadata`, `litellm_metadata`, or nested provider thinking options. Keep `extra` for top-level request fields.

@@ -1,4 +1,4 @@
-export type ProviderUsageAdapter = "anthropic" | "deepseek" | "kimi" | "minimax" | "openai";
+export type ProviderUsageAdapter = "anthropic" | "deepseek" | "kimi" | "litellm" | "minimax" | "openai";
 
 export interface ProviderUsageResult {
 	provider: string;
@@ -17,6 +17,7 @@ export interface ProviderUsageRequest {
 	provider: string;
 	baseUrl?: string;
 	apiKey: string;
+	targetApiKey?: string;
 }
 
 const DEEPSEEK_BALANCE_ENDPOINT = "https://api.deepseek.com/user/balance";
@@ -36,7 +37,7 @@ export function getProviderUsageSecretKey(provider: string): string {
 }
 
 export function providerRequiresUsageApiKey(adapter: ProviderUsageAdapter): boolean {
-	return adapter === "openai" || adapter === "anthropic";
+	return adapter === "openai" || adapter === "anthropic" || adapter === "litellm";
 }
 
 export function isMimoProvider(provider: string, baseUrl?: string): boolean {
@@ -90,6 +91,13 @@ export function getProviderUsageAdapter(provider: string, baseUrl?: string): Pro
 	) {
 		return "anthropic";
 	}
+	if (
+		normalizedProvider === "litellm" ||
+		normalizedBaseUrl.includes("ai.nube.sh") ||
+		normalizedBaseUrl.includes("litellm")
+	) {
+		return "litellm";
+	}
 
 	return undefined;
 }
@@ -112,9 +120,16 @@ export async function checkProviderUsage(request: ProviderUsageRequest): Promise
 		parsed = parseMiniMaxTokenPlan(await fetchJson(MINIMAX_TOKEN_PLAN_ENDPOINT, "MiniMax", bearerHeaders(request.apiKey)));
 	} else if (adapter === "openai") {
 		parsed = parseOpenAICosts(await fetchJson(buildOpenAICostsEndpoint(), "OpenAI", bearerHeaders(request.apiKey)));
-	} else {
+	} else if (adapter === "anthropic") {
 		parsed = parseAnthropicCostReport(
 			await fetchJson(buildAnthropicCostReportEndpoint(), "Anthropic", anthropicAdminHeaders(request.apiKey))
+		);
+	} else {
+		if (!request.targetApiKey) {
+			throw new Error("LiteLLM usage checks require the provider API key to inspect plus a separate master/admin Usage Key.");
+		}
+		parsed = parseLiteLLMKeyInfo(
+			await fetchJson(buildLiteLLMKeyInfoEndpoint(request.baseUrl, request.targetApiKey), "LiteLLM", bearerHeaders(request.apiKey))
 		);
 	}
 
@@ -309,6 +324,50 @@ export function parseAnthropicCostReport(payload: unknown): ParsedProviderUsage 
 	};
 }
 
+export function parseLiteLLMKeyInfo(payload: unknown): ParsedProviderUsage {
+	const obj = asRecord(payload, "LiteLLM key info response");
+	const info = obj.info !== undefined ? asRecord(obj.info, "LiteLLM key info") : obj;
+	const alias = optionalString(info.key_alias) ?? optionalString(info.alias) ?? "virtual key";
+	const spend = optionalNumber(info.spend, "LiteLLM spend") ?? optionalNumber(info.total_spend, "LiteLLM total_spend") ?? 0;
+	const maxBudget =
+		optionalNumber(info.max_budget, "LiteLLM max_budget") ??
+		optionalNumber(info.budget, "LiteLLM budget") ??
+		optionalNumber(info.soft_budget, "LiteLLM soft_budget");
+	const remainingBudget =
+		optionalNumber(info.remaining_budget, "LiteLLM remaining_budget") ??
+		(maxBudget !== undefined ? Math.max(maxBudget - spend, 0) : undefined);
+	const budgetDuration = optionalString(info.budget_duration);
+	const models = Array.isArray(info.models)
+		? info.models.map((item) => String(item)).filter(Boolean)
+		: [];
+
+	const summary =
+		remainingBudget !== undefined && maxBudget !== undefined
+			? `${formatMoney(remainingBudget, "USD")} remaining / ${formatMoney(maxBudget, "USD")} budget (${formatMoney(
+					spend,
+					"USD"
+				)} spent)`
+			: `${formatMoney(spend, "USD")} spent`;
+	const details = [
+		`Key: ${alias}`,
+		`Spend: ${formatMoney(spend, "USD")}`,
+	];
+	if (maxBudget !== undefined) {
+		details.push(`Budget: ${formatMoney(maxBudget, "USD")}`);
+	}
+	if (remainingBudget !== undefined) {
+		details.push(`Remaining: ${formatMoney(remainingBudget, "USD")}`);
+	}
+	if (budgetDuration) {
+		details.push(`Budget duration: ${budgetDuration}`);
+	}
+	if (models.length > 0) {
+		details.push(`Models: ${models.join(", ")}`);
+	}
+
+	return { summary, details };
+}
+
 export function formatProviderUsageResult(result: ProviderUsageResult): string {
 	return [
 		`Provider: ${result.provider}`,
@@ -456,6 +515,21 @@ function buildAnthropicCostReportEndpoint(): string {
 	return `${ANTHROPIC_COST_REPORT_ENDPOINT}?${params.toString()}`;
 }
 
+export function buildLiteLLMKeyInfoEndpoint(baseUrl: string | undefined, targetApiKey: string): string {
+	const trimmed = (baseUrl ?? "").trim();
+	if (!trimmed) {
+		throw new Error("LiteLLM usage checks require a configured provider Base URL.");
+	}
+	const normalized = trimmed.replace(/\/+$/, "");
+	const managementBaseUrl = normalized.endsWith("/api/v1")
+		? normalized.slice(0, -"/api/v1".length)
+		: normalized.endsWith("/v1")
+			? normalized.slice(0, -"/v1".length)
+			: normalized;
+	const params = new URLSearchParams({ key: targetApiKey });
+	return `${managementBaseUrl}/key/info?${params.toString()}`;
+}
+
 function getMonthToDateRange(now = new Date()): { start: Date; end: Date } {
 	return {
 		start: new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1, 0, 0, 0)),
@@ -535,4 +609,8 @@ function optionalNumber(value: unknown, label: string): number | undefined {
 		return undefined;
 	}
 	return asNumber(value, label);
+}
+
+function optionalString(value: unknown): string | undefined {
+	return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }

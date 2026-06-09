@@ -33,8 +33,9 @@
 | `headers` | 否 | `object` | — | 每次请求的自定义 HTTP 请求头 |
 | `prompt_cache` | 否 | `object` | 安全自动 | Prompt/KV 缓存配置与命中统计 |
 | `extra` | 否 | `object` | — | 额外请求体参数 |
+| `extra_body` | 否 | `object` | — | LiteLLM 供应商/代理专用请求体参数 |
 | `include_reasoning_in_request` | 否 | `boolean` | — | 在 assistant 消息中包含 `reasoning_content` |
-| `apiMode` | 否 | `string` | `openai` | API 协议：`openai`、`openai-responses`、`ollama`、`anthropic`、`gemini` |
+| `apiMode` | 否 | `string` | `openai` | API 协议：`openai`、`litellm`、`openai-responses`、`ollama`、`anthropic`、`gemini` |
 | `delay` | 否 | `number` | 全局 `oaicopilot.delay` | 连续请求之间的模型专属延迟（毫秒） |
 | `useForCommitGeneration` | 否 | `boolean` | — | 是否用于 Git 提交信息生成（不支持 `gemini`） |
 
@@ -65,6 +66,8 @@ OpenRouter 推理配置对象，包含以下选项：
 
 MiniMax M3 在 OpenAI 兼容模式和 Anthropic 兼容模式下都支持 `thinking.type: "adaptive"`。OpenAI 模式下可添加 `extra.reasoning_split: true`，将思维链与回答正文分离接收。
 
+使用 `apiMode: "litellm"` 时，OAIProxy 会通过 LiteLLM 的字面量 `extra_body` 字段发送思维链控制。通用开关使用 `thinking.type`，供应商/LiteLLM 特定的思维链选项（如 `keep`）放入 `extra_body.thinking`。
+
 ### `supported_reasoning_efforts`
 
 模型选择器下拉菜单中显示的自定义 Thinking Effort 值列表。DeepSeek 模型默认使用 `["high", "max"]`；其他模型默认使用 `["minimal", "low", "medium", "high", "xhigh", "max"]`。
@@ -84,9 +87,14 @@ MiniMax M3 在 OpenAI 兼容模式和 Anthropic 兼容模式下都支持 `thinki
 
 此模型使用的 API 协议：
 - `"openai"`（默认）：`/chat/completions`，使用 `Authorization: Bearer` 请求头。适用于 Kimi、DeepSeek、小米 MiMo、MiniMax 等 OpenAI 兼容供应商。
+- `"litellm"`：LiteLLM Proxy `/chat/completions`，使用 `Authorization: Bearer` 请求头。OAIProxy 会把思维链/推理的供应商选项映射到 `extra_body`。
 - `"openai-responses"`：`/responses`，使用 `Authorization: Bearer` 请求头
 - `"ollama"`：`/api/chat`，可选 `Authorization: Bearer` 请求头
 - `"anthropic"`：`/v1/messages`，使用 `x-api-key` 请求头
 - `"gemini"`：`/v1beta/models/{model}:streamGenerateContent?alt=sse`，使用 `x-goog-api-key` 请求头
 
 MiniMax M3 可使用 `"openai"` 配合 `https://api.minimax.io/v1`，也可使用 `"anthropic"` 配合 `https://api.minimax.io/anthropic`。为 M3 设置 `vision: true`，即可直接转发图像输入和受支持的视频数据片段（`video/mp4`、`video/x-msvideo`、`video/quicktime`、`video/x-matroska`）。
+
+### `extra_body`
+
+LiteLLM Proxy 支持通过字面量 `extra_body` 请求字段传递供应商/代理专用参数。在 `apiMode: "litellm"` 中，可用 `extra_body` 设置 `reasoning_split`、`allowed_openai_params`、`drop_params`、`metadata`、`litellm_metadata` 或嵌套的供应商思维链选项。`extra` 仍用于顶层请求字段。

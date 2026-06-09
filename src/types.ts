@@ -75,6 +75,12 @@ export interface HFModelItem {
 	 * without modifying the core interface.
 	 */
 	extra?: Record<string, unknown>;
+	/**
+	 * LiteLLM/OpenAI-SDK-style provider-specific request body parameters.
+	 * For `apiMode: "litellm"`, OAIProxy sends this as the literal `extra_body`
+	 * request field and also maps supported thinking/reasoning settings into it.
+	 */
+	extra_body?: Record<string, unknown>;
 
 	/**
 	 * Custom HTTP headers to be sent with every request to this model's provider.
@@ -90,8 +96,9 @@ export interface HFModelItem {
 	include_reasoning_in_request?: boolean;
 
 	/**
-	 * API mode: "openai" for OpenAI Chat Completions, "openai-responses" for OpenAI Responses,
-	 * "ollama" for Ollama native API, "anthropic" for Anthropic Messages, "gemini" for Gemini native API.
+	 * API mode: "openai" for OpenAI Chat Completions, "litellm" for LiteLLM Proxy Chat Completions,
+	 * "openai-responses" for OpenAI Responses, "ollama" for Ollama native API,
+	 * "anthropic" for Anthropic Messages, "gemini" for Gemini native API.
 	 * Default is "openai".
 	 */
 	apiMode?: HFApiMode;
@@ -182,4 +189,4 @@ export interface RetryConfig {
 }
 
 /** Supports API mode. */
-export type HFApiMode = "openai" | "openai-responses" | "ollama" | "anthropic" | "gemini";
+export type HFApiMode = "openai" | "litellm" | "openai-responses" | "ollama" | "anthropic" | "gemini";

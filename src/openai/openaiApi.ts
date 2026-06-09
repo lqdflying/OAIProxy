@@ -35,6 +35,7 @@ import { logCacheUsage } from "../promptCache";
 
 export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unknown>> {
 	private readonly _reasoningDetailTextByKey = new Map<string, string>();
+	protected readonly _cacheUsageApiMode: string = "openai";
 
 	constructor(modelId: string) {
 		super(modelId);
@@ -335,7 +336,7 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 
 					try {
 						const parsed = JSON.parse(data);
-						logCacheUsage("openai", modelId, parsed);
+						logCacheUsage(this._cacheUsageApiMode, modelId, parsed);
 						await this.processDelta(parsed, progress);
 					} catch (e) {
 						console.error("[OpenAI Provider] Failed to parse SSE chunk:", e, "data:", data);
@@ -375,14 +376,11 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 		}
 
 		const deltaObj = choice.delta as Record<string, unknown> | undefined;
+		const messageObj = choice.message as Record<string, unknown> | undefined;
 
 		// Process thinking content first (before regular text content)
 		try {
-			let maybeThinking =
-				(choice as Record<string, unknown> | undefined)?.thinking ??
-				(deltaObj as Record<string, unknown> | undefined)?.thinking ??
-				(deltaObj as Record<string, unknown> | undefined)?.reasoning ??
-				(deltaObj as Record<string, unknown> | undefined)?.reasoning_content;
+			const thinkingCandidates = this.extractThinkingCandidates(choice, deltaObj, messageObj);
 
 			// OpenRouter/Claude/MiniMax reasoning_details array handling.
 			const maybeReasoningDetails =
@@ -400,23 +398,13 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 						emitted = true;
 					}
 				}
-				maybeThinking = null; // Skip simple thinking if details present
-			}
-
-			// Fallback to simple thinking if no details
-			if (maybeThinking !== undefined && maybeThinking !== null) {
-				let text = "";
-				// let metadata: Record<string, unknown> | undefined;
-				if (maybeThinking && typeof maybeThinking === "object") {
-					const mt = maybeThinking as Record<string, unknown>;
-					text = typeof mt["text"] === "string" ? (mt["text"] as string) : JSON.stringify(mt);
-					// metadata = mt["metadata"] ? (mt["metadata"] as Record<string, unknown>) : undefined;
-				} else if (typeof maybeThinking === "string") {
-					text = maybeThinking;
-				}
-				if (text) {
-					this.bufferThinkingContent(text, progress);
-					emitted = true;
+			} else {
+				// Fallback to simple thinking if no details
+				for (const text of thinkingCandidates) {
+					if (text) {
+						this.bufferThinkingContent(text, progress);
+						emitted = true;
+					}
 				}
 			}
 		} catch (e) {
@@ -487,6 +475,71 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 			await this.flushToolCallBuffers(progress, /*throwOnInvalid*/ true);
 		}
 		return emitted;
+	}
+
+	private extractThinkingCandidates(
+		choice: Record<string, unknown>,
+		deltaObj: Record<string, unknown> | undefined,
+		messageObj: Record<string, unknown> | undefined
+	): string[] {
+		const out: string[] = [];
+		const add = (value: unknown) => {
+			for (const text of this.extractThinkingTexts(value)) {
+				if (text && !out.includes(text)) {
+					out.push(text);
+				}
+			}
+		};
+
+		add(choice.thinking);
+		add(choice.reasoning);
+		add(choice.reasoning_content);
+		add(choice.thinking_blocks);
+		add(deltaObj?.thinking);
+		add(deltaObj?.reasoning);
+		add(deltaObj?.reasoning_content);
+		add(deltaObj?.thinking_blocks);
+		add(this.getProviderSpecificField(deltaObj, "reasoning_content"));
+		add(this.getProviderSpecificField(deltaObj, "thinking"));
+		add(messageObj?.thinking);
+		add(messageObj?.reasoning);
+		add(messageObj?.reasoning_content);
+		add(messageObj?.thinking_blocks);
+		add(this.getProviderSpecificField(messageObj, "reasoning_content"));
+		add(this.getProviderSpecificField(messageObj, "thinking"));
+
+		return out;
+	}
+
+	private extractThinkingTexts(value: unknown): string[] {
+		if (value === undefined || value === null) {
+			return [];
+		}
+		if (typeof value === "string") {
+			return value ? [value] : [];
+		}
+		if (Array.isArray(value)) {
+			return value.flatMap((item) => this.extractThinkingTexts(item));
+		}
+		if (typeof value === "object") {
+			const record = value as Record<string, unknown>;
+			for (const key of ["text", "thinking", "reasoning", "reasoning_content", "content"]) {
+				const nested = record[key];
+				if (typeof nested === "string" && nested) {
+					return [nested];
+				}
+			}
+			return [JSON.stringify(value)];
+		}
+		return [];
+	}
+
+	private getProviderSpecificField(record: Record<string, unknown> | undefined, key: string): unknown {
+		const providerFields = record?.provider_specific_fields;
+		if (!providerFields || typeof providerFields !== "object" || Array.isArray(providerFields)) {
+			return undefined;
+		}
+		return (providerFields as Record<string, unknown>)[key];
 	}
 
 	private extractReasoningDetailText(detail: ReasoningDetail): string {

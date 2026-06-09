@@ -17,6 +17,13 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
 		apiMode: "openai",
 	},
 	{
+		id: "litellm",
+		label: "LiteLLM Proxy",
+		provider: "litellm",
+		baseUrl: "https://ai.nube.sh/api/v1",
+		apiMode: "litellm",
+	},
+	{
 		id: "anthropic",
 		label: "Anthropic",
 		provider: "anthropic",

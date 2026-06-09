@@ -8,6 +8,7 @@ The provider IDs match OAIProxy's built-in presets:
 |---|---|---|
 | `openai-responses.jsonc` | `openai` | `openai-responses` |
 | `openai-chat-completions.jsonc` | `openai` | `openai` |
+| `litellm.jsonc` | `litellm` | `litellm` |
 | `anthropic.jsonc` | `anthropic` | `anthropic` |
 | `kimi.jsonc` | `kimi` | `openai` |
 | `deepseek.jsonc` | `deepseek` | `openai` |

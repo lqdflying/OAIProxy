@@ -85,6 +85,44 @@ suite("openaiApi", () => {
 		assert.deepStrictEqual(body.thinking, { type: "enabled" });
 		assert.strictEqual(body.max_completion_tokens, 8192);
 	});
+
+	test("extracts LiteLLM provider-specific reasoning content from stream", async () => {
+		const api = new OpenaiApi("litellm-model");
+		const parts: unknown[] = [];
+		const stream = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(
+					new TextEncoder().encode(
+						[
+							"data: {\"choices\":[{\"delta\":{\"provider_specific_fields\":{\"reasoning_content\":\"thinking...\"}}}]}",
+							"",
+							"data: {\"choices\":[{\"delta\":{\"content\":\"answer\"},\"finish_reason\":\"stop\"}]}",
+							"",
+							"data: [DONE]",
+							"",
+						].join("\n")
+					)
+				);
+				controller.close();
+			},
+		});
+
+		await api.processStreamingResponse(
+			stream,
+			{
+				report(part) {
+					parts.push(part);
+				},
+			},
+			{
+				isCancellationRequested: false,
+				onCancellationRequested: () => ({ dispose() {} }),
+			} as unknown as vscode.CancellationToken
+		);
+
+		assert.ok(parts.some((part) => (part as { value?: unknown }).value === "thinking..."));
+		assert.ok(parts.some((part) => (part as { value?: unknown }).value === "answer"));
+	});
 });
 
 function model(overrides: Partial<HFModelItem>): HFModelItem {

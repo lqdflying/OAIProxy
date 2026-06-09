@@ -1,5 +1,13 @@
 # Change Log
 
+## 0.1.15 (2026-06-10)
+
+- Add LiteLLM as a first-class provider/API mode with OpenAI-compatible chat transport, provider-specific `extra_body` request shaping, and LiteLLM-aware cache telemetry.
+- Add a LiteLLM provider preset using a remote HTTPS sample base URL and a Kimi K2.6 Quick Setup preset with thinking enabled through `extra_body`.
+- Add Manual Setup support and examples for `extra_body` JSON so LiteLLM proxy options can be sent without legacy temperature-style defaults.
+- Add LiteLLM usage-check support for public key-info endpoints when a separate usage/admin key is configured.
+- Fix prompt-cache logging so LiteLLM requests and cache usage are both labeled `apiMode: "litellm"` while reusing the OpenAI stream parser.
+
 ## 0.1.14 (2026-06-08)
 
 - Add Quick Setup provider-state badges for unconfigured presets: `Provider Needed`, `Key Needed`, `Provider Ready`, and `Configured`.

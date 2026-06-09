@@ -268,6 +268,7 @@ function providerConfigToModel(config: ProviderConfigItem): HFModelItem {
 function isApiMode(value: unknown): value is HFApiMode {
 	return (
 		value === "openai" ||
+		value === "litellm" ||
 		value === "openai-responses" ||
 		value === "ollama" ||
 		value === "anthropic" ||

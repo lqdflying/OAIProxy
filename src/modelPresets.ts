@@ -217,6 +217,34 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		},
 	},
 	{
+		id: "litellm-kimi-k2-6",
+		label: "Kimi K2.6 (LiteLLM)",
+		providerPresetId: "litellm",
+		category: "latest",
+		tags: ["LiteLLM", "Kimi", "Vision", "Thinking"],
+		description: "Kimi K2.6 through the LiteLLM proxy sample endpoint with thinking enabled.",
+		model: {
+			id: "Kimi-K2.6",
+			displayName: "Kimi K2.6 (LiteLLM)",
+			owned_by: "litellm",
+			baseUrl: "https://ai.nube.sh/api/v1",
+			apiMode: "litellm",
+			vision: true,
+			context_length: 262144,
+			max_tokens: 65536,
+			thinking: {
+				type: "enabled",
+			},
+			include_reasoning_in_request: true,
+			extra_body: {
+				thinking: {
+					type: "enabled",
+					keep: "all",
+				},
+			},
+		},
+	},
+	{
 		id: "kimi-k2-5",
 		label: "Kimi K2.5",
 		providerPresetId: "kimi",

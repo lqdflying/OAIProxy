@@ -5,8 +5,9 @@ The `extra` field allows you to add arbitrary parameters to the API request body
 ## How it works
 
 - Parameters in `extra` are merged directly into the request body
-- Works with all API modes (`openai`, `openai-responses`, `ollama`, `anthropic`, `gemini`)
+- Works with all API modes (`openai`, `litellm`, `openai-responses`, `ollama`, `anthropic`, `gemini`)
 - Values can be any valid JSON type (string, number, boolean, object, array)
+- For `apiMode: "litellm"`, use `extra_body` when LiteLLM expects provider/proxy-specific parameters inside the literal `extra_body` field.
 
 ## Common use cases
 
@@ -54,6 +55,27 @@ The `extra` field allows you to add arbitrary parameters to the API request body
 ## Show thinking in Copilot
 
 These are provider-specific parameters that can make Copilot show a **Thinking** block (if the provider/model supports it).
+
+### LiteLLM
+
+Use `apiMode: "litellm"` when routing through LiteLLM Proxy. OAIProxy maps `thinking.type` into `extra_body.thinking.type`; put any additional LiteLLM/provider-specific thinking options in `extra_body`.
+
+```json
+{
+  "id": "kimi-k2.6",
+  "owned_by": "litellm",
+  "baseUrl": "https://ai.nube.sh/api/v1",
+  "apiMode": "litellm",
+  "thinking": {
+    "type": "enabled"
+  },
+  "extra_body": {
+    "thinking": {
+      "keep": "all"
+    }
+  }
+}
+```
 
 ### OpenAI Responses
 

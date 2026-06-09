@@ -37,6 +37,7 @@ import { OllamaApi } from "./ollama/ollamaApi";
 import { OpenaiApi } from "./openai/openaiApi";
 import { OpenaiResponsesApi } from "./openai/openaiResponsesApi";
 import { OpenAIResponsesStateStore } from "./openai/openaiResponsesState";
+import { LiteLLMApi } from "./litellm/litellmApi";
 import { AnthropicApi } from "./anthropic/anthropicApi";
 import { AnthropicRequestBody } from "./anthropic/anthropicTypes";
 import { GeminiApi, buildGeminiGenerateContentUrl, type GeminiToolCallMeta } from "./gemini/geminiApi";
@@ -647,7 +648,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				await geminiApi.processStreamingResponse(response.body, trackingProgress, token);
 			} else {
 				// OpenAI compatible API mode (default)
-				const openaiApi = new OpenaiApi(model.id);
+				const openaiApi = apiMode === "litellm" ? new LiteLLMApi(model.id) : new OpenaiApi(model.id);
 				const openaiMessages = openaiApi.convertMessages(workingMessages, modelConfig);
 
 				// requestBody
@@ -1008,6 +1009,10 @@ function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
 		hasThinking: body.thinking !== undefined,
 		thinkingType: getNestedString(body.thinking, "type"),
 		thinkingBudgetTokens: getNestedNumber(body.thinking, "budget_tokens"),
+		hasExtraBody: body.extra_body !== undefined,
+		extraBodyThinkingType: getNestedString(getNestedObject(body.extra_body, "thinking"), "type"),
+		extraBodyThinkingBudgetTokens: getNestedNumber(getNestedObject(body.extra_body, "thinking"), "budget_tokens"),
+		hasExtraBodyReasoning: getNestedObject(body.extra_body, "reasoning") !== undefined,
 		hasOutputConfig: body.output_config !== undefined,
 		outputConfigEffort: getNestedString(body.output_config, "effort"),
 	};
@@ -1054,6 +1059,16 @@ function getNestedNumber(value: unknown, key: string): number | undefined {
 	}
 	const nestedValue = (value as Record<string, unknown>)[key];
 	return typeof nestedValue === "number" ? nestedValue : undefined;
+}
+
+function getNestedObject(value: unknown, key: string): Record<string, unknown> | undefined {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		return undefined;
+	}
+	const nestedValue = (value as Record<string, unknown>)[key];
+	return nestedValue && typeof nestedValue === "object" && !Array.isArray(nestedValue)
+		? nestedValue as Record<string, unknown>
+		: undefined;
 }
 
 function containsImagePayload(value: unknown, depth = 0): boolean {

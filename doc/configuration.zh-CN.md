@@ -69,7 +69,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 
 ## 多 API 模式
 
-本扩展支持五种不同的 API 协议，可与各种模型供应商对接。你可以通过 `apiMode` 参数为每个模型指定使用的 API 模式。
+本扩展支持多种 API 协议，可与各种模型供应商对接。你可以通过 `apiMode` 参数为每个模型指定使用的 API 模式。
 
 ### 支持的 API 模式
 
@@ -78,22 +78,27 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
    - 请求头：`Authorization: Bearer <apiKey>`
    - 适用：大多数 OpenAI 兼容供应商（Kimi、DeepSeek、小米 MiMo、MiniMax、ModelScope、SiliconFlow 等）
 
-2. **`openai-responses`** - OpenAI Responses API
+2. **`litellm`** - LiteLLM Proxy Chat Completions API
+   - 端点：`/chat/completions`
+   - 请求头：`Authorization: Bearer <apiKey>`
+   - 适用：需要通过字面量 `extra_body` 传递供应商/代理参数的 LiteLLM 代理端点
+
+3. **`openai-responses`** - OpenAI Responses API
    - 端点：`/responses`
    - 请求头：`Authorization: Bearer <apiKey>`
    - 适用：OpenAI 官方 Responses API（及兼容网关如 rsp4copilot）
 
-3. **`ollama`** - Ollama 原生 API
+4. **`ollama`** - Ollama 原生 API
    - 端点：`/api/chat`
    - 请求头：`Authorization: Bearer <apiKey>`（当存储的 API Key 恰好为 `ollama` 时省略）
    - 适用：本地 Ollama 实例
 
-4. **`anthropic`** - Anthropic Claude API
+5. **`anthropic`** - Anthropic Claude API
    - 端点：`/v1/messages`
    - 请求头：`x-api-key: <apiKey>`
    - 适用：Anthropic Claude 模型
 
-5. **`gemini`** - Gemini 原生 API
+6. **`gemini`** - Gemini 原生 API
    - 端点：`/v1beta/models/{model}:streamGenerateContent?alt=sse`
    - 请求头：`x-goog-api-key: <apiKey>`
    - 适用：Google Gemini 模型（及兼容网关如 rsp4copilot）
@@ -126,6 +131,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 ### 重要说明
 
 - 未指定 `apiMode` 时默认为 `"openai"`。
+- LiteLLM Proxy 在需要通过字面量 `extra_body` 传递供应商参数时使用 `apiMode: "litellm"`。
 - Kimi、DeepSeek 和小米 MiMo 通过其 OpenAI 兼容的 Chat Completions API 使用 `apiMode: "openai"`。
 - MiniMax 的 M 系列模型同时支持 `apiMode: "openai"` 和 `apiMode: "anthropic"`。MiniMax 推荐在 M3 思维链和交错思维工作流中使用 Anthropic 兼容端点。
 - 使用 `ollama` 模式时，OAIProxy 仍需要保存一个 API Key 值。如果本地 Ollama 不需要认证，请使用 `ollama` 作为占位值，这样不会发送 `Authorization` 请求头；其他任意值都会作为 bearer token 发送。
@@ -146,7 +152,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 
 ### 供应商预设
 
-配置界面可以为 OpenAI、Anthropic、Kimi、DeepSeek、小米 MiMo 和 MiniMax 预填供应商设置。预设只填入供应商 ID、Base URL 和 API 模式；具体模型 ID 请另行按需添加。
+配置界面可以为 OpenAI、LiteLLM、Anthropic、Kimi、DeepSeek、小米 MiMo 和 MiniMax 预填供应商设置。预设只填入供应商 ID、Base URL 和 API 模式；具体模型 ID 请另行按需添加。
 
 | 供应商 | 供应商 ID | Base URL | API 模式 |
 |---|---|---|---|

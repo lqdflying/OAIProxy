@@ -89,6 +89,7 @@ const modelSupportedReasoningEffortsInput = document.getElementById("modelSuppor
 const modelDefaultReasoningEffortInput = document.getElementById("modelDefaultReasoningEffort");
 const modelHeadersInput = document.getElementById("modelHeaders");
 const modelExtraInput = document.getElementById("modelExtra");
+const modelExtraBodyInput = document.getElementById("modelExtraBody");
 const modelPromptCacheInput = document.getElementById("modelPromptCache");
 const saveModelBtn = document.getElementById("saveModel");
 const cancelModelBtn = document.getElementById("cancelModel");
@@ -228,6 +229,13 @@ function getProviderUsageKind(provider, baseUrl) {
 	) {
 		return "anthropic";
 	}
+	if (
+		normalizedProvider === "litellm" ||
+		normalizedBaseUrl.includes("ai.nube.sh") ||
+		normalizedBaseUrl.includes("litellm")
+	) {
+		return "litellm";
+	}
 	return "";
 }
 
@@ -251,7 +259,7 @@ function getProviderUsageUnsupportedReason(provider, baseUrl) {
 }
 
 function providerUsageNeedsSeparateKey(usageKind) {
-	return usageKind === "openai" || usageKind === "anthropic";
+	return usageKind === "openai" || usageKind === "anthropic" || usageKind === "litellm";
 }
 
 function getProviderUsagePlan(usageKind) {
@@ -263,6 +271,9 @@ function getProviderUsagePlan(usageKind) {
 	}
 	if (usageKind === "openai" || usageKind === "anthropic") {
 		return "Cost usage";
+	}
+	if (usageKind === "litellm") {
+		return "Proxy key spend";
 	}
 	return "";
 }
@@ -276,6 +287,9 @@ function getProviderUsageTargetDescription(usageKind) {
 	}
 	if (usageKind === "openai" || usageKind === "anthropic") {
 		return "Month-to-date spend";
+	}
+	if (usageKind === "litellm") {
+		return "Virtual key spend and budget";
 	}
 	return "Not supported";
 }
@@ -1010,6 +1024,7 @@ function applyModelToForm(model) {
 	modelThinkingTypeInput.value = model.thinking?.type || "";
 	setJsonInput(modelHeadersInput, providerInfo.headers ?? model.headers);
 	setJsonInput(modelExtraInput, model.extra);
+	setJsonInput(modelExtraBodyInput, model.extra_body);
 	setJsonInput(modelPromptCacheInput, model.prompt_cache);
 	updateModelProviderKeyPlaceholder();
 }
@@ -1104,6 +1119,7 @@ document.getElementById("addProvider").addEventListener("click", () => {
 		<td>
 			<select class="provider-input" data-field="apiMode">
 				<option value="openai">OpenAI</option>
+				<option value="litellm">LiteLLM</option>
 				<option value="openai-responses">OpenAI Responses</option>
 				<option value="ollama">Ollama</option>
 				<option value="anthropic">Anthropic</option>
@@ -1432,6 +1448,7 @@ function renderProviders() {
 					<td class="provider-mode-cell">
 						<select class="provider-input" data-field="apiMode">
 							<option value="openai" ${apiMode === "openai" ? "selected" : ""}>OpenAI</option>
+							<option value="litellm" ${apiMode === "litellm" ? "selected" : ""}>LiteLLM</option>
 							<option value="openai-responses" ${apiMode === "openai-responses" ? "selected" : ""}>OpenAI Responses</option>
 							<option value="ollama" ${apiMode === "ollama" ? "selected" : ""}>Ollama</option>
 							<option value="anthropic" ${apiMode === "anthropic" ? "selected" : ""}>Anthropic</option>
@@ -1608,6 +1625,7 @@ function resetModelForm() {
 	modelDefaultReasoningEffortInput.value = "";
 	modelHeadersInput.value = "";
 	modelExtraInput.value = "";
+	modelExtraBodyInput.value = "";
 	modelPromptCacheInput.value = "";
 	advancedSettingsContent.style.display = "none";
 	toggleAdvancedSettingsBtn.textContent = "Show Advanced Settings";
@@ -1694,6 +1712,7 @@ function collectModelFormData() {
 		// Parse headers and extra JSON
 		headers: parseJsonField(modelHeadersInput.value),
 		extra: parseJsonField(modelExtraInput.value),
+		extra_body: parseJsonField(modelExtraBodyInput.value),
 		prompt_cache: parseJsonField(modelPromptCacheInput.value),
 		// Include original modelId and configId for update operations
 		originalModelId: isEditing ? modelIdInput.getAttribute("data-original-id") : undefined,
@@ -1882,6 +1901,9 @@ function validateModelData(modelData) {
 	if (!validateJsonObjectInput(modelExtraInput, "Extra Parameters")) {
 		return false;
 	}
+	if (!validateJsonObjectInput(modelExtraBodyInput, "Extra Body")) {
+		return false;
+	}
 	if (!validateJsonObjectInput(modelPromptCacheInput, "Prompt Cache")) {
 		return false;
 	}
@@ -2055,6 +2077,7 @@ function populateModelForm(model) {
 	const headers = model.headers ?? providerInfo?.headers;
 	modelHeadersInput.value = headers ? JSON.stringify(headers, null, 2) : "";
 	modelExtraInput.value = model.extra ? JSON.stringify(model.extra, null, 2) : "";
+	modelExtraBodyInput.value = model.extra_body ? JSON.stringify(model.extra_body, null, 2) : "";
 	modelPromptCacheInput.value = model.prompt_cache ? JSON.stringify(model.prompt_cache, null, 2) : "";
 	// Mark that we're in editing mode by setting an attribute
 	modelIdInput.setAttribute("data-editing", "true");

@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import {
 	checkProviderUsage,
+	buildLiteLLMKeyInfoEndpoint,
 	formatDuration,
 	getProviderUsageAdapter,
 	getProviderUsageSecretKey,
@@ -9,6 +10,7 @@ import {
 	parseDeepSeekBalance,
 	parseKimiBalance,
 	parseMiniMaxTokenPlan,
+	parseLiteLLMKeyInfo,
 	parseOpenAICosts,
 } from "../providerUsage";
 
@@ -162,7 +164,49 @@ suite("providerUsage", () => {
 		assert.strictEqual(getProviderUsageAdapter("openai", "https://api.openai.com/v1"), "openai");
 		assert.strictEqual(getProviderUsageAdapter("custom", "https://api.anthropic.com"), "anthropic");
 		assert.strictEqual(getProviderUsageAdapter("minimax-anthropic", "https://api.minimax.io/anthropic"), "minimax");
+		assert.strictEqual(getProviderUsageAdapter("litellm", "https://ai.nube.sh/api/v1"), "litellm");
 		assert.strictEqual(getProviderUsageSecretKey("OpenAI"), "oaicopilot.usageApiKey.openai");
+	});
+
+	test("parses LiteLLM key info and builds management endpoint", () => {
+		const result = parseLiteLLMKeyInfo({
+			info: {
+				key_alias: "default",
+				spend: 2.5,
+				max_budget: 10,
+				budget_duration: "30d",
+				models: ["Kimi-K2.6"],
+			},
+		});
+
+		assert.strictEqual(result.summary, "USD 7.5 remaining / USD 10 budget (USD 2.5 spent)");
+		assert.deepStrictEqual(result.details, [
+			"Key: default",
+			"Spend: USD 2.5",
+			"Budget: USD 10",
+			"Remaining: USD 7.5",
+			"Budget duration: 30d",
+			"Models: Kimi-K2.6",
+		]);
+		assert.strictEqual(
+			buildLiteLLMKeyInfoEndpoint("https://ai.nube.sh/api/v1", "sk-test"),
+			"https://ai.nube.sh/key/info?key=sk-test"
+		);
+		assert.strictEqual(
+			buildLiteLLMKeyInfoEndpoint("https://proxy.example.test/v1/", "sk-test"),
+			"https://proxy.example.test/key/info?key=sk-test"
+		);
+	});
+
+	test("requires target provider key for LiteLLM usage checks", async () => {
+		await assert.rejects(
+			checkProviderUsage({
+				provider: "litellm",
+				baseUrl: "https://ai.nube.sh/api/v1",
+				apiKey: "admin",
+			}),
+			/LiteLLM usage checks require the provider API key/
+		);
 	});
 
 	test("detects MiMo as unsupported for provider usage checks", async () => {

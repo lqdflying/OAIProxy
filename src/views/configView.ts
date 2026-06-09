@@ -751,6 +751,7 @@ export class ConfigViewPanel {
 			const secretKey = providerRequiresUsageApiKey(adapter)
 				? getProviderUsageSecretKey(trimmedProvider)
 				: getProviderSecretKey(trimmedProvider);
+			const providerApiKey = await this.secrets.get(getProviderSecretKey(trimmedProvider));
 			const trimmedUsageApiKey = usageApiKey?.trim();
 			if (providerRequiresUsageApiKey(adapter) && trimmedUsageApiKey) {
 				await this.secrets.store(secretKey, trimmedUsageApiKey);
@@ -765,8 +766,16 @@ export class ConfigViewPanel {
 						: `No API key found for provider ${trimmedProvider}. Configure its provider API key first.`
 				);
 			}
+			if (adapter === "litellm" && !providerApiKey) {
+				throw new Error(`No LiteLLM provider API key found for ${trimmedProvider}. Save the provider key first.`);
+			}
 
-			const result = await checkProviderUsage({ provider: trimmedProvider, baseUrl, apiKey });
+			const result = await checkProviderUsage({
+				provider: trimmedProvider,
+				baseUrl,
+				apiKey,
+				targetApiKey: adapter === "litellm" ? providerApiKey : undefined,
+			});
 			this.panel.webview.postMessage({
 				type: "providerUsageResult",
 				provider: trimmedProvider,
