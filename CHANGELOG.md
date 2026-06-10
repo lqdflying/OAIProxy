@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.1.17 (2026-06-10)
+
+- Simplify the Model Management table by hiding the optional Config ID column while preserving internal `id::configId` handling for duplicate model variants.
+
 ## 0.1.16 (2026-06-10)
 
 - Add LiteLLM Quick Setup presets for GLM-5.1 and Qwen3.5-122B-A10B with documented context, output, thinking, vision, and tool defaults, and save official source-note links in every Quick Setup generated model JSON.

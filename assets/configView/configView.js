@@ -1527,7 +1527,7 @@ function renderProviders() {
 function renderModels() {
 	const models = state.models.filter((m) => !isProviderPlaceholderModel(m)).sort((a, b) => a.id.localeCompare(b.id));
 	if (!models.length) {
-		modelTableBody.innerHTML = '<tr><td colspan="8" class="no-data">No models</td></tr>';
+		modelTableBody.innerHTML = '<tr><td colspan="7" class="no-data">No models</td></tr>';
 		return;
 	}
 
@@ -1538,7 +1538,6 @@ function renderModels() {
 				<td>${model.id}</td>
 				<td>${model.owned_by}</td>
 				<td>${model.displayName || ""}</td>
-				<td>${model.configId || ""}</td>
 				<td>${model.context_length || ""}</td>
 				<td>${model.max_tokens || model.max_completion_tokens || ""}</td>
 				<td>${model.vision ? "True" : ""}</td>
