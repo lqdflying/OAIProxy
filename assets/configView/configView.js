@@ -46,6 +46,7 @@ const quickSetupPanel = document.getElementById("quickSetupPanel");
 const modelPresetSearchInput = document.getElementById("modelPresetSearch");
 const modelPresetProviderFilterInput = document.getElementById("modelPresetProviderFilter");
 const modelPresetCategoryFilterInput = document.getElementById("modelPresetCategoryFilter");
+const modelPresetStatusFilterInput = document.getElementById("modelPresetStatusFilter");
 const modelPresetList = document.getElementById("modelPresetList");
 const selectedPresetSummary = document.getElementById("selectedPresetSummary");
 const addSelectedPresetsBtn = document.getElementById("addSelectedPresets");
@@ -366,19 +367,29 @@ function getPresetProviderState(model) {
 	if (!isProviderConfigured(model)) {
 		return {
 			className: "error",
+			filterValue: "provider-needed",
 			label: "Provider Needed",
 		};
 	}
 	if (requiresProviderKey(model)) {
 		return {
 			className: "warning",
+			filterValue: "key-needed",
 			label: "Key Needed",
 		};
 	}
 	return {
 		className: "success",
+		filterValue: "provider-ready",
 		label: "Provider Ready",
 	};
+}
+
+function getPresetStatusFilterValue(model) {
+	if (hasConfiguredModel(model)) {
+		return "configured";
+	}
+	return getPresetProviderState(model).filterValue;
 }
 
 function getSelectedPresetBatch() {
@@ -833,6 +844,7 @@ function renderModelPresets() {
 	const search = modelPresetSearchInput.value.trim().toLowerCase();
 	const providerFilter = modelPresetProviderFilterInput.value;
 	const categoryFilter = modelPresetCategoryFilterInput.value;
+	const statusFilter = modelPresetStatusFilterInput.value;
 	const presets = state.modelPresets
 		.filter((preset) => {
 			const model = preset.model || {};
@@ -840,6 +852,9 @@ function renderModelPresets() {
 				return false;
 			}
 			if (categoryFilter && preset.category !== categoryFilter) {
+				return false;
+			}
+			if (statusFilter && getPresetStatusFilterValue(model) !== statusFilter) {
 				return false;
 			}
 			if (!search) {
@@ -1234,6 +1249,7 @@ customizePresetBtn.addEventListener("click", () => {
 modelPresetSearchInput.addEventListener("input", renderModelPresets);
 modelPresetProviderFilterInput.addEventListener("change", renderModelPresets);
 modelPresetCategoryFilterInput.addEventListener("change", renderModelPresets);
+modelPresetStatusFilterInput.addEventListener("change", renderModelPresets);
 
 // Provider dropdown change event listener for auto-fill
 modelProviderInput.addEventListener("change", () => {

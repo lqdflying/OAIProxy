@@ -684,7 +684,7 @@ button:not(.secondary):not(.danger) {
 
 .quick-setup-controls {
 	display: grid;
-	grid-template-columns: minmax(180px, 2fr) minmax(140px, 1fr) minmax(140px, 1fr);
+	grid-template-columns: minmax(180px, 2fr) repeat(3, minmax(140px, 1fr));
 	gap: 10px;
 	align-items: end;
 	margin-bottom: 10px;
