@@ -9,6 +9,7 @@ vsc-extension-quickstart.md
 **/.eslintrc.json
 **/*.map
 **/*.ts
+assets/demo.mp4
 .github/**
 .prettierignore
 .vscode-test.mjs
