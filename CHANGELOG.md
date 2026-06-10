@@ -1,5 +1,9 @@
 # Change Log
 
+## 0.1.16 (2026-06-10)
+
+- Add LiteLLM Quick Setup presets for GLM-5.1 and Qwen3.5-122B-A10B with documented context, output, thinking, vision, and tool defaults, and save official source-note links in every Quick Setup generated model JSON.
+
 ## 0.1.15 (2026-06-10)
 
 - Add LiteLLM as a first-class provider/API mode with OpenAI-compatible chat transport, provider-specific `extra_body` request shaping, and LiteLLM-aware cache telemetry.

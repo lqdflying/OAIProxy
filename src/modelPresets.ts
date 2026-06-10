@@ -20,6 +20,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "OpenAI frontier model for complex coding and professional work.",
 		model: {
 			id: "gpt-5.5",
+			_comment: "Quick Setup defaults based on official OpenAI GPT-5.5 model docs: https://developers.openai.com/api/docs/models/gpt-5.5",
 			displayName: "GPT-5.5",
 			owned_by: "openai",
 			baseUrl: "https://api.openai.com/v1",
@@ -48,6 +49,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "OpenAI-compatible Chat Completions setup for GPT-5.5.",
 		model: {
 			id: "gpt-5.5",
+			_comment: "Quick Setup defaults based on official OpenAI GPT-5.5 model docs: https://developers.openai.com/api/docs/models/gpt-5.5",
 			configId: "chat-completions",
 			displayName: "GPT-5.5 (Chat Completions)",
 			owned_by: "openai",
@@ -75,6 +77,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "Anthropic's high-capability Claude model for complex reasoning and agentic coding.",
 		model: {
 			id: "claude-opus-4-7",
+			_comment: "Quick Setup defaults based on official Anthropic Claude model docs: https://platform.claude.com/docs/en/about-claude/models/overview",
 			displayName: "Claude Opus 4.7",
 			owned_by: "anthropic",
 			baseUrl: "https://api.anthropic.com",
@@ -110,6 +113,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "Balanced Claude setup for coding, agent workflows, and daily production use.",
 		model: {
 			id: "claude-sonnet-4-6",
+			_comment: "Quick Setup defaults based on official Anthropic Claude model docs: https://platform.claude.com/docs/en/about-claude/models/overview",
 			displayName: "Claude Sonnet 4.6",
 			owned_by: "anthropic",
 			baseUrl: "https://api.anthropic.com",
@@ -145,6 +149,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "DeepSeek V4 Pro with thinking mode enabled for agentic coding workflows.",
 		model: {
 			id: "deepseek-v4-pro",
+			_comment: "Quick Setup defaults based on official DeepSeek model docs: https://api-docs.deepseek.com/quick_start/pricing",
 			displayName: "DeepSeek V4 Pro",
 			owned_by: "deepseek",
 			baseUrl: "https://api.deepseek.com",
@@ -171,6 +176,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "Fast DeepSeek V4 option with the same OpenAI-compatible endpoint.",
 		model: {
 			id: "deepseek-v4-flash",
+			_comment: "Quick Setup defaults based on official DeepSeek model docs: https://api-docs.deepseek.com/quick_start/pricing",
 			displayName: "DeepSeek V4 Flash",
 			owned_by: "deepseek",
 			baseUrl: "https://api.deepseek.com",
@@ -197,6 +203,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "Kimi's latest agentic coding model with multimodal input and thinking enabled.",
 		model: {
 			id: "kimi-k2.6",
+			_comment: "Quick Setup defaults based on official Kimi API docs: https://platform.kimi.ai/docs/guide/start-using-kimi-api",
 			displayName: "Kimi K2.6",
 			owned_by: "kimi",
 			baseUrl: "https://api.moonshot.ai/v1",
@@ -225,6 +232,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "Kimi K2.6 through the LiteLLM proxy sample endpoint with thinking enabled.",
 		model: {
 			id: "Kimi-K2.6",
+			_comment: "Quick Setup defaults based on official Kimi API docs and LiteLLM extra_body guidance: https://platform.kimi.ai/docs/guide/start-using-kimi-api",
 			displayName: "Kimi K2.6 (LiteLLM)",
 			owned_by: "litellm",
 			baseUrl: "https://ai.nube.sh/api/v1",
@@ -245,6 +253,62 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		},
 	},
 	{
+		id: "litellm-glm-5-1",
+		label: "GLM-5.1 (LiteLLM)",
+		providerPresetId: "litellm",
+		category: "latest",
+		tags: ["LiteLLM", "GLM", "Thinking", "Tools"],
+		description: "Z.AI GLM-5.1 through the LiteLLM proxy sample endpoint with thinking enabled.",
+		model: {
+			id: "GLM-5.1",
+			_comment: "Quick Setup defaults based on official Z.AI GLM-5.1 docs: https://docs.z.ai/guides/llm/glm-5.1",
+			displayName: "GLM-5.1 (LiteLLM)",
+			owned_by: "litellm",
+			baseUrl: "https://ai.nube.sh/api/v1",
+			apiMode: "litellm",
+			vision: false,
+			context_length: 200000,
+			max_tokens: 128000,
+			thinking: {
+				type: "enabled",
+			},
+			include_reasoning_in_request: true,
+			toolCalling: true,
+		},
+	},
+	{
+		id: "litellm-qwen3-5-122b-a10b",
+		label: "Qwen3.5 122B A10B (LiteLLM)",
+		providerPresetId: "litellm",
+		category: "latest",
+		tags: ["LiteLLM", "Qwen", "Vision", "Thinking", "Tools"],
+		description: "Qwen3.5 122B A10B through the LiteLLM proxy sample endpoint with thinking enabled.",
+		model: {
+			id: "Qwen3.5-122B-A10B",
+			_comment: "Quick Setup defaults based on official Qwen3.5 coding/agent docs: https://huggingface.co/Qwen/Qwen3.5-122B-A10B/blob/main/README.md",
+			displayName: "Qwen3.5 122B A10B (LiteLLM)",
+			owned_by: "litellm",
+			baseUrl: "https://ai.nube.sh/api/v1",
+			apiMode: "litellm",
+			vision: true,
+			context_length: 262144,
+			max_tokens: 32768,
+			temperature: 0.6,
+			top_p: 0.95,
+			presence_penalty: 0.0,
+			include_reasoning_in_request: true,
+			toolCalling: true,
+			extra_body: {
+				chat_template_kwargs: {
+					enable_thinking: true,
+				},
+				min_p: 0.0,
+				top_k: 20,
+				repetition_penalty: 1.0,
+			},
+		},
+	},
+	{
 		id: "kimi-k2-5",
 		label: "Kimi K2.5",
 		providerPresetId: "kimi",
@@ -253,6 +317,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "Cost-conscious Kimi multimodal setup for dialogue and agent tasks.",
 		model: {
 			id: "kimi-k2.5",
+			_comment: "Quick Setup defaults based on official Kimi API docs: https://platform.kimi.ai/docs/guide/start-using-kimi-api",
 			displayName: "Kimi K2.5",
 			owned_by: "kimi",
 			baseUrl: "https://api.moonshot.ai/v1",
@@ -281,6 +346,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "Xiaomi MiMo V2.5 Pro for complex agent, coding, and long-context reasoning.",
 		model: {
 			id: "mimo-v2.5-pro",
+			_comment: "Quick Setup defaults based on official Xiaomi MiMo docs/site: https://mimo.xiaomi.com/",
 			displayName: "MiMo V2.5 Pro",
 			owned_by: "mimo",
 			baseUrl: "https://api.xiaomimimo.com/v1",
@@ -304,6 +370,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "Xiaomi MiMo V2.5 full-modal model for multimodal agent workflows.",
 		model: {
 			id: "mimo-v2.5",
+			_comment: "Quick Setup defaults based on official Xiaomi MiMo docs/site: https://mimo.xiaomi.com/",
 			displayName: "MiMo V2.5",
 			owned_by: "mimo",
 			baseUrl: "https://api.xiaomimimo.com/v1",
@@ -327,6 +394,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "Fast Xiaomi MiMo V2 option for lower-cost responses and everyday agent work.",
 		model: {
 			id: "mimo-v2-flash",
+			_comment: "Quick Setup defaults based on official Xiaomi MiMo docs/site: https://mimo.xiaomi.com/",
 			displayName: "MiMo V2 Flash",
 			owned_by: "mimo",
 			baseUrl: "https://api.xiaomimimo.com/v1",
@@ -350,6 +418,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "MiniMax M3 through the OpenAI-compatible API.",
 		model: {
 			id: "MiniMax-M3",
+			_comment: "Quick Setup defaults based on official MiniMax API docs: https://www.minimax.io/platform/document",
 			displayName: "MiniMax M3",
 			owned_by: "minimax",
 			baseUrl: "https://api.minimax.io/v1",
@@ -375,6 +444,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "MiniMax M3 through MiniMax's Anthropic-compatible API.",
 		model: {
 			id: "MiniMax-M3",
+			_comment: "Quick Setup defaults based on official MiniMax API docs: https://www.minimax.io/platform/document",
 			configId: "anthropic",
 			displayName: "MiniMax M3 (Anthropic)",
 			owned_by: "minimax-anthropic",
@@ -406,6 +476,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "Google Gemini's advanced multimodal reasoning model.",
 		model: {
 			id: "gemini-3-pro-preview",
+			_comment: "Quick Setup defaults based on official Google Gemini model docs: https://ai.google.dev/gemini-api/docs/models",
 			displayName: "Gemini 3 Pro Preview",
 			owned_by: "google",
 			baseUrl: "https://generativelanguage.googleapis.com",
@@ -426,6 +497,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "Fast Gemini 3 preview setup for high-volume multimodal work.",
 		model: {
 			id: "gemini-3-flash-preview",
+			_comment: "Quick Setup defaults based on official Google Gemini model docs: https://ai.google.dev/gemini-api/docs/models",
 			displayName: "Gemini 3 Flash Preview",
 			owned_by: "google",
 			baseUrl: "https://generativelanguage.googleapis.com",
@@ -446,6 +518,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "Stable Gemini price-performance model for low-latency agentic tasks.",
 		model: {
 			id: "gemini-2.5-flash",
+			_comment: "Quick Setup defaults based on official Google Gemini model docs: https://ai.google.dev/gemini-api/docs/models",
 			displayName: "Gemini 2.5 Flash",
 			owned_by: "google",
 			baseUrl: "https://generativelanguage.googleapis.com",

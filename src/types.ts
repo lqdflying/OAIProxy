@@ -19,6 +19,11 @@ export interface HFArchitecture {
 
 export interface HFModelItem {
 	id: string;
+	/**
+	 * Human-readable note that can be saved into settings JSON for generated presets.
+	 * This is configuration metadata only and is not sent to model providers.
+	 */
+	_comment?: string;
 	object?: string;
 	created?: number;
 	owned_by: string;

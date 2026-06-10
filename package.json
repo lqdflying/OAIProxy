@@ -32,7 +32,7 @@
 		"type": "git",
 		"url": "https://github.com/lqdflying/OAIProxy"
 	},
-	"version": "0.1.15",
+	"version": "0.1.16",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -155,6 +155,10 @@
 							"id": {
 								"type": "string",
 								"description": "Model ID (e.g., 'glm-4.6')."
+							},
+							"_comment": {
+								"type": "string",
+								"description": "Human-readable note for generated model presets. This is configuration metadata only and is not sent to model providers."
 							},
 							"displayName": {
 								"type": "string",
