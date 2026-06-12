@@ -1,24 +1,17 @@
 {
     "oaicopilot.models": [
         {
-            "id": "kimi-k2.6",
-            "displayName": "Kimi K2.6",
+            "id": "kimi-k2.7-code",
+            "_comment": "Sample based on official Kimi K2.7 Code docs: https://platform.kimi.ai/docs/guide/kimi-k2-7-code-quickstart",
+            "displayName": "Kimi K2.7 Code",
             "owned_by": "kimi",
             "baseUrl": "https://api.moonshot.ai/v1",
             "apiMode": "openai",
             "vision": true,
             "context_length": 262144,
-            "max_tokens": 65536,
-            "thinking": {
-                "type": "enabled",
-            },
+            "max_completion_tokens": 32768,
+            "toolCalling": true,
             "include_reasoning_in_request": true,
-            "extra": {
-                "thinking": {
-                    "type": "enabled",
-                    "keep": "all",
-                },
-            },
         },
     ],
 }

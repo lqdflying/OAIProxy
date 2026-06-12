@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.1.20 (2026-06-12)
+
+- Add Kimi K2.7 Code to Quick Setup with official Moonshot/Kimi model metadata, including the 256K context window, 32K output limit, tool support, vision support, and default always-on thinking behavior.
+- Update the Kimi settings example to use `kimi-k2.7-code` without sending explicit thinking or sampling fields.
+
 ## 0.1.19 (2026-06-10)
 
 - Add a README and Marketplace demo GIF showing the OAIProxy configuration workflow.

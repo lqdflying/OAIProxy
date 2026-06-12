@@ -1,5 +1,6 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
+import { MODEL_PRESETS } from "../modelPresets";
 import { OpenaiApi } from "../openai/openaiApi";
 import type { HFModelItem } from "../types";
 
@@ -84,6 +85,27 @@ suite("openaiApi", () => {
 
 		assert.deepStrictEqual(body.thinking, { type: "enabled" });
 		assert.strictEqual(body.max_completion_tokens, 8192);
+	});
+
+	test("keeps Kimi K2.7 Code request body on official defaults", () => {
+		const preset = MODEL_PRESETS.find((item) => item.id === "kimi-k2-7-code");
+		assert.ok(preset);
+
+		const api = new OpenaiApi("kimi-k2.7-code");
+		const body = api.prepareRequestBody(
+			{
+				model: preset.model.id,
+				messages: [],
+				stream: true,
+			},
+			preset.model
+		);
+
+		assert.strictEqual(body.max_completion_tokens, 32768);
+		assert.strictEqual(body.max_tokens, undefined);
+		assert.strictEqual(body.thinking, undefined);
+		assert.strictEqual(body.temperature, undefined);
+		assert.strictEqual(body.top_p, undefined);
 	});
 
 	test("extracts LiteLLM provider-specific reasoning content from stream", async () => {
