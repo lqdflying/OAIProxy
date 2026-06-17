@@ -217,6 +217,28 @@ export function formatTokenUsageSummary(report: TokenUsageReport): string {
 	return `OAIProxy token usage: ${formatTokenCount(report.inputTokens)} input (${report.inputUsagePercent.toFixed(1)}% input budget, ${report.contextUsagePercent.toFixed(1)}% context).`;
 }
 
+export function getTokenBudgetErrorMessage(report: TokenUsageReport): string | undefined {
+	if (report.maxInputTokens <= 0 || report.inputTokens <= report.maxInputTokens) {
+		return undefined;
+	}
+
+	const overBy = report.inputTokens - report.maxInputTokens;
+	const largestCategories = getVisibleCategories(report)
+		.filter((category) => category.tokens > 0)
+		.sort((a, b) => b.tokens - a.tokens)
+		.slice(0, 4)
+		.map((category) => `${category.label}: ${formatTokenCount(category.tokens)}`)
+		.join("; ");
+	const categorySuffix = largestCategories ? ` Largest categories: ${largestCategories}.` : "";
+
+	return [
+		`OAIProxy blocked this request before contacting the provider because Copilot assembled ${formatTokenCount(report.inputTokens)} input tokens for ${report.modelName}, which is ${formatTokenCount(overBy)} over the advertised input budget of ${formatTokenCount(report.maxInputTokens)}.`,
+		`Output reserve is ${formatTokenCount(report.maxOutputTokens)} tokens.`,
+		"Run /compact in this Copilot chat, start a new chat, or remove large attached files/tool output/terminal output before retrying.",
+		categorySuffix,
+	].join(" ");
+}
+
 function createTokenUsageCategories(): TokenUsageCategory[] {
 	return [
 		{ id: "systemContext", label: "System / Project Context", tokens: 0 },

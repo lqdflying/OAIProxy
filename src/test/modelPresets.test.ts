@@ -55,6 +55,7 @@ suite("modelPresets", () => {
 		assert.strictEqual(preset.model.baseUrl, "https://api.moonshot.ai/v1");
 		assert.strictEqual(preset.model.apiMode, "openai");
 		assert.strictEqual(preset.model.context_length, 262144);
+		assert.strictEqual(preset.model.max_input_tokens, 180000);
 		assert.strictEqual(preset.model.max_completion_tokens, 32768);
 		assert.strictEqual(preset.model.max_tokens, undefined);
 		assert.strictEqual(preset.model.vision, true);

@@ -37,4 +37,28 @@ suite("provideModel", () => {
 		assert.strictEqual(tokenLimits.advertisedContextLength, 1500000);
 		assert.strictEqual(tokenLimits.maxInputTokens + tokenLimits.maxOutputTokens, 1500000);
 	});
+
+	test("honors conservative max input token budget", () => {
+		const tokenLimits = resolveModelTokenLimits({
+			context_length: 262144,
+			max_input_tokens: 180000,
+			max_completion_tokens: 32768,
+		});
+
+		assert.strictEqual(tokenLimits.contextLength, 262144);
+		assert.strictEqual(tokenLimits.advertisedContextLength, 262144);
+		assert.strictEqual(tokenLimits.maxInputTokens, 180000);
+		assert.strictEqual(tokenLimits.maxOutputTokens, 32768);
+	});
+
+	test("caps max input token budget at context minus output reserve", () => {
+		const tokenLimits = resolveModelTokenLimits({
+			context_length: 262144,
+			max_input_tokens: 999999,
+			max_completion_tokens: 32768,
+		});
+
+		assert.strictEqual(tokenLimits.maxInputTokens, 229376);
+		assert.strictEqual(tokenLimits.maxOutputTokens, 32768);
+	});
 });

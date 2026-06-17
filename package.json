@@ -35,7 +35,7 @@
 		"type": "git",
 		"url": "https://github.com/lqdflying/OAIProxy"
 	},
-	"version": "0.1.21",
+	"version": "0.1.22",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -197,6 +197,12 @@
 								"minimum": 1000,
 								"maximum": 10000000,
 								"description": "Model support context length. Default is 128000."
+							},
+							"max_input_tokens": {
+								"type": "number",
+								"minimum": 1,
+								"maximum": 10000000,
+								"description": "Optional advertised input token budget for VS Code/OAIProxy preflight checks. Use this to leave provider-specific safety margin without changing context_length or output token parameters."
 							},
 							"vision": {
 								"type": "boolean",

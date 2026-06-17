@@ -50,7 +50,7 @@ export async function updateContextStatusBar(
 	model: LanguageModelChatInformation,
 	statusBarItem: vscode.StatusBarItem,
 	modelConfig: { includeReasoningInRequest: boolean }
-): Promise<void> {
+): Promise<TokenUsageReport> {
 	const report = await createTokenUsageReport({
 		messages,
 		tools,
@@ -76,4 +76,5 @@ export async function updateContextStatusBar(
 	}
 
 	statusBarItem.show();
+	return report;
 }

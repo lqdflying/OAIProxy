@@ -46,6 +46,7 @@ import { CommonApi } from "./commonApi";
 import { logger } from "./logger";
 import { normalizeReasoningEffortForModel } from "./reasoningEffort";
 import { applyOpenAIPromptCache, hasCacheControl } from "./promptCache";
+import { getTokenBudgetErrorMessage } from "./tokenUsage";
 
 interface ChatInformationOptions {
 	readonly silent?: boolean;
@@ -201,7 +202,19 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			};
 
 			// Update Token Usage
-			updateContextStatusBar(messages, options.tools, model, this.statusBarItem, modelConfig);
+			const tokenUsageReport = await updateContextStatusBar(messages, options.tools, model, this.statusBarItem, modelConfig);
+			const tokenBudgetError = getTokenBudgetErrorMessage(tokenUsageReport);
+			if (tokenBudgetError) {
+				logger.warn("request.contextTooLarge", {
+					modelId: model.id,
+					inputTokens: tokenUsageReport.inputTokens,
+					maxInputTokens: tokenUsageReport.maxInputTokens,
+					maxOutputTokens: tokenUsageReport.maxOutputTokens,
+					messageCount: tokenUsageReport.messageCount,
+					toolCount: tokenUsageReport.toolCount,
+				});
+				throw new Error(tokenBudgetError);
+			}
 
 			// Apply delay between consecutive requests
 			const modelDelay = um?.delay;

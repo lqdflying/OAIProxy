@@ -2,13 +2,14 @@
     "oaicopilot.models": [
         {
             "id": "kimi-k2.7-code",
-            "_comment": "Sample based on official Kimi K2.7 Code docs: https://platform.kimi.ai/docs/guide/kimi-k2-7-code-quickstart",
+            "_comment": "Sample based on official Kimi K2.7 Code docs: https://platform.kimi.ai/docs/guide/kimi-k2-7-code-quickstart. max_input_tokens is an OAIProxy safety budget to encourage VS Code compaction before Moonshot's 256K provider limit.",
             "displayName": "Kimi K2.7 Code",
             "owned_by": "kimi",
             "baseUrl": "https://api.moonshot.ai/v1",
             "apiMode": "openai",
             "vision": true,
             "context_length": 262144,
+            "max_input_tokens": 180000,
             "max_completion_tokens": 32768,
             "toolCalling": true,
             "include_reasoning_in_request": true,

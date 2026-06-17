@@ -64,6 +64,8 @@ English | [简体中文](README.zh-CN.md)
 ]
 ```
 
+Set `max_input_tokens` when a provider needs a safety margin below its official context window. OAIProxy advertises that smaller input budget to VS Code and blocks oversized requests before contacting the provider; it does not send `max_input_tokens` upstream.
+
 ## Configuration UI
 
 The extension provides a visual configuration interface for managing providers, models, and API keys without editing JSON files manually. Open via the Command Palette (`OAIProxy: Open Configuration UI`) or click the OAIProxy status bar item.

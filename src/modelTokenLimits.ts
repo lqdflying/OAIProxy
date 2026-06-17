@@ -5,6 +5,7 @@ const MODEL_PICKER_NEAR_MILLION_MARGIN = 0.1;
 
 interface TokenLimitSource {
 	context_length?: number;
+	max_input_tokens?: number;
 	max_tokens?: number;
 	max_completion_tokens?: number;
 }
@@ -20,7 +21,11 @@ export function resolveModelTokenLimits(model: TokenLimitSource | null | undefin
 	const contextLength = model?.context_length ?? DEFAULT_CONTEXT_LENGTH;
 	const advertisedContextLength = normalizeModelPickerContextLength(contextLength);
 	const maxOutputTokens = model?.max_completion_tokens ?? model?.max_tokens ?? DEFAULT_MAX_TOKENS;
-	const maxInputTokens = Math.max(1, advertisedContextLength - maxOutputTokens);
+	const defaultMaxInputTokens = Math.max(1, advertisedContextLength - maxOutputTokens);
+	const configuredMaxInputTokens = model?.max_input_tokens;
+	const maxInputTokens = configuredMaxInputTokens !== undefined
+		? Math.max(1, Math.min(configuredMaxInputTokens, defaultMaxInputTokens))
+		: defaultMaxInputTokens;
 
 	return {
 		contextLength,

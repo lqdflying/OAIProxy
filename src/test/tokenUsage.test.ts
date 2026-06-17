@@ -9,6 +9,7 @@ import {
 	createTokenUsageReport,
 	formatTokenUsageDetails,
 	formatTokenUsageTooltip,
+	getTokenBudgetErrorMessage,
 	type TokenUsageEstimator,
 } from "../tokenUsage";
 
@@ -131,6 +132,39 @@ suite("tokenUsage", () => {
 		assert.ok(details.includes("Context Window: 95 / 150 (63.3%)"));
 		assert.ok(details.includes("Warning: input estimate is high"));
 		assert.strictEqual(createProgressBar(150, 100), "150.0%");
+	});
+
+	test("formats oversized context preflight error", async () => {
+		const report = await createTokenUsageReport(
+			{
+				messages: [
+					message(SYSTEM_ROLE, [new vscode.LanguageModelTextPart("system")]),
+					message(vscode.LanguageModelChatMessageRole.User, [new vscode.LanguageModelTextPart("hello")]),
+				],
+				tools: [
+					{ name: "read_file", description: "Read a file", inputSchema: {} } as vscode.LanguageModelChatTool,
+				],
+				model: {
+					id: "small-model",
+					name: "Small Model",
+					maxInputTokens: 100,
+					maxOutputTokens: 20,
+				} as vscode.LanguageModelChatInformation,
+				modelConfig: { includeReasoningInRequest: false },
+			},
+			{
+				countMessageDetails: async () => tokenDetails({ overheadTokens: 4, textTokens: 60 }),
+				countToolDefinitions: async () => 40,
+			}
+		);
+
+		const errorMessage = getTokenBudgetErrorMessage(report);
+
+		assert.ok(errorMessage);
+		assert.ok(errorMessage.includes("OAIProxy blocked this request"));
+		assert.ok(errorMessage.includes("over the advertised input budget"));
+		assert.ok(errorMessage.includes("Run /compact"));
+		assert.ok(errorMessage.includes("Tool Definitions"));
 	});
 
 	test("counts message details by part type", async () => {

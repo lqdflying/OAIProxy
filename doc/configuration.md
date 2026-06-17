@@ -47,6 +47,7 @@ There are two ways to open the configuration interface:
 - **Important**: If you use the configuration UI, the global baseURL and API key become invalid.
 - **Provider IDs**: Use descriptive names that match the service (e.g., "modelscope", "iflow", "anthropic", "kimi", "deepseek", "zai", "mimo", "minimax")
 - **Model IDs**: Use the exact model identifier from the provider's documentation
+- **Input budget safety**: Use `max_input_tokens` to advertise a smaller usable input budget to VS Code and OAIProxy preflight checks. This leaves provider-specific safety margin without changing the official `context_length` or output token request parameter.
 - **Config IDs**: Use meaningful names like "thinking", "no-thinking", "fast", "accurate" for multiple configurations
 - **Base URL Overrides**: Set model-specific base URLs when using models from different endpoints of the same provider
 - **Save Frequently**: Changes are saved to VS Code settings immediately

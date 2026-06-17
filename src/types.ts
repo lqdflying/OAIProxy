@@ -38,6 +38,12 @@ export interface HFModelItem {
 	providers?: HFProvider[];
 	architecture?: HFArchitecture;
 	context_length?: number;
+	/**
+	 * Optional OAIProxy/VS Code advertised input budget. Use this to leave a
+	 * provider-specific safety margin without changing the official context
+	 * length or output token request parameters.
+	 */
+	max_input_tokens?: number;
 	vision?: boolean;
 	/**
 	 * Whether VS Code should advertise tool calling for this model.

@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.1.22 (2026-06-17)
+
+- Add an OAIProxy preflight token-budget guard that blocks oversized Copilot requests before contacting the provider and tells users to run `/compact`, start a new chat, or remove large context.
+- Add `max_input_tokens` model configuration support so providers can advertise a conservative VS Code/OAIProxy input budget without changing official `context_length` or upstream output token parameters.
+- Update Kimi K2.7 Code Quick Setup and sample config with a conservative `max_input_tokens` safety budget to encourage compaction before Moonshot's 256K provider limit.
+
 ## 0.1.21 (2026-06-17)
 
 - Add Z.AI GLM-5.2 Quick Setup and provider presets using the official Coding Plan endpoint, 1M context, 131,072 max output tokens, tool support, preserved thinking, and documented reasoning effort values.
