@@ -246,11 +246,16 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			};
 		}
 
-		// thinking (Volcengine provider)
-		if (um?.thinking?.type !== undefined) {
-			rb.thinking = {
-				type: um.thinking.type,
-			};
+		// thinking (Volcengine/Zai provider)
+		if (um?.thinking?.type !== undefined || um?.thinking?.clear_thinking !== undefined) {
+			const thinking: Record<string, unknown> = {};
+			if (um.thinking.type !== undefined) {
+				thinking.type = um.thinking.type;
+			}
+			if (um.thinking.clear_thinking !== undefined) {
+				thinking.clear_thinking = um.thinking.clear_thinking;
+			}
+			rb.thinking = thinking;
 		}
 
 		// stop

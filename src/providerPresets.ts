@@ -45,6 +45,13 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
 		apiMode: "openai",
 	},
 	{
+		id: "zai",
+		label: "Z.AI / Zhipu AI",
+		provider: "zai",
+		baseUrl: "https://api.z.ai/api/coding/paas/v4",
+		apiMode: "openai",
+	},
+	{
 		id: "mimo",
 		label: "Xiaomi MiMo",
 		provider: "mimo",

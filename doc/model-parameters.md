@@ -61,8 +61,11 @@ OpenRouter reasoning configuration object with the following options:
 
 Thinking configuration for providers that expose an explicit thinking mode:
 - `type`: Set to `"enabled"` to enable thinking, `"disabled"` to disable thinking, or `"adaptive"` when supported by the provider
+- `clear_thinking`: For Z.AI/GLM-compatible endpoints, set to `false` to preserve historical `reasoning_content` across turns
 
 MiMo uses the same `thinking.type` request-body shape in OpenAI-compatible mode. For MiMo thinking-enabled agent/tool sessions, keep `include_reasoning_in_request: true` so historical assistant `reasoning_content` is sent back in later turns.
+
+Z.AI GLM-5.2 coding-agent sessions should use `reasoning_effort: "max"`, `thinking.type: "enabled"`, `thinking.clear_thinking: false`, and `include_reasoning_in_request: true` so preserved thinking blocks are returned to the provider unchanged. Supported GLM-5.2 effort values are `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`.
 
 MiniMax M3 supports `thinking.type: "adaptive"` in both OpenAI-compatible and Anthropic-compatible modes. In OpenAI mode, add `extra.reasoning_split: true` to receive thinking separately from answer text.
 
@@ -86,7 +89,7 @@ Provider-aware prompt/KV cache configuration:
 ### `apiMode`
 
 API protocol to use for this model:
-- `"openai"` (default): `/chat/completions` with `Authorization: Bearer` header. Use this for OpenAI-compatible providers such as Kimi, DeepSeek, Xiaomi MiMo, and MiniMax.
+- `"openai"` (default): `/chat/completions` with `Authorization: Bearer` header. Use this for OpenAI-compatible providers such as Kimi, DeepSeek, Z.AI GLM, Xiaomi MiMo, and MiniMax.
 - `"litellm"`: LiteLLM Proxy `/chat/completions` with `Authorization: Bearer` header. OAIProxy maps thinking/reasoning provider options into `extra_body`.
 - `"openai-responses"`: `/responses` with `Authorization: Bearer` header
 - `"ollama"`: `/api/chat` with optional `Authorization: Bearer` header

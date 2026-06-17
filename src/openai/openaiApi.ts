@@ -33,6 +33,19 @@ import { logger } from "../logger";
 import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "../vscodeCompat";
 import { logCacheUsage } from "../promptCache";
 
+interface OpenAIStreamStats {
+	chunkCount: number;
+	contentChunks: number;
+	contentLength: number;
+	reasoningChunks: number;
+	reasoningLength: number;
+	toolCallChunks: number;
+	toolCallDeltaCount: number;
+	messageChunks: number;
+	done: boolean;
+	finishReason?: string;
+}
+
 export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unknown>> {
 	private readonly _reasoningDetailTextByKey = new Map<string, string>();
 	protected readonly _cacheUsageApiMode: string = "openai";
@@ -99,8 +112,8 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 					assistantMessage.content = joinedText;
 				}
 
-				if (modelConfig.includeReasoningInRequest) {
-					assistantMessage.reasoning_content = joinedThinking || "Next step.";
+				if (modelConfig.includeReasoningInRequest && joinedThinking) {
+					assistantMessage.reasoning_content = joinedThinking;
 				}
 
 				if (toolCalls.length > 0) {
@@ -204,10 +217,15 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 		}
 
 		// thinking (Zai provider)
-		if (um?.thinking?.type !== undefined) {
-			rb.thinking = {
-				type: um.thinking.type,
-			};
+		if (um?.thinking?.type !== undefined || um?.thinking?.clear_thinking !== undefined) {
+			const thinking: Record<string, unknown> = {};
+			if (um.thinking.type !== undefined) {
+				thinking.type = um.thinking.type;
+			}
+			if (um.thinking.clear_thinking !== undefined) {
+				thinking.clear_thinking = um.thinking.clear_thinking;
+			}
+			rb.thinking = thinking;
 		}
 
 		// OpenRouter reasoning configuration
@@ -306,6 +324,17 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 		const reader = responseBody.getReader();
 		const decoder = new TextDecoder();
 		let buffer = "";
+		const stats: OpenAIStreamStats = {
+			chunkCount: 0,
+			contentChunks: 0,
+			contentLength: 0,
+			reasoningChunks: 0,
+			reasoningLength: 0,
+			toolCallChunks: 0,
+			toolCallDeltaCount: 0,
+			messageChunks: 0,
+			done: false,
+		};
 
 		try {
 			while (true) {
@@ -329,6 +358,7 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 					const data = line.slice(5).trim();
 					logger.debug("openai.stream.chunk", { modelId, data });
 					if (data === "[DONE]") {
+						stats.done = true;
 						// Do not throw on [DONE]; any incomplete/empty buffers are ignored.
 						await this.flushToolCallBuffers(progress, /*throwOnInvalid*/ false);
 						continue;
@@ -336,6 +366,7 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 
 					try {
 						const parsed = JSON.parse(data);
+						this.updateOpenAIStreamStats(parsed, stats);
 						logCacheUsage(this._cacheUsageApiMode, modelId, parsed);
 						await this.processDelta(parsed, progress);
 					} catch (e) {
@@ -348,6 +379,7 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 					}
 				}
 			}
+			logger.debug("openai.stream.summary", { modelId, ...stats });
 			logger.debug("openai.stream.done", { modelId });
 		} catch (e) {
 			console.error("[OpenAI Provider] Streaming response error:", e);
@@ -357,6 +389,57 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 			reader.releaseLock();
 			// If there's an active thinking sequence, end it first
 			this.reportEndThinking(progress);
+		}
+	}
+
+	private updateOpenAIStreamStats(parsed: unknown, stats: OpenAIStreamStats): void {
+		stats.chunkCount += 1;
+		if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+			return;
+		}
+
+		const obj = parsed as Record<string, unknown>;
+		const choice = Array.isArray(obj.choices) && obj.choices[0] && typeof obj.choices[0] === "object"
+			? obj.choices[0] as Record<string, unknown>
+			: undefined;
+		if (!choice) {
+			return;
+		}
+
+		if (typeof choice.finish_reason === "string") {
+			stats.finishReason = choice.finish_reason;
+		} else if (typeof choice.finishReason === "string") {
+			stats.finishReason = choice.finishReason;
+		}
+
+		this.updateOpenAIStreamPartStats(choice.delta, stats);
+		this.updateOpenAIStreamPartStats(choice.message, stats);
+		if (choice.message && typeof choice.message === "object" && !Array.isArray(choice.message)) {
+			stats.messageChunks += 1;
+		}
+		if (Array.isArray(choice.tool_calls) && choice.tool_calls.length > 0) {
+			stats.toolCallChunks += 1;
+			stats.toolCallDeltaCount += choice.tool_calls.length;
+		}
+	}
+
+	private updateOpenAIStreamPartStats(part: unknown, stats: OpenAIStreamStats): void {
+		if (!part || typeof part !== "object" || Array.isArray(part)) {
+			return;
+		}
+
+		const record = part as Record<string, unknown>;
+		if (typeof record.content === "string" && record.content.length > 0) {
+			stats.contentChunks += 1;
+			stats.contentLength += record.content.length;
+		}
+		if (typeof record.reasoning_content === "string" && record.reasoning_content.length > 0) {
+			stats.reasoningChunks += 1;
+			stats.reasoningLength += record.reasoning_content.length;
+		}
+		if (Array.isArray(record.tool_calls) && record.tool_calls.length > 0) {
+			stats.toolCallChunks += 1;
+			stats.toolCallDeltaCount += record.tool_calls.length;
 		}
 	}
 
@@ -411,62 +494,24 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 			console.error("[OAIProxy Model Provider] Failed to process thinking/reasoning_details:", e);
 		}
 
-		if (deltaObj?.content) {
-			const content = String(deltaObj.content);
-
-			// Process XML think blocks or text content (mutually exclusive)
-			const xmlRes = this.processXmlThinkBlocks(content, progress);
-			if (xmlRes.emittedText) {
-				this._hasEmittedAssistantText = true;
-			}
-			if (xmlRes.emittedAny) {
-				emitted = true;
-			} else {
-				this.reportEndThinking(progress);
-
-				const res = this.processTextContent(content, progress);
-				if (res.emittedAny) {
-					this._hasEmittedAssistantText = true;
-					emitted = true;
-				}
-			}
+		const deltaContent = typeof deltaObj?.content === "string" ? deltaObj.content : "";
+		const finalMessageContent = !this._hasEmittedAssistantText ? this.extractFinalMessageContent(messageObj) : "";
+		const content = deltaContent || finalMessageContent;
+		if (content) {
+			emitted = this.processOpenAITextContent(content, progress) || emitted;
 		}
 
-		if (deltaObj?.tool_calls) {
-			// If there's an active thinking sequence, end it first
-			this.reportEndThinking(progress);
-
-			const toolCalls = deltaObj.tool_calls as Array<Record<string, unknown>>;
-
-			// SSEProcessor-like: if first tool call appears after text, emit a whitespace
-			// to ensure any UI buffers/linkifiers are flushed without adding visible noise.
-			if (!this._emittedBeginToolCallsHint && this._hasEmittedAssistantText && toolCalls.length > 0) {
-				progress.report(new vscode.LanguageModelTextPart(" "));
-				this._emittedBeginToolCallsHint = true;
-			}
-
-			for (const tc of toolCalls) {
-				const idx = (tc.index as number) ?? 0;
-				// Ignore any further deltas for an index we've already completed
-				if (this._completedToolCallIndices.has(idx)) {
-					continue;
-				}
-				const buf = this._toolCallBuffers.get(idx) ?? { args: "" };
-				if (tc.id && typeof tc.id === "string") {
-					buf.id = tc.id as string;
-				}
-				const func = tc.function as Record<string, unknown> | undefined;
-				if (func?.name && typeof func.name === "string") {
-					buf.name = func.name as string;
-				}
-				if (typeof func?.arguments === "string") {
-					buf.args += func.arguments as string;
-				}
-				this._toolCallBuffers.set(idx, buf);
-
-				// Emit immediately once arguments become valid JSON to avoid perceived hanging
-				await this.tryEmitBufferedToolCall(idx, progress);
-			}
+		const deltaToolCalls = Array.isArray(deltaObj?.tool_calls)
+			? deltaObj.tool_calls as Array<Record<string, unknown>>
+			: [];
+		const finalMessageToolCalls = Array.isArray(messageObj?.tool_calls)
+			? messageObj.tool_calls as Array<Record<string, unknown>>
+			: [];
+		if (deltaToolCalls.length > 0) {
+			await this.processOpenAIToolCalls(deltaToolCalls, progress);
+		}
+		if (finalMessageToolCalls.length > 0) {
+			await this.processOpenAIToolCalls(finalMessageToolCalls, progress);
 		}
 
 		const finish = (choice.finish_reason as string | undefined) ?? undefined;
@@ -475,6 +520,99 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 			await this.flushToolCallBuffers(progress, /*throwOnInvalid*/ true);
 		}
 		return emitted;
+	}
+
+	private processOpenAITextContent(content: string, progress: Progress<LanguageModelResponsePart2>): boolean {
+		let emitted = false;
+
+		// Process XML think blocks or text content (mutually exclusive)
+		const xmlRes = this.processXmlThinkBlocks(content, progress);
+		if (xmlRes.emittedText) {
+			this._hasEmittedAssistantText = true;
+		}
+		if (xmlRes.emittedAny) {
+			emitted = true;
+		} else {
+			this.reportEndThinking(progress);
+
+			const res = this.processTextContent(content, progress);
+			if (res.emittedAny) {
+				this._hasEmittedAssistantText = true;
+				emitted = true;
+			}
+		}
+
+		return emitted;
+	}
+
+	private extractFinalMessageContent(messageObj: Record<string, unknown> | undefined): string {
+		const content = messageObj?.content;
+		if (typeof content === "string") {
+			return content;
+		}
+		if (!Array.isArray(content)) {
+			return "";
+		}
+		return content
+			.map((part) => {
+				if (typeof part === "string") {
+					return part;
+				}
+				if (part && typeof part === "object") {
+					const record = part as Record<string, unknown>;
+					if (typeof record.text === "string") {
+						return record.text;
+					}
+					if (typeof record.content === "string") {
+						return record.content;
+					}
+				}
+				return "";
+			})
+			.join("");
+	}
+
+	private async processOpenAIToolCalls(
+		toolCalls: Array<Record<string, unknown>>,
+		progress: Progress<LanguageModelResponsePart2>
+	): Promise<void> {
+		if (toolCalls.length === 0) {
+			return;
+		}
+
+		// If there's an active thinking sequence, end it first
+		this.reportEndThinking(progress);
+
+		// SSEProcessor-like: if first tool call appears after text, emit a whitespace
+		// to ensure any UI buffers/linkifiers are flushed without adding visible noise.
+		if (!this._emittedBeginToolCallsHint && this._hasEmittedAssistantText) {
+			progress.report(new vscode.LanguageModelTextPart(" "));
+			this._emittedBeginToolCallsHint = true;
+		}
+
+		for (let i = 0; i < toolCalls.length; i++) {
+			const tc = toolCalls[i];
+			const idx = typeof tc.index === "number" ? tc.index : i;
+			// Ignore any further deltas for an index we've already completed
+			if (this._completedToolCallIndices.has(idx)) {
+				continue;
+			}
+			const buf = this._toolCallBuffers.get(idx) ?? { args: "" };
+			if (tc.id && typeof tc.id === "string") {
+				buf.id = tc.id as string;
+			}
+			const func = tc.function as Record<string, unknown> | undefined;
+			if (func?.name && typeof func.name === "string") {
+				buf.name = func.name as string;
+			}
+			if (typeof func?.arguments === "string") {
+				buf.args += func.arguments as string;
+			}
+			this._toolCallBuffers.set(idx, buf);
+
+			// Emit immediately once arguments become valid JSON to avoid perceived hanging
+			await this.tryEmitBufferedToolCall(idx, progress);
+		}
 	}
 
 	private extractThinkingCandidates(

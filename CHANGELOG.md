@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.1.21 (2026-06-17)
+
+- Add Z.AI GLM-5.2 Quick Setup and provider presets using the official Coding Plan endpoint, 1M context, 131,072 max output tokens, tool support, preserved thinking, and documented reasoning effort values.
+- Forward Z.AI/OpenAI-compatible `thinking.clear_thinking` and GLM-5.2 `reasoning_effort` settings, including VS Code Thinking Effort defaults for `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`.
+- Improve OpenAI-compatible chat streaming so final `choice.message` content/tool calls can be parsed, preserved thinking is no longer fabricated when absent, and debug logs retain summarized non-empty content, reasoning, and tool-call chunks without exposing raw payloads.
+- Add Z.AI examples, docs, unsupported usage-check handling, and regression coverage for GLM-5.2 request shaping, presets, reasoning effort, and streaming fallback behavior.
+
 ## 0.1.20 (2026-06-12)
 
 - Add Kimi K2.7 Code to Quick Setup with official Moonshot/Kimi model metadata, including the 256K context window, 32K output limit, tool support, vision support, and default always-on thinking behavior.

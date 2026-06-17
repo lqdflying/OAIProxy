@@ -42,6 +42,16 @@ suite("providerPresets", () => {
 		assert.strictEqual(preset.apiMode, "openai");
 	});
 
+	test("includes Z.AI GLM Coding Plan OpenAI-compatible preset", () => {
+		const preset = PROVIDER_PRESETS.find((item) => item.id === "zai");
+
+		assert.ok(preset);
+		assert.strictEqual(preset.label, "Z.AI / Zhipu AI");
+		assert.strictEqual(preset.provider, "zai");
+		assert.strictEqual(preset.baseUrl, "https://api.z.ai/api/coding/paas/v4");
+		assert.strictEqual(preset.apiMode, "openai");
+	});
+
 	test("includes Google Gemini native preset", () => {
 		const preset = PROVIDER_PRESETS.find((item) => item.id === "gemini");
 

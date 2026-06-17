@@ -13,6 +13,7 @@ suite("litellmApi", () => {
 		const body = prepare({
 			thinking: {
 				type: "enabled",
+				clear_thinking: false,
 			},
 			thinking_budget: 4096,
 		});
@@ -21,6 +22,7 @@ suite("litellmApi", () => {
 			thinking: {
 				type: "enabled",
 				budget_tokens: 4096,
+				clear_thinking: false,
 			},
 		});
 		assert.strictEqual(body.thinking, undefined);

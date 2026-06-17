@@ -44,6 +44,21 @@ suite("reasoningEffort", () => {
 		assert.strictEqual(getDefaultReasoningEffort(deepseek, getReasoningEfforts(deepseek)), "high");
 	});
 
+	test("exposes Z.AI GLM-5.2 documented effort values", () => {
+		const glm = model({
+			id: "glm-5.2",
+			owned_by: "zai",
+			reasoning_effort: "max",
+			supported_reasoning_efforts: ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+			default_reasoning_effort: "max",
+		});
+
+		assert.strictEqual(shouldExposeReasoningEffort(glm), true);
+		assert.deepStrictEqual(getReasoningEfforts(glm), ["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
+		assert.strictEqual(getDefaultReasoningEffort(glm, getReasoningEfforts(glm)), "max");
+		assert.strictEqual(normalizeReasoningEffortForModel(glm, "none"), "none");
+	});
+
 	test("preserves configured default effort when valid", () => {
 		const deepseek = model({
 			id: "deepseek-v4-pro",

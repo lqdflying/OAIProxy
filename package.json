@@ -2,7 +2,7 @@
 	"name": "oaiproxy",
 	"publisher": "lqdflying",
 	"displayName": "OAIProxy",
-	"description": "OpenAI/LiteLLM/Ollama/Anthropic/Gemini provider for Copilot Chat, with OpenAI, Anthropic, Kimi, DeepSeek, Xiaomi MiMo, and MiniMax presets",
+	"description": "OpenAI/LiteLLM/Ollama/Anthropic/Gemini provider for Copilot Chat, with OpenAI, Anthropic, Kimi, DeepSeek, Z.AI GLM, Xiaomi MiMo, and MiniMax presets",
 	"icon": "assets/icon.png",
 	"keywords": [
 		"ai",
@@ -15,6 +15,9 @@
 		"kimi",
 		"moonshot",
 		"deepseek",
+		"zai",
+		"zhipu",
+		"glm",
 		"mimo",
 		"xiaomi",
 		"minimax",
@@ -32,7 +35,7 @@
 		"type": "git",
 		"url": "https://github.com/lqdflying/OAIProxy"
 	},
-	"version": "0.1.20",
+	"version": "0.1.21",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -228,7 +231,8 @@
 									"high",
 									"medium",
 									"low",
-									"minimal"
+									"minimal",
+									"none"
 								],
 								"description": "Reasoning effort level (OpenAI reasoning configuration)"
 							},
@@ -260,6 +264,10 @@
 											"adaptive"
 										],
 										"description": "Set to 'enabled' to enable thinking, 'disabled' to disable thinking, or 'adaptive' for Anthropic adaptive thinking."
+									},
+									"clear_thinking": {
+										"type": "boolean",
+										"description": "For Z.AI/GLM-compatible endpoints, set false to preserve historical reasoning_content across turns."
 									}
 								}
 							},

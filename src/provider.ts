@@ -1008,9 +1008,11 @@ function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
 		reasoningEffortNested: getNestedString(body.reasoning, "effort"),
 		hasThinking: body.thinking !== undefined,
 		thinkingType: getNestedString(body.thinking, "type"),
+		thinkingClearThinking: getNestedBoolean(body.thinking, "clear_thinking"),
 		thinkingBudgetTokens: getNestedNumber(body.thinking, "budget_tokens"),
 		hasExtraBody: body.extra_body !== undefined,
 		extraBodyThinkingType: getNestedString(getNestedObject(body.extra_body, "thinking"), "type"),
+		extraBodyThinkingClearThinking: getNestedBoolean(getNestedObject(body.extra_body, "thinking"), "clear_thinking"),
 		extraBodyThinkingBudgetTokens: getNestedNumber(getNestedObject(body.extra_body, "thinking"), "budget_tokens"),
 		hasExtraBodyReasoning: getNestedObject(body.extra_body, "reasoning") !== undefined,
 		hasOutputConfig: body.output_config !== undefined,
@@ -1059,6 +1061,14 @@ function getNestedNumber(value: unknown, key: string): number | undefined {
 	}
 	const nestedValue = (value as Record<string, unknown>)[key];
 	return typeof nestedValue === "number" ? nestedValue : undefined;
+}
+
+function getNestedBoolean(value: unknown, key: string): boolean | undefined {
+	if (!value || typeof value !== "object") {
+		return undefined;
+	}
+	const nestedValue = (value as Record<string, unknown>)[key];
+	return typeof nestedValue === "boolean" ? nestedValue : undefined;
 }
 
 function getNestedObject(value: unknown, key: string): Record<string, unknown> | undefined {

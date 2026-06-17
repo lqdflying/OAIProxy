@@ -20,7 +20,7 @@
 
 1. **添加供应商**：
    - 在供应商管理中点击 "Add Provider"
-   - 可选：选择 "Kimi (Moonshot AI)"、"DeepSeek"、"Xiaomi MiMo" 或 "MiniMax" 等预设
+   - 可选：选择 "Kimi (Moonshot AI)"、"DeepSeek"、"Z.AI / Zhipu AI"、"Xiaomi MiMo" 或 "MiniMax" 等预设
    - 如果不使用预设，输入供应商 ID："modelscope"
    - 手动供应商请输入 Base URL："https://api-inference.modelscope.cn/v1"
    - 输入 API Key：你的 ModelScope API 密钥
@@ -45,7 +45,7 @@
 ### 提示与最佳实践
 
 - **重要**：如果使用配置界面，全局 baseURL 和 API 密钥将失效。
-- **供应商 ID**：使用与服务匹配的描述性名称（如 "modelscope"、"iflow"、"anthropic"、"kimi"、"deepseek"、"mimo"、"minimax"）
+- **供应商 ID**：使用与服务匹配的描述性名称（如 "modelscope"、"iflow"、"anthropic"、"kimi"、"deepseek"、"zai"、"mimo"、"minimax"）
 - **模型 ID**：使用供应商文档中的确切模型标识符
 - **配置 ID**：多个配置使用有意义的名称，如 "thinking"、"no-thinking"、"fast"、"accurate"
 - **Base URL 覆盖**：当同一供应商的不同模型来自不同端点时，设置模型专属 Base URL
@@ -76,7 +76,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 1. **`openai`**（默认）- OpenAI Chat Completions API
    - 端点：`/chat/completions`
    - 请求头：`Authorization: Bearer <apiKey>`
-   - 适用：大多数 OpenAI 兼容供应商（Kimi、DeepSeek、小米 MiMo、MiniMax、ModelScope、SiliconFlow 等）
+   - 适用：大多数 OpenAI 兼容供应商（Kimi、DeepSeek、Z.AI GLM、小米 MiMo、MiniMax、ModelScope、SiliconFlow 等）
 
 2. **`litellm`** - LiteLLM Proxy Chat Completions API
    - 端点：`/chat/completions`
@@ -132,7 +132,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 
 - 未指定 `apiMode` 时默认为 `"openai"`。
 - LiteLLM Proxy 在需要通过字面量 `extra_body` 传递供应商参数时使用 `apiMode: "litellm"`。
-- Kimi、DeepSeek 和小米 MiMo 通过其 OpenAI 兼容的 Chat Completions API 使用 `apiMode: "openai"`。
+- Kimi、DeepSeek、Z.AI GLM 和小米 MiMo 通过其 OpenAI 兼容的 Chat Completions API 使用 `apiMode: "openai"`。
 - MiniMax 的 M 系列模型同时支持 `apiMode: "openai"` 和 `apiMode: "anthropic"`。MiniMax 推荐在 M3 思维链和交错思维工作流中使用 Anthropic 兼容端点。
 - 使用 `ollama` 模式时，OAIProxy 仍需要保存一个 API Key 值。如果本地 Ollama 不需要认证，请使用 `ollama` 作为占位值，这样不会发送 `Authorization` 请求头；其他任意值都会作为 bearer token 发送。
 - 每种 API 模式内部使用不同的消息转换逻辑，以匹配各自供应商的格式（工具、图像、思维链）。
@@ -152,7 +152,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 
 ### 供应商预设
 
-配置界面可以为 OpenAI、LiteLLM、Anthropic、Kimi、DeepSeek、小米 MiMo 和 MiniMax 预填供应商设置。预设只填入供应商 ID、Base URL 和 API 模式；具体模型 ID 请另行按需添加。
+配置界面可以为 OpenAI、LiteLLM、Anthropic、Kimi、DeepSeek、Z.AI GLM、小米 MiMo 和 MiniMax 预填供应商设置。预设只填入供应商 ID、Base URL 和 API 模式；具体模型 ID 请另行按需添加。
 
 | 供应商 | 供应商 ID | Base URL | API 模式 |
 |---|---|---|---|
@@ -160,11 +160,40 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 | Anthropic | `anthropic` | `https://api.anthropic.com` | `anthropic` |
 | Kimi (Moonshot AI) | `kimi` | `https://api.moonshot.ai/v1` | `openai` |
 | DeepSeek | `deepseek` | `https://api.deepseek.com` | `openai` |
+| Z.AI / Zhipu AI | `zai` | `https://api.z.ai/api/coding/paas/v4` | `openai` |
 | Xiaomi MiMo | `mimo` | `https://api.xiaomimimo.com/v1` | `openai` |
 | MiniMax (OpenAI) | `minimax` | `https://api.minimax.io/v1` | `openai` |
 | MiniMax (Anthropic) | `minimax-anthropic` | `https://api.minimax.io/anthropic` | `anthropic` |
 
-配置示例见 `examples/openai-responses.jsonc`、`examples/openai-chat-completions.jsonc`、`examples/anthropic.jsonc`、`examples/mimo.jsonc`、`examples/minimax-openai.jsonc` 和 `examples/minimax-anthropic.jsonc`。OpenAI 和 Anthropic 的用量/费用检查需要单独的 admin key，请在配置界面的 `Usage Key` 字段中填写，不要写入 `settings.json`。小米 MiMo 用量检查会显示为不可用，因为小米目前仅在 Console 页面提供余额和用量信息，尚未公开 API key 用量端点。
+配置示例见 `examples/openai-responses.jsonc`、`examples/openai-chat-completions.jsonc`、`examples/anthropic.jsonc`、`examples/zai-glm.jsonc`、`examples/mimo.jsonc`、`examples/minimax-openai.jsonc` 和 `examples/minimax-anthropic.jsonc`。OpenAI 和 Anthropic 的用量/费用检查需要单独的 admin key，请在配置界面的 `Usage Key` 字段中填写，不要写入 `settings.json`。Z.AI 和小米 MiMo 用量检查会显示为不可用，因为当前公开文档未提供 API key 用量或余额端点。
+
+### Z.AI GLM-5.2
+
+`glm-5.2` 使用 Z.AI GLM Coding Plan 端点。Z.AI 官方文档列出 1,000,000 token 上下文窗口、131,072 最大输出 token、文本输入、思维链/推理支持、`reasoning_effort` 和工具调用。编码会话如需保留历史思维链，请同时设置 `reasoning_effort: "max"`、`thinking.clear_thinking: false` 和 `include_reasoning_in_request: true`。
+
+```json
+"oaicopilot.models": [
+    {
+        "id": "glm-5.2",
+        "displayName": "GLM-5.2",
+        "owned_by": "zai",
+        "baseUrl": "https://api.z.ai/api/coding/paas/v4",
+        "apiMode": "openai",
+        "vision": false,
+        "context_length": 1000000,
+        "max_tokens": 131072,
+        "reasoning_effort": "max",
+        "supported_reasoning_efforts": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+        "default_reasoning_effort": "max",
+        "thinking": {
+            "type": "enabled",
+            "clear_thinking": false
+        },
+        "include_reasoning_in_request": true,
+        "toolCalling": true
+    }
+]
+```
 
 ### MiniMax M3
 

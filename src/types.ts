@@ -181,6 +181,7 @@ export interface HFModelsResponse {
  */
 export interface ThinkingConfig {
 	type?: string;
+	clear_thinking?: boolean;
 }
 
 /**

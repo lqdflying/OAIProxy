@@ -4,7 +4,7 @@
 
 # OAIProxy
 
-**自维护的 VS Code 扩展，用于在 GitHub Copilot Chat 中使用 OpenAI/Ollama/Anthropic/Gemini API 兼容供应商，并内置 OpenAI、Anthropic、Kimi、DeepSeek、小米 MiMo、MiniMax 预设** 🔥
+**自维护的 VS Code 扩展，用于在 GitHub Copilot Chat 中使用 OpenAI/Ollama/Anthropic/Gemini API 兼容供应商，并内置 OpenAI、Anthropic、Kimi、DeepSeek、Z.AI GLM、小米 MiMo、MiniMax 预设** 🔥
 
 [English](README.md) | 简体中文
 
@@ -15,14 +15,14 @@
 ![OAIProxy 配置界面示例](assets/OAIProxy-Sample.png)
 
 ## 特性
-- **多 API 支持**：OpenAI/Ollama/Anthropic/Gemini API，并内置 Kimi、DeepSeek、小米 MiMo、MiniMax、ModelScope、SiliconFlow 等 OpenAI 兼容供应商预设
+- **多 API 支持**：OpenAI/Ollama/Anthropic/Gemini API，并内置 Kimi、DeepSeek、Z.AI GLM、小米 MiMo、MiniMax、ModelScope、SiliconFlow 等 OpenAI 兼容供应商预设
 - **视觉模型**：完整支持图像理解能力
 - **视觉桥接**：在纯文本模型中使用图像 — OAIProxy 通过配置的视觉模型自动描述图像，并采用 LRU 缓存
 - **思维链标签支持**：在所有供应商（OpenAI、Ollama、Gemini、Anthropic）中无缝显示模型思维/推理模块
 - **思维链力度控制**：模型选择器中 VS Code 内置的按模型 Thinking Effort 下拉菜单 — 实时自定义推理力度
 - **高级配置**：灵活的对话请求选项，支持思维链/推理控制
 - **多供应商管理**：同时配置多个供应商模型，自动管理各供应商 API 密钥
-- **供应商用量检查**：在独立的 Provider Usage Check 表格中查看 DeepSeek/Kimi 余额、MiniMax token 套餐剩余额度，以及 OpenAI/Anthropic 当月费用用量；小米 MiMo 会显示为暂不可用，直到小米发布公开的 API key 用量端点
+- **供应商用量检查**：在独立的 Provider Usage Check 表格中查看 DeepSeek/Kimi 余额、MiniMax token 套餐剩余额度，以及 OpenAI/Anthropic 当月费用用量；Z.AI 和小米 MiMo 会显示为暂不可用，直到公开文档化 API key 用量端点
 - **同模型多配置**：为同一模型定义不同参数配置（如 GLM-4.6 开启/关闭思维链）
 - **可视化配置界面**：直观的界面管理供应商和模型
 - **自动重试**：处理 API 错误（429、500、502、503、504），支持指数退避
@@ -66,9 +66,9 @@
 
 本扩展提供可视化配置界面，用于管理供应商、模型和 API 密钥，无需手动编辑 JSON 文件。可通过命令面板（`OAIProxy: Open Configuration UI`）打开，或点击 OAIProxy 状态栏项。
 
-供应商管理表单内置 OpenAI、Anthropic、Kimi、DeepSeek、小米 MiMo、MiniMax 预设。选择预设会填入供应商 ID、Base URL 和 API 模式；模型 ID 仍以供应商当前文档或模型列表为准。示例片段见 `examples/openai-responses.jsonc`、`examples/openai-chat-completions.jsonc`、`examples/anthropic.jsonc`、`examples/mimo.jsonc`、`examples/minimax-openai.jsonc` 和 `examples/minimax-anthropic.jsonc`。
+供应商管理表单内置 OpenAI、Anthropic、Kimi、DeepSeek、Z.AI GLM、小米 MiMo、MiniMax 预设。选择预设会填入供应商 ID、Base URL 和 API 模式；模型 ID 仍以供应商当前文档或模型列表为准。示例片段见 `examples/openai-responses.jsonc`、`examples/openai-chat-completions.jsonc`、`examples/anthropic.jsonc`、`examples/zai-glm.jsonc`、`examples/mimo.jsonc`、`examples/minimax-openai.jsonc` 和 `examples/minimax-anthropic.jsonc`。
 
-独立的 Provider Usage Check 表格会动态列出已配置且支持用量检查的供应商，并按余额、token 套餐或费用用量展示结果。OpenAI 和 Anthropic 的用量/admin key 会与聊天 API key 分开保存。小米 MiMo 条目会显示不可用原因，因为小米目前通过 Console 页面提供余额和用量信息，尚未公开文档化的 API key 用量端点。
+独立的 Provider Usage Check 表格会动态列出已配置且支持用量检查的供应商，并按余额、token 套餐或费用用量展示结果。OpenAI 和 Anthropic 的用量/admin key 会与聊天 API key 分开保存。Z.AI 和小米 MiMo 条目会显示不可用原因，因为当前公开文档未提供 API key 用量或余额端点。
 
 → [完整配置指南](doc/configuration.zh-CN.md)
 
@@ -76,9 +76,13 @@
 
 支持五种 API 协议：`openai`（Chat Completions）、`openai-responses`（Responses）、`ollama`、`anthropic` 和 `gemini`。通过 `apiMode` 参数为每个模型指定。
 
-Kimi、DeepSeek 和小米 MiMo 使用现有 `openai` 模式，因为它们的托管 API 与 OpenAI 格式兼容。MiniMax 同时支持 `openai` 和 `anthropic` 模式；MiniMax 推荐在 M3 思维链和交错思维工作流中使用 Anthropic 兼容端点。
+Kimi、DeepSeek、Z.AI GLM 和小米 MiMo 使用现有 `openai` 模式，因为它们的托管 API 与 OpenAI 格式兼容。MiniMax 同时支持 `openai` 和 `anthropic` 模式；MiniMax 推荐在 M3 思维链和交错思维工作流中使用 Anthropic 兼容端点。
 
 → [完整多 API 指南](doc/configuration.zh-CN.md#多-api-模式)
+
+## Z.AI GLM-5.2
+
+模型 ID 使用 `glm-5.2`，Base URL 使用 Z.AI GLM Coding Plan 端点（`https://api.z.ai/api/coding/paas/v4`）。Z.AI 文档列出 GLM-5.2 为文本模型，支持 1,000,000 token 上下文窗口、131,072 最大输出 token、思维链/推理、reasoning effort 和工具调用。Quick Setup 预设会启用思维链，设置 `reasoning_effort: "max"`，并设置 `thinking.clear_thinking: false` 以在后续请求中保留返回的 reasoning 内容。
 
 ## MiniMax M3
 

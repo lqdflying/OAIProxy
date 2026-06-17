@@ -20,7 +20,7 @@ There are two ways to open the configuration interface:
 
 1. **Add a Provider**:
    - Click "Add Provider" in the Provider Management section
-   - Optionally choose a preset such as "Kimi (Moonshot AI)", "DeepSeek", "Xiaomi MiMo", or "MiniMax"
+   - Optionally choose a preset such as "Kimi (Moonshot AI)", "DeepSeek", "Z.AI / Zhipu AI", "Xiaomi MiMo", or "MiniMax"
    - If you do not use a preset, enter Provider ID: "modelscope"
    - For a manual provider, enter Base URL: "https://api-inference.modelscope.cn/v1"
    - Enter API Key: Your ModelScope API key
@@ -45,7 +45,7 @@ There are two ways to open the configuration interface:
 ### Tips & Best Practices
 
 - **Important**: If you use the configuration UI, the global baseURL and API key become invalid.
-- **Provider IDs**: Use descriptive names that match the service (e.g., "modelscope", "iflow", "anthropic", "kimi", "deepseek", "mimo", "minimax")
+- **Provider IDs**: Use descriptive names that match the service (e.g., "modelscope", "iflow", "anthropic", "kimi", "deepseek", "zai", "mimo", "minimax")
 - **Model IDs**: Use the exact model identifier from the provider's documentation
 - **Config IDs**: Use meaningful names like "thinking", "no-thinking", "fast", "accurate" for multiple configurations
 - **Base URL Overrides**: Set model-specific base URLs when using models from different endpoints of the same provider
@@ -76,7 +76,7 @@ The extension supports multiple API protocols to work with various model provide
 1. **`openai`** (default) - OpenAI Chat Completions API
    - Endpoint: `/chat/completions`
    - Header: `Authorization: Bearer <apiKey>`
-   - Use for: Most OpenAI-compatible providers (Kimi, DeepSeek, Xiaomi MiMo, MiniMax, ModelScope, SiliconFlow, etc.)
+   - Use for: Most OpenAI-compatible providers (Kimi, DeepSeek, Z.AI GLM, Xiaomi MiMo, MiniMax, ModelScope, SiliconFlow, etc.)
 
 2. **`litellm`** - LiteLLM Proxy Chat Completions API
    - Endpoint: `/chat/completions`
@@ -131,7 +131,7 @@ Mixed configuration with multiple API modes:
 ### Important Notes
 - The `apiMode` parameter defaults to `"openai"` if not specified.
 - LiteLLM Proxy uses `apiMode: "litellm"` when provider-specific parameters must be sent in the literal `extra_body` field.
-- Kimi, DeepSeek, and Xiaomi MiMo use `apiMode: "openai"` through their OpenAI-compatible chat completions APIs.
+- Kimi, DeepSeek, Z.AI GLM, and Xiaomi MiMo use `apiMode: "openai"` through their OpenAI-compatible chat completions APIs.
 - MiniMax supports both `apiMode: "openai"` and `apiMode: "anthropic"` for M-series models. MiniMax recommends the Anthropic-compatible M3 endpoint for thinking and interleaved-thinking workflows.
 - When using `ollama` mode, OAIProxy still needs a stored API key value. Use `ollama` as a placeholder for local Ollama if you do not want an `Authorization` header to be sent; any other value is sent as a bearer token.
 - Each API mode uses different message conversion logic internally to match provider-specific formats (tools, images, thinking).
@@ -151,7 +151,7 @@ Mixed configuration with multiple API modes:
 
 ### Provider Presets
 
-The configuration UI can prefill provider settings for OpenAI, Anthropic, Kimi, DeepSeek, Xiaomi MiMo, and MiniMax. Presets fill only the provider ID, base URL, and API mode; add the exact model IDs you want to use separately.
+The configuration UI can prefill provider settings for OpenAI, Anthropic, Kimi, DeepSeek, Z.AI GLM, Xiaomi MiMo, and MiniMax. Presets fill only the provider ID, base URL, and API mode; add the exact model IDs you want to use separately.
 
 | Provider | Provider ID | Base URL | API Mode |
 |---|---|---|---|
@@ -159,11 +159,40 @@ The configuration UI can prefill provider settings for OpenAI, Anthropic, Kimi, 
 | Anthropic | `anthropic` | `https://api.anthropic.com` | `anthropic` |
 | Kimi (Moonshot AI) | `kimi` | `https://api.moonshot.ai/v1` | `openai` |
 | DeepSeek | `deepseek` | `https://api.deepseek.com` | `openai` |
+| Z.AI / Zhipu AI | `zai` | `https://api.z.ai/api/coding/paas/v4` | `openai` |
 | Xiaomi MiMo | `mimo` | `https://api.xiaomimimo.com/v1` | `openai` |
 | MiniMax (OpenAI) | `minimax` | `https://api.minimax.io/v1` | `openai` |
 | MiniMax (Anthropic) | `minimax-anthropic` | `https://api.minimax.io/anthropic` | `anthropic` |
 
-Settings snippets are available in `examples/openai-responses.jsonc`, `examples/openai-chat-completions.jsonc`, `examples/anthropic.jsonc`, `examples/mimo.jsonc`, `examples/minimax-openai.jsonc`, and `examples/minimax-anthropic.jsonc`. OpenAI and Anthropic usage/cost checks require separate admin keys; enter those in the configuration UI's `Usage Key` field instead of adding them to `settings.json`. MiMo usage checks are shown as unavailable because Xiaomi currently documents balance and usage only through Console pages, not a public API-key endpoint.
+Settings snippets are available in `examples/openai-responses.jsonc`, `examples/openai-chat-completions.jsonc`, `examples/anthropic.jsonc`, `examples/zai-glm.jsonc`, `examples/mimo.jsonc`, `examples/minimax-openai.jsonc`, and `examples/minimax-anthropic.jsonc`. OpenAI and Anthropic usage/cost checks require separate admin keys; enter those in the configuration UI's `Usage Key` field instead of adding them to `settings.json`. Z.AI and MiMo usage checks are shown as unavailable because their current public docs do not expose API-key usage or balance endpoints.
+
+### Z.AI GLM-5.2
+
+Use `glm-5.2` with the Z.AI GLM Coding Plan endpoint. The official Z.AI docs list a 1,000,000-token context window, 131,072 max output tokens, text input, reasoning/thinking support, `reasoning_effort`, and tool use. Set `reasoning_effort: "max"` and `thinking.clear_thinking: false` together with `include_reasoning_in_request: true` for preserved-thinking coding conversations.
+
+```json
+"oaicopilot.models": [
+    {
+        "id": "glm-5.2",
+        "displayName": "GLM-5.2",
+        "owned_by": "zai",
+        "baseUrl": "https://api.z.ai/api/coding/paas/v4",
+        "apiMode": "openai",
+        "vision": false,
+        "context_length": 1000000,
+        "max_tokens": 131072,
+        "reasoning_effort": "max",
+        "supported_reasoning_efforts": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+        "default_reasoning_effort": "max",
+        "thinking": {
+            "type": "enabled",
+            "clear_thinking": false
+        },
+        "include_reasoning_in_request": true,
+        "toolCalling": true
+    }
+]
+```
 
 ### MiniMax M3
 

@@ -1,0 +1,24 @@
+{
+    "oaicopilot.models": [
+        {
+            "id": "glm-5.2",
+            "_comment": "Sample based on official Z.AI GLM Coding Plan and Chat Completion docs: https://docs.z.ai/devpack/quick-start, https://docs.z.ai/devpack/latest-model, and https://docs.z.ai/api-reference/llm/chat-completion",
+            "displayName": "GLM-5.2",
+            "owned_by": "zai",
+            "baseUrl": "https://api.z.ai/api/coding/paas/v4",
+            "apiMode": "openai",
+            "vision": false,
+            "context_length": 1000000,
+            "max_tokens": 131072,
+            "reasoning_effort": "max",
+            "supported_reasoning_efforts": ["none", "minimal", "low", "medium", "high", "xhigh", "max"],
+            "default_reasoning_effort": "max",
+            "thinking": {
+                "type": "enabled",
+                "clear_thinking": false,
+            },
+            "toolCalling": true,
+            "include_reasoning_in_request": true,
+        },
+    ],
+}

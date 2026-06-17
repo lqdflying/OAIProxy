@@ -61,8 +61,11 @@ OpenRouter 推理配置对象，包含以下选项：
 
 支持显式思维链模式的供应商配置：
 - `type`：设为 `"enabled"` 开启思维链，`"disabled"` 关闭思维链，供应商支持时可设为 `"adaptive"`
+- `clear_thinking`：Z.AI/GLM 兼容端点可设为 `false`，用于跨轮次保留历史 `reasoning_content`
 
 小米 MiMo 在 OpenAI 兼容模式下使用同样的 `thinking.type` 请求体结构。对开启思维链的 MiMo agent/工具调用会话，请保持 `include_reasoning_in_request: true`，以便后续轮次继续传回历史 assistant 的 `reasoning_content`。
+
+Z.AI GLM-5.2 编码 agent 会话建议同时使用 `reasoning_effort: "max"`、`thinking.type: "enabled"`、`thinking.clear_thinking: false` 和 `include_reasoning_in_request: true`，以便原样传回保留的思维链内容。GLM-5.2 支持的 effort 值为 `none`、`minimal`、`low`、`medium`、`high`、`xhigh` 和 `max`。
 
 MiniMax M3 在 OpenAI 兼容模式和 Anthropic 兼容模式下都支持 `thinking.type: "adaptive"`。OpenAI 模式下可添加 `extra.reasoning_split: true`，将思维链与回答正文分离接收。
 
@@ -86,7 +89,7 @@ MiniMax M3 在 OpenAI 兼容模式和 Anthropic 兼容模式下都支持 `thinki
 ### `apiMode`
 
 此模型使用的 API 协议：
-- `"openai"`（默认）：`/chat/completions`，使用 `Authorization: Bearer` 请求头。适用于 Kimi、DeepSeek、小米 MiMo、MiniMax 等 OpenAI 兼容供应商。
+- `"openai"`（默认）：`/chat/completions`，使用 `Authorization: Bearer` 请求头。适用于 Kimi、DeepSeek、Z.AI GLM、小米 MiMo、MiniMax 等 OpenAI 兼容供应商。
 - `"litellm"`：LiteLLM Proxy `/chat/completions`，使用 `Authorization: Bearer` 请求头。OAIProxy 会把思维链/推理的供应商选项映射到 `extra_body`。
 - `"openai-responses"`：`/responses`，使用 `Authorization: Bearer` 请求头
 - `"ollama"`：`/api/chat`，可选 `Authorization: Bearer` 请求头

@@ -289,6 +289,12 @@ class Logger {
 			if (choice.delta && typeof choice.delta === "object" && !Array.isArray(choice.delta)) {
 				this.addDeltaMetadata(summary, choice.delta as Record<string, unknown>, "choiceDelta");
 			}
+			if (choice.message && typeof choice.message === "object" && !Array.isArray(choice.message)) {
+				this.addDeltaMetadata(summary, choice.message as Record<string, unknown>, "choiceMessage");
+			}
+			if (Array.isArray(choice.tool_calls)) {
+				summary.choiceToolCallCount = choice.tool_calls.length;
+			}
 		}
 
 		const candidate = Array.isArray(obj.candidates) && obj.candidates[0] && typeof obj.candidates[0] === "object"

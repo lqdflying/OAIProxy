@@ -111,6 +111,9 @@ function buildLiteLLMThinking(model: HFModelItem | undefined): Record<string, un
 	if (model?.thinking_budget !== undefined) {
 		thinking.budget_tokens = model.thinking_budget;
 	}
+	if (model?.thinking?.clear_thinking !== undefined) {
+		thinking.clear_thinking = model.thinking.clear_thinking;
+	}
 	return thinking;
 }
 

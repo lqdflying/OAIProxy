@@ -87,6 +87,54 @@ suite("openaiApi", () => {
 		assert.strictEqual(body.max_completion_tokens, 8192);
 	});
 
+	test("passes Z.AI preserved thinking configuration through request body", () => {
+		const api = new OpenaiApi("glm-5.2");
+		const body = api.prepareRequestBody(
+			{
+				model: "glm-5.2",
+				messages: [],
+				stream: true,
+			},
+			model({
+				id: "glm-5.2",
+				owned_by: "zai",
+				baseUrl: "https://api.z.ai/api/coding/paas/v4",
+				apiMode: "openai",
+				max_tokens: 131072,
+				reasoning_effort: "max",
+				thinking: {
+					type: "enabled",
+					clear_thinking: false,
+				},
+			})
+		);
+
+		assert.deepStrictEqual(body.thinking, { type: "enabled", clear_thinking: false });
+		assert.strictEqual(body.max_tokens, 131072);
+		assert.strictEqual(body.reasoning_effort, "max");
+	});
+
+	test("does not invent preserved reasoning content for assistant history", () => {
+		const api = new OpenaiApi("glm-5.2");
+		const messages = api.convertMessages(
+			[
+				{
+					role: vscode.LanguageModelChatMessageRole.Assistant,
+					name: undefined,
+					content: [
+						new vscode.LanguageModelTextPart("Visible answer."),
+					],
+				} as unknown as vscode.LanguageModelChatRequestMessage,
+			],
+			{ includeReasoningInRequest: true }
+		);
+
+		assert.strictEqual(messages.length, 1);
+		assert.strictEqual(messages[0].role, "assistant");
+		assert.strictEqual(messages[0].content, "Visible answer.");
+		assert.strictEqual(messages[0].reasoning_content, undefined);
+	});
+
 	test("keeps Kimi K2.7 Code request body on official defaults", () => {
 		const preset = MODEL_PRESETS.find((item) => item.id === "kimi-k2-7-code");
 		assert.ok(preset);
@@ -144,6 +192,81 @@ suite("openaiApi", () => {
 
 		assert.ok(parts.some((part) => (part as { value?: unknown }).value === "thinking..."));
 		assert.ok(parts.some((part) => (part as { value?: unknown }).value === "answer"));
+	});
+
+	test("emits final message content from OpenAI-compatible stream chunks", async () => {
+		const api = new OpenaiApi("final-message-model");
+		const parts: unknown[] = [];
+		const stream = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(
+					new TextEncoder().encode(
+						[
+							"data: {\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"final answer\"},\"finish_reason\":\"stop\"}]}",
+							"",
+							"data: [DONE]",
+							"",
+						].join("\n")
+					)
+				);
+				controller.close();
+			},
+		});
+
+		await api.processStreamingResponse(
+			stream,
+			{
+				report(part) {
+					parts.push(part);
+				},
+			},
+			{
+				isCancellationRequested: false,
+				onCancellationRequested: () => ({ dispose() {} }),
+			} as unknown as vscode.CancellationToken
+		);
+
+		assert.ok(parts.some((part) => (part as { value?: unknown }).value === "final answer"));
+	});
+
+	test("emits final message tool calls from OpenAI-compatible stream chunks", async () => {
+		const api = new OpenaiApi("final-tool-model");
+		const parts: unknown[] = [];
+		const stream = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(
+					new TextEncoder().encode(
+						[
+							"data: {\"choices\":[{\"message\":{\"role\":\"assistant\",\"tool_calls\":[{\"id\":\"call_1\",\"type\":\"function\",\"function\":{\"name\":\"read_file\",\"arguments\":\"{\\\"path\\\":\\\"README.md\\\"}\"}}]},\"finish_reason\":\"tool_calls\"}]}",
+							"",
+							"data: [DONE]",
+							"",
+						].join("\n")
+					)
+				);
+				controller.close();
+			},
+		});
+
+		await api.processStreamingResponse(
+			stream,
+			{
+				report(part) {
+					parts.push(part);
+				},
+			},
+			{
+				isCancellationRequested: false,
+				onCancellationRequested: () => ({ dispose() {} }),
+			} as unknown as vscode.CancellationToken
+		);
+
+		assert.ok(
+			parts.some((part) => {
+				const toolCall = part as { callId?: unknown; name?: unknown; input?: unknown };
+				return toolCall.callId === "call_1" && toolCall.name === "read_file";
+			})
+		);
 	});
 });
 

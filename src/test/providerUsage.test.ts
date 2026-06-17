@@ -230,6 +230,27 @@ suite("providerUsage", () => {
 		);
 	});
 
+	test("detects Z.AI as unsupported for provider usage checks", async () => {
+		assert.strictEqual(getProviderUsageAdapter("zai", "https://api.z.ai/api/coding/paas/v4"), undefined);
+		assert.strictEqual(getProviderUsageAdapter("custom", "https://api.z.ai/api/paas/v4"), undefined);
+		assert.match(
+			getProviderUsageUnsupportedReason("zai", "https://api.z.ai/api/coding/paas/v4") ?? "",
+			/Z\.AI usage checks are unavailable/
+		);
+		assert.match(
+			getProviderUsageUnsupportedReason("zhipu", "https://open.bigmodel.cn/api/paas/v4") ?? "",
+			/public API-key usage or balance endpoint/
+		);
+		await assert.rejects(
+			checkProviderUsage({
+				provider: "zai",
+				baseUrl: "https://api.z.ai/api/coding/paas/v4",
+				apiKey: "test",
+			}),
+			/Z\.AI usage checks are unavailable/
+		);
+	});
+
 	test("formats non-positive reset times as now", () => {
 		assert.strictEqual(formatDuration(0), "now");
 		assert.strictEqual(formatDuration(-1), "now");
