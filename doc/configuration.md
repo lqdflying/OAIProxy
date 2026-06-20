@@ -172,7 +172,7 @@ Settings snippets are available in `examples/openai-responses.jsonc`, `examples/
 
 Use full Fireworks model IDs with the `https://api.fireworks.ai/inference/v1` base URL. The built-in Quick Setup cards currently cover `accounts/fireworks/models/deepseek-v4-pro`, `accounts/fireworks/models/kimi-k2p7-code`, and `accounts/fireworks/models/glm-5p2`.
 
-Fireworks enables prompt caching upstream. OAIProxy sends a stable `user` affinity value when prompt caching is enabled, preserves returned reasoning content in follow-up requests, and does not add undocumented thinking or reasoning-effort controls. Provider Usage Check uses the public accounts and `billingUsage` APIs with the normal Fireworks key.
+Fireworks enables prompt caching upstream. OAIProxy sends a stable `user` affinity value when prompt caching is enabled and preserves returned reasoning content in follow-up requests. The GLM-5.2 preset exposes the documented distinct reasoning choices `none`, `high`, and `max` in VS Code's Thinking Effort control, with `max` as the model default. Provider Usage Check uses the public accounts and `billingUsage` APIs with the normal Fireworks key.
 
 ### Z.AI GLM-5.2
 

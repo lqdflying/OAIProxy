@@ -18,7 +18,6 @@ import {
 	createRetryConfig,
 	executeWithRetry,
 	normalizeUserModels,
-	getStringConfiguration,
 	isImageMimeType,
 	isVideoMimeType,
 } from "./utils";
@@ -44,7 +43,7 @@ import { GeminiApi, buildGeminiGenerateContentUrl, type GeminiToolCallMeta } fro
 import type { GeminiGenerateContentRequest } from "./gemini/geminiTypes";
 import { CommonApi } from "./commonApi";
 import { logger } from "./logger";
-import { normalizeReasoningEffortForModel } from "./reasoningEffort";
+import { getRequestedReasoningEffort, normalizeReasoningEffortForModel } from "./reasoningEffort";
 import { applyOpenAIPromptCache, hasCacheControl } from "./promptCache";
 import { getTokenBudgetErrorMessage } from "./tokenUsage";
 
@@ -183,7 +182,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				throw new Error(missingProviderSetupMessage);
 			}
 			um = resolveProviderBackedModel(um, userModels, providerConfigs);
-			um = applyModelConfiguration(um, options.modelConfiguration);
+			um = applyModelConfiguration(um, options.modelConfiguration, options.modelOptions);
 
 			// Check if using Ollama native API mode
 			const apiMode = um?.apiMode ?? "openai";
@@ -858,15 +857,16 @@ interface OpenAIResponsesStatefulMarkerLocation {
 
 function applyModelConfiguration(
 	model: HFModelItem | undefined,
-	configuration: ProvideLanguageModelChatResponseOptions["modelConfiguration"] | undefined
+	configuration: ProvideLanguageModelChatResponseOptions["modelConfiguration"] | undefined,
+	modelOptions: ProvideLanguageModelChatResponseOptions["modelOptions"] | undefined
 ): HFModelItem | undefined {
-	if (!model || !configuration) {
+	if (!model) {
 		return model;
 	}
 
 	const reasoningEffort = normalizeReasoningEffortForModel(
 		model,
-		getStringConfiguration(configuration, "reasoningEffort", "reasoning_effort")
+		getRequestedReasoningEffort(configuration, modelOptions)
 	);
 	if (!reasoningEffort) {
 		return model;

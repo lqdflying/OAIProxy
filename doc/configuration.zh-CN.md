@@ -172,7 +172,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 
 使用完整 Fireworks 模型 ID 和 `https://api.fireworks.ai/inference/v1` Base URL。内置 Quick Setup 卡片当前包括 `accounts/fireworks/models/deepseek-v4-pro`、`accounts/fireworks/models/kimi-k2p7-code` 和 `accounts/fireworks/models/glm-5p2`。
 
-Fireworks 在上游默认启用 prompt caching。启用缓存时，OAIProxy 会发送稳定的 `user` affinity 值，在后续请求中保留返回的 reasoning 内容，并且不会添加未在 Fireworks 文档中说明的 thinking 或 reasoning-effort 控制。Provider Usage Check 使用公开 accounts 和 `billingUsage` API，并复用普通 Fireworks key。
+Fireworks 在上游默认启用 prompt caching。启用缓存时，OAIProxy 会发送稳定的 `user` affinity 值，并在后续请求中保留返回的 reasoning 内容。GLM-5.2 预设会在 VS Code 的 Thinking Effort 控件中提供 Fireworks 文档定义的 `none`、`high` 和 `max` 三种不同推理选项，并以 `max` 作为模型默认值。Provider Usage Check 使用公开 accounts 和 `billingUsage` API，并复用普通 Fireworks key。
 
 ### Z.AI GLM-5.2
 

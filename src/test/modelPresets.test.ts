@@ -74,6 +74,9 @@ suite("modelPresets", () => {
 				contextLength: 1048576,
 				maxTokens: 131072,
 				vision: false,
+				reasoningEffort: undefined,
+				supportedReasoningEfforts: undefined,
+				defaultReasoningEffort: undefined,
 			},
 			{
 				presetId: "fireworks-kimi-k2-7-code",
@@ -81,6 +84,9 @@ suite("modelPresets", () => {
 				contextLength: 262144,
 				maxTokens: 32768,
 				vision: true,
+				reasoningEffort: undefined,
+				supportedReasoningEfforts: undefined,
+				defaultReasoningEffort: undefined,
 			},
 			{
 				presetId: "fireworks-glm-5-2",
@@ -88,6 +94,9 @@ suite("modelPresets", () => {
 				contextLength: 1048576,
 				maxTokens: 131072,
 				vision: false,
+				reasoningEffort: "max",
+				supportedReasoningEfforts: ["none", "high", "max"],
+				defaultReasoningEffort: "max",
 			},
 		];
 
@@ -106,7 +115,9 @@ suite("modelPresets", () => {
 			assert.strictEqual(preset.model.toolCalling, true);
 			assert.strictEqual(preset.model.include_reasoning_in_request, true);
 			assert.deepStrictEqual(preset.model.prompt_cache, { enabled: true });
-			assert.strictEqual(preset.model.reasoning_effort, undefined);
+			assert.strictEqual(preset.model.reasoning_effort, item.reasoningEffort);
+			assert.deepStrictEqual(preset.model.supported_reasoning_efforts, item.supportedReasoningEfforts);
+			assert.strictEqual(preset.model.default_reasoning_effort, item.defaultReasoningEffort);
 			assert.strictEqual(preset.model.thinking, undefined);
 			assert.ok(preset.model._comment?.includes("https://app.fireworks.ai/models/fireworks/"));
 		}

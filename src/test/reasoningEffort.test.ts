@@ -4,6 +4,7 @@ import {
 	getDefaultReasoningEffort,
 	getReasoningEffortDescription,
 	getReasoningEfforts,
+	getRequestedReasoningEffort,
 	normalizeReasoningEffortForModel,
 	shouldExposeReasoningEffort,
 } from "../reasoningEffort";
@@ -57,6 +58,30 @@ suite("reasoningEffort", () => {
 		assert.deepStrictEqual(getReasoningEfforts(glm), ["none", "minimal", "low", "medium", "high", "xhigh", "max"]);
 		assert.strictEqual(getDefaultReasoningEffort(glm, getReasoningEfforts(glm)), "max");
 		assert.strictEqual(normalizeReasoningEffortForModel(glm, "none"), "none");
+	});
+
+	test("exposes distinct Fireworks GLM-5.2 effort tiers", () => {
+		const glm = model({
+			id: "accounts/fireworks/models/glm-5p2",
+			owned_by: "fireworks",
+		});
+
+		assert.strictEqual(shouldExposeReasoningEffort(glm), true);
+		assert.deepStrictEqual(getReasoningEfforts(glm), ["none", "high", "max"]);
+		assert.strictEqual(getDefaultReasoningEffort(glm, getReasoningEfforts(glm)), "max");
+		assert.strictEqual(normalizeReasoningEffortForModel(glm, "none"), "none");
+		assert.strictEqual(normalizeReasoningEffortForModel(glm, "medium"), "high");
+		assert.strictEqual(normalizeReasoningEffortForModel(glm, "high"), "high");
+		assert.strictEqual(normalizeReasoningEffortForModel(glm, "xhigh"), "max");
+	});
+
+	test("prefers per-request model options over model configuration", () => {
+		assert.strictEqual(
+			getRequestedReasoningEffort({ reasoningEffort: "max" }, { reasoningEffort: "high" }),
+			"high"
+		);
+		assert.strictEqual(getRequestedReasoningEffort({ reasoning_effort: "max" }, undefined), "max");
+		assert.strictEqual(getRequestedReasoningEffort(undefined, { reasoning_effort: "none" }), "none");
 	});
 
 	test("preserves configured default effort when valid", () => {

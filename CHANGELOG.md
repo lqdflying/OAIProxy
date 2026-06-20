@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.1.24 (2026-06-20)
+
+- Add Fireworks GLM-5.2 Thinking Effort choices for the documented `none`, `high`, and `max` tiers, with `max` as the preset default.
+- Normalize legacy intermediate effort aliases to the nearest Fireworks-supported GLM-5.2 tier and add preset/reasoning regression coverage.
+- Accept Copilot's proposed per-request `modelOptions.reasoningEffort` forwarding while retaining `modelConfiguration.reasoningEffort` compatibility, so OAIProxy is ready for the upstream extension-provider fix.
+- Document the active VS Code extension-contributed model forwarding bug and its official issue/PR for future compatibility checks.
+
 ## 0.1.23 (2026-06-20)
 
 - Add Fireworks AI as a first-class OpenAI-compatible provider with dedicated API-key storage, Provider Management support, documentation, examples, and regression coverage.

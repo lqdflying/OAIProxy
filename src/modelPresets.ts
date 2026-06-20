@@ -301,7 +301,7 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		description: "GLM-5.2 through Fireworks serverless inference.",
 		model: {
 			id: "accounts/fireworks/models/glm-5p2",
-			_comment: "Quick Setup defaults based on the official Fireworks model page and prompt caching guide: https://app.fireworks.ai/models/fireworks/glm-5p2 and https://docs.fireworks.ai/guides/prompt-caching",
+			_comment: "Quick Setup defaults based on the official Fireworks model page, Chat Completions API, and prompt caching guide: https://app.fireworks.ai/models/fireworks/glm-5p2, https://docs.fireworks.ai/api-reference/post-chatcompletions, and https://docs.fireworks.ai/guides/prompt-caching",
 			displayName: "GLM-5.2 (Fireworks)",
 			owned_by: "fireworks",
 			baseUrl: "https://api.fireworks.ai/inference/v1",
@@ -310,6 +310,9 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 			context_length: 1048576,
 			max_tokens: 131072,
 			toolCalling: true,
+			reasoning_effort: "max",
+			supported_reasoning_efforts: ["none", "high", "max"],
+			default_reasoning_effort: "max",
 			include_reasoning_in_request: true,
 			prompt_cache: {
 				enabled: true,
