@@ -12,9 +12,10 @@ The provider IDs match OAIProxy's built-in presets:
 | `anthropic.jsonc` | `anthropic` | `anthropic` |
 | `kimi.jsonc` | `kimi` | `openai` |
 | `deepseek.jsonc` | `deepseek` | `openai` |
+| `fireworks.jsonc` | `fireworks` | `openai` |
 | `zai-glm.jsonc` | `zai` | `openai` |
 | `mimo.jsonc` | `mimo` | `openai` |
 | `minimax-openai.jsonc` | `minimax` | `openai` |
 | `minimax-anthropic.jsonc` | `minimax-anthropic` | `anthropic` |
 
-Normal provider API keys are stored by the extension as `oaicopilot.apiKey.<provider>`, not inside these snippets. For OpenAI and Anthropic usage/cost checks, enter the separate admin key in the configuration UI's `Usage Key` field; it is stored separately as `oaicopilot.usageApiKey.<provider>`.
+Normal provider API keys are stored by the extension as `oaicopilot.apiKey.<provider>`, not inside these snippets. Fireworks usage checks reuse the normal provider key. For OpenAI and Anthropic usage/cost checks, enter the separate admin key in the configuration UI's `Usage Key` field; it is stored separately as `oaicopilot.usageApiKey.<provider>`.

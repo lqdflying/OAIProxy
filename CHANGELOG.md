@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.1.23 (2026-06-20)
+
+- Add Fireworks AI as a first-class OpenAI-compatible provider with dedicated API-key storage, Provider Management support, documentation, examples, and regression coverage.
+- Add Fireworks Quick Setup presets for DeepSeek V4 Pro, Kimi K2.7 Code, and GLM-5.2 using official serverless model IDs, context/output limits, tool and vision capabilities, and preserved reasoning content.
+- Add Fireworks prompt-cache session affinity and cached-token telemetry, verified against live multi-turn requests across all three presets.
+- Add Fireworks month-to-date serverless token usage checks through the public accounts and `billingUsage` APIs using the normal provider API key.
+
 ## 0.1.22 (2026-06-17)
 
 - Add an OAIProxy preflight token-budget guard that blocks oversized Copilot requests before contacting the provider and tells users to run `/compact`, start a new chat, or remove large context.

@@ -132,7 +132,7 @@ Mixed configuration with multiple API modes:
 ### Important Notes
 - The `apiMode` parameter defaults to `"openai"` if not specified.
 - LiteLLM Proxy uses `apiMode: "litellm"` when provider-specific parameters must be sent in the literal `extra_body` field.
-- Kimi, DeepSeek, Z.AI GLM, and Xiaomi MiMo use `apiMode: "openai"` through their OpenAI-compatible chat completions APIs.
+- Fireworks, Kimi, DeepSeek, Z.AI GLM, and Xiaomi MiMo use `apiMode: "openai"` through their OpenAI-compatible chat completions APIs.
 - MiniMax supports both `apiMode: "openai"` and `apiMode: "anthropic"` for M-series models. MiniMax recommends the Anthropic-compatible M3 endpoint for thinking and interleaved-thinking workflows.
 - When using `ollama` mode, OAIProxy still needs a stored API key value. Use `ollama` as a placeholder for local Ollama if you do not want an `Authorization` header to be sent; any other value is sent as a bearer token.
 - Each API mode uses different message conversion logic internally to match provider-specific formats (tools, images, thinking).
@@ -152,7 +152,7 @@ Mixed configuration with multiple API modes:
 
 ### Provider Presets
 
-The configuration UI can prefill provider settings for OpenAI, Anthropic, Kimi, DeepSeek, Z.AI GLM, Xiaomi MiMo, and MiniMax. Presets fill only the provider ID, base URL, and API mode; add the exact model IDs you want to use separately.
+The configuration UI can prefill provider settings for OpenAI, Anthropic, Fireworks, Kimi, DeepSeek, Z.AI GLM, Xiaomi MiMo, and MiniMax. Presets fill only the provider ID, base URL, and API mode; add the exact model IDs you want to use separately.
 
 | Provider | Provider ID | Base URL | API Mode |
 |---|---|---|---|
@@ -160,12 +160,19 @@ The configuration UI can prefill provider settings for OpenAI, Anthropic, Kimi, 
 | Anthropic | `anthropic` | `https://api.anthropic.com` | `anthropic` |
 | Kimi (Moonshot AI) | `kimi` | `https://api.moonshot.ai/v1` | `openai` |
 | DeepSeek | `deepseek` | `https://api.deepseek.com` | `openai` |
+| Fireworks AI | `fireworks` | `https://api.fireworks.ai/inference/v1` | `openai` |
 | Z.AI / Zhipu AI | `zai` | `https://api.z.ai/api/coding/paas/v4` | `openai` |
 | Xiaomi MiMo | `mimo` | `https://api.xiaomimimo.com/v1` | `openai` |
 | MiniMax (OpenAI) | `minimax` | `https://api.minimax.io/v1` | `openai` |
 | MiniMax (Anthropic) | `minimax-anthropic` | `https://api.minimax.io/anthropic` | `anthropic` |
 
-Settings snippets are available in `examples/openai-responses.jsonc`, `examples/openai-chat-completions.jsonc`, `examples/anthropic.jsonc`, `examples/zai-glm.jsonc`, `examples/mimo.jsonc`, `examples/minimax-openai.jsonc`, and `examples/minimax-anthropic.jsonc`. OpenAI and Anthropic usage/cost checks require separate admin keys; enter those in the configuration UI's `Usage Key` field instead of adding them to `settings.json`. Z.AI and MiMo usage checks are shown as unavailable because their current public docs do not expose API-key usage or balance endpoints.
+Settings snippets are available in `examples/openai-responses.jsonc`, `examples/openai-chat-completions.jsonc`, `examples/anthropic.jsonc`, `examples/fireworks.jsonc`, `examples/zai-glm.jsonc`, `examples/mimo.jsonc`, `examples/minimax-openai.jsonc`, and `examples/minimax-anthropic.jsonc`. Fireworks usage checks reuse the normal provider key and report month-to-date serverless tokens across accessible accounts. OpenAI and Anthropic usage/cost checks require separate admin keys; enter those in the configuration UI's `Usage Key` field instead of adding them to `settings.json`. Z.AI and MiMo usage checks are shown as unavailable because their current public docs do not expose API-key usage or balance endpoints.
+
+### Fireworks AI
+
+Use full Fireworks model IDs with the `https://api.fireworks.ai/inference/v1` base URL. The built-in Quick Setup cards currently cover `accounts/fireworks/models/deepseek-v4-pro`, `accounts/fireworks/models/kimi-k2p7-code`, and `accounts/fireworks/models/glm-5p2`.
+
+Fireworks enables prompt caching upstream. OAIProxy sends a stable `user` affinity value when prompt caching is enabled, preserves returned reasoning content in follow-up requests, and does not add undocumented thinking or reasoning-effort controls. Provider Usage Check uses the public accounts and `billingUsage` APIs with the normal Fireworks key.
 
 ### Z.AI GLM-5.2
 

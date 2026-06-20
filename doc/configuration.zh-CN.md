@@ -132,7 +132,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 
 - 未指定 `apiMode` 时默认为 `"openai"`。
 - LiteLLM Proxy 在需要通过字面量 `extra_body` 传递供应商参数时使用 `apiMode: "litellm"`。
-- Kimi、DeepSeek、Z.AI GLM 和小米 MiMo 通过其 OpenAI 兼容的 Chat Completions API 使用 `apiMode: "openai"`。
+- Fireworks、Kimi、DeepSeek、Z.AI GLM 和小米 MiMo 通过其 OpenAI 兼容的 Chat Completions API 使用 `apiMode: "openai"`。
 - MiniMax 的 M 系列模型同时支持 `apiMode: "openai"` 和 `apiMode: "anthropic"`。MiniMax 推荐在 M3 思维链和交错思维工作流中使用 Anthropic 兼容端点。
 - 使用 `ollama` 模式时，OAIProxy 仍需要保存一个 API Key 值。如果本地 Ollama 不需要认证，请使用 `ollama` 作为占位值，这样不会发送 `Authorization` 请求头；其他任意值都会作为 bearer token 发送。
 - 每种 API 模式内部使用不同的消息转换逻辑，以匹配各自供应商的格式（工具、图像、思维链）。
@@ -152,7 +152,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 
 ### 供应商预设
 
-配置界面可以为 OpenAI、LiteLLM、Anthropic、Kimi、DeepSeek、Z.AI GLM、小米 MiMo 和 MiniMax 预填供应商设置。预设只填入供应商 ID、Base URL 和 API 模式；具体模型 ID 请另行按需添加。
+配置界面可以为 OpenAI、LiteLLM、Anthropic、Fireworks、Kimi、DeepSeek、Z.AI GLM、小米 MiMo 和 MiniMax 预填供应商设置。预设只填入供应商 ID、Base URL 和 API 模式；具体模型 ID 请另行按需添加。
 
 | 供应商 | 供应商 ID | Base URL | API 模式 |
 |---|---|---|---|
@@ -160,12 +160,19 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 | Anthropic | `anthropic` | `https://api.anthropic.com` | `anthropic` |
 | Kimi (Moonshot AI) | `kimi` | `https://api.moonshot.ai/v1` | `openai` |
 | DeepSeek | `deepseek` | `https://api.deepseek.com` | `openai` |
+| Fireworks AI | `fireworks` | `https://api.fireworks.ai/inference/v1` | `openai` |
 | Z.AI / Zhipu AI | `zai` | `https://api.z.ai/api/coding/paas/v4` | `openai` |
 | Xiaomi MiMo | `mimo` | `https://api.xiaomimimo.com/v1` | `openai` |
 | MiniMax (OpenAI) | `minimax` | `https://api.minimax.io/v1` | `openai` |
 | MiniMax (Anthropic) | `minimax-anthropic` | `https://api.minimax.io/anthropic` | `anthropic` |
 
-配置示例见 `examples/openai-responses.jsonc`、`examples/openai-chat-completions.jsonc`、`examples/anthropic.jsonc`、`examples/zai-glm.jsonc`、`examples/mimo.jsonc`、`examples/minimax-openai.jsonc` 和 `examples/minimax-anthropic.jsonc`。OpenAI 和 Anthropic 的用量/费用检查需要单独的 admin key，请在配置界面的 `Usage Key` 字段中填写，不要写入 `settings.json`。Z.AI 和小米 MiMo 用量检查会显示为不可用，因为当前公开文档未提供 API key 用量或余额端点。
+配置示例见 `examples/openai-responses.jsonc`、`examples/openai-chat-completions.jsonc`、`examples/anthropic.jsonc`、`examples/fireworks.jsonc`、`examples/zai-glm.jsonc`、`examples/mimo.jsonc`、`examples/minimax-openai.jsonc` 和 `examples/minimax-anthropic.jsonc`。Fireworks 用量检查复用普通供应商 key，并报告可访问账户的当月无服务器 token。OpenAI 和 Anthropic 的用量/费用检查需要单独的 admin key，请在配置界面的 `Usage Key` 字段中填写，不要写入 `settings.json`。Z.AI 和小米 MiMo 用量检查会显示为不可用，因为当前公开文档未提供 API key 用量或余额端点。
+
+### Fireworks AI
+
+使用完整 Fireworks 模型 ID 和 `https://api.fireworks.ai/inference/v1` Base URL。内置 Quick Setup 卡片当前包括 `accounts/fireworks/models/deepseek-v4-pro`、`accounts/fireworks/models/kimi-k2p7-code` 和 `accounts/fireworks/models/glm-5p2`。
+
+Fireworks 在上游默认启用 prompt caching。启用缓存时，OAIProxy 会发送稳定的 `user` affinity 值，在后续请求中保留返回的 reasoning 内容，并且不会添加未在 Fireworks 文档中说明的 thinking 或 reasoning-effort 控制。Provider Usage Check 使用公开 accounts 和 `billingUsage` API，并复用普通 Fireworks key。
 
 ### Z.AI GLM-5.2
 

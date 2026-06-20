@@ -148,7 +148,7 @@ export function activate(context: vscode.ExtensionContext) {
 
 			if (providers.length === 0) {
 				vscode.window.showInformationMessage(
-					"No configured OpenAI, Anthropic, DeepSeek, Kimi/Moonshot, or MiniMax providers found."
+					"No configured OpenAI, Anthropic, DeepSeek, Fireworks, Kimi/Moonshot, or MiniMax providers found."
 				);
 				return;
 			}

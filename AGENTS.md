@@ -16,6 +16,8 @@ npm run build          # Package extension to .vsix
 npm run download-api   # Download VS Code proposed API types (required after vscode.d.ts updates)
 ```
 
+- This workspace is a known headless host without an X server. Do not run `npm run test` or retry VS Code's desktop test runner here; it fails before loading tests with `Missing X server or $DISPLAY`. Run `npm run compile`, `npm run lint`, and the relevant compiled suites through Mocha with `--ui tdd`. For suites importing `vscode`, use a temporary minimal `vscode` module mock outside the repository, run the affected suites, then remove the mock. Report the desktop runner as not attempted due to this known environment constraint rather than as a new test failure.
+
 ## Architecture
 - **Entry**: `src/extension.ts` - registers `HuggingFaceChatModelProvider` under vendor id `oaicopilot`
 - **Core Provider**: `src/provider.ts` - implements `LanguageModelChatProvider` interface
@@ -31,6 +33,7 @@ npm run download-api   # Download VS Code proposed API types (required after vsc
 - The Language Models panel management command stores provider-specific keys for models with a custom `baseUrl` at `oaicopilot.apiKey.<owned_by>`. The generic key `oaicopilot.apiKey` is for models without a provider-specific `baseUrl`.
 - VS Code 1.120+ Thinking Effort uses `LanguageModelChatInformation.configurationSchema` plus `options.modelConfiguration.reasoningEffort`.
 - When adding a new provider or provider preset, check whether the provider offers an official usage/balance/cost API. If a public API-key endpoint exists, add the usage adapter, UI copy, tests, and docs in the same change; if not, document the unsupported reason and do not integrate private console/cookie endpoints.
+- Fireworks is a first-class OpenAI-compatible provider using `https://api.fireworks.ai/inference/v1` and full `accounts/fireworks/models/...` model IDs. Before changing Fireworks presets, verify current serverless availability and metadata in the official model catalog, preserve Fireworks' `p`-encoded slugs such as `kimi-k2p7-code` and `glm-5p2`, keep Fireworks-hosted cards separate from first-party provider cards, use documented prompt-cache affinity fields, and integrate usage only through the public accounts and `billingUsage` APIs.
 - For test VSIX builds, keep the current package version. Do not bump `package.json`, `package-lock.json`, or add a release changelog entry unless the user explicitly says GA/release/version bump.
 - `npm run build` intentionally uses system `npx` with a controlled `PATH` so `vsce` dependency detection uses real npm output. Do not use Bun's npm shim, plain `/usr/bin/npx`, or `--no-dependencies` for final VSIX builds; that can omit runtime dependencies such as `@microsoft/tiktokenizer`.
 - Do not install, reinstall, or reload the OAIProxy VSIX from agent actions unless the user explicitly asks. Build/package the VSIX and let the user install/reload it. If a same-version test VSIX appears stale after install, advise uninstalling the existing extension first, then installing the VSIX again.

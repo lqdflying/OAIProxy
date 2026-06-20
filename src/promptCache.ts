@@ -41,6 +41,15 @@ export function applyOpenAIPromptCache(
 
 	const hasExplicitConfig =
 		(typeof config?.key === "string" && config.key.trim() !== "") || config?.retention !== undefined;
+	if (isFireworksEndpoint(target.model, target.baseUrl)) {
+		if (requestBody.user === undefined) {
+			requestBody.user = typeof config?.key === "string" && config.key.trim()
+				? config.key.trim()
+				: createDefaultPromptCacheKey(target.model, target.modelId);
+		}
+		return;
+	}
+
 	const shouldAutoEnable = isOfficialOpenAIEndpoint(target.model, target.baseUrl);
 	if (!hasExplicitConfig && !shouldAutoEnable) {
 		return;
@@ -183,6 +192,20 @@ function isOfficialOpenAIEndpoint(model: HFModelItem | undefined, baseUrl: strin
 	try {
 		const host = new URL(baseUrl).hostname.toLowerCase();
 		return host === "api.openai.com";
+	} catch {
+		return false;
+	}
+}
+
+function isFireworksEndpoint(model: HFModelItem | undefined, baseUrl: string): boolean {
+	const provider = model?.owned_by?.trim().toLowerCase();
+	if (provider === "fireworks") {
+		return true;
+	}
+
+	try {
+		const host = new URL(baseUrl).hostname.toLowerCase();
+		return host === "api.fireworks.ai";
 	} catch {
 		return false;
 	}

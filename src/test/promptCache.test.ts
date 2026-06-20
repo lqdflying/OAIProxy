@@ -66,6 +66,25 @@ suite("promptCache", () => {
 		assert.strictEqual(body.prompt_cache_retention, "24h");
 	});
 
+	test("uses Fireworks user affinity without sending OpenAI prompt cache fields", () => {
+		const body: Record<string, unknown> = {};
+		applyOpenAIPromptCache(body, {
+			model: model({
+				id: "accounts/fireworks/models/kimi-k2p7-code",
+				owned_by: "fireworks",
+				prompt_cache: {
+					enabled: true,
+				},
+			}),
+			baseUrl: "https://api.fireworks.ai/inference/v1",
+			modelId: "accounts/fireworks/models/kimi-k2p7-code",
+		});
+
+		assert.strictEqual(body.user, "oaiproxy-fireworks-accounts-fireworks-models-kimi-k2p7-code");
+		assert.strictEqual(body.prompt_cache_key, undefined);
+		assert.strictEqual(body.prompt_cache_retention, undefined);
+	});
+
 	test("enables Anthropic cache control for known Anthropic-compatible endpoints by default", () => {
 		assert.strictEqual(
 			isAnthropicPromptCacheEnabled(model({

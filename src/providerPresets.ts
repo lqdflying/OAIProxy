@@ -45,6 +45,13 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
 		apiMode: "openai",
 	},
 	{
+		id: "fireworks",
+		label: "Fireworks AI",
+		provider: "fireworks",
+		baseUrl: "https://api.fireworks.ai/inference/v1",
+		apiMode: "openai",
+	},
+	{
 		id: "zai",
 		label: "Z.AI / Zhipu AI",
 		provider: "zai",

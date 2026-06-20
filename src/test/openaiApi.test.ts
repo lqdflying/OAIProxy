@@ -156,6 +156,28 @@ suite("openaiApi", () => {
 		assert.strictEqual(body.top_p, undefined);
 	});
 
+	test("keeps Fireworks presets free of undocumented thinking controls", () => {
+		const presets = MODEL_PRESETS.filter((item) => item.model.owned_by === "fireworks");
+		assert.strictEqual(presets.length, 3);
+
+		for (const preset of presets) {
+			const api = new OpenaiApi(preset.model.id);
+			const body = api.prepareRequestBody(
+				{
+					model: preset.model.id,
+					messages: [],
+					stream: true,
+				},
+				preset.model
+			);
+
+			assert.strictEqual(body.max_tokens, preset.model.max_tokens);
+			assert.strictEqual(body.max_completion_tokens, undefined);
+			assert.strictEqual(body.reasoning_effort, undefined);
+			assert.strictEqual(body.thinking, undefined);
+		}
+	});
+
 	test("extracts LiteLLM provider-specific reasoning content from stream", async () => {
 		const api = new OpenaiApi("litellm-model");
 		const parts: unknown[] = [];

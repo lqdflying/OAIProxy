@@ -22,6 +22,16 @@ suite("providerPresets", () => {
 		assert.strictEqual(preset.apiMode, "litellm");
 	});
 
+	test("includes Fireworks OpenAI-compatible preset", () => {
+		const preset = PROVIDER_PRESETS.find((item) => item.id === "fireworks");
+
+		assert.ok(preset);
+		assert.strictEqual(preset.label, "Fireworks AI");
+		assert.strictEqual(preset.provider, "fireworks");
+		assert.strictEqual(preset.baseUrl, "https://api.fireworks.ai/inference/v1");
+		assert.strictEqual(preset.apiMode, "openai");
+	});
+
 	test("includes MiniMax Anthropic-compatible preset", () => {
 		const preset = PROVIDER_PRESETS.find((item) => item.id === "minimax-anthropic");
 

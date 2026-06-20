@@ -1,6 +1,7 @@
 import * as assert from "assert";
 import {
 	checkProviderUsage,
+	buildFireworksBillingUsageEndpoint,
 	buildLiteLLMKeyInfoEndpoint,
 	formatDuration,
 	getProviderUsageAdapter,
@@ -8,6 +9,8 @@ import {
 	getProviderUsageUnsupportedReason,
 	parseAnthropicCostReport,
 	parseDeepSeekBalance,
+	parseFireworksAccounts,
+	parseFireworksBillingUsage,
 	parseKimiBalance,
 	parseMiniMaxTokenPlan,
 	parseLiteLLMKeyInfo,
@@ -165,7 +168,124 @@ suite("providerUsage", () => {
 		assert.strictEqual(getProviderUsageAdapter("custom", "https://api.anthropic.com"), "anthropic");
 		assert.strictEqual(getProviderUsageAdapter("minimax-anthropic", "https://api.minimax.io/anthropic"), "minimax");
 		assert.strictEqual(getProviderUsageAdapter("litellm", "https://ai.nube.sh/api/v1"), "litellm");
+		assert.strictEqual(getProviderUsageAdapter("fireworks", "https://api.fireworks.ai/inference/v1"), "fireworks");
+		assert.strictEqual(getProviderUsageAdapter("custom", "https://api.fireworks.ai/inference/v1"), "fireworks");
 		assert.strictEqual(getProviderUsageSecretKey("OpenAI"), "oaicopilot.usageApiKey.openai");
+	});
+
+	test("parses Fireworks accounts and serverless billing usage", () => {
+		assert.deepStrictEqual(
+			parseFireworksAccounts({
+				accounts: [
+					{
+						name: "accounts/team-a",
+						displayName: "Team A",
+					},
+				],
+				nextPageToken: "next",
+			}),
+			{
+				accounts: [
+					{
+						name: "accounts/team-a",
+						displayName: "Team A",
+					},
+				],
+				nextPageToken: "next",
+			}
+		);
+		assert.deepStrictEqual(
+			parseFireworksBillingUsage({
+				serverlessCosts: [
+					{
+						promptTokens: "1842301",
+						completionTokens: "412980",
+						group: {
+							model_name: "accounts/fireworks/models/kimi-k2p7-code",
+						},
+					},
+				],
+			}),
+			[
+				{
+					modelName: "accounts/fireworks/models/kimi-k2p7-code",
+					promptTokens: 1842301,
+					completionTokens: 412980,
+				},
+			]
+		);
+		assert.deepStrictEqual(parseFireworksBillingUsage({}), []);
+		assert.strictEqual(
+			buildFireworksBillingUsageEndpoint("accounts/team-a", new Date("2026-06-20T10:00:00.000Z")),
+			"https://api.fireworks.ai/v1/accounts/team-a/billingUsage?startTime=2026-06-01T00%3A00%3A00.000Z&endTime=2026-06-20T10%3A00%3A00.000Z&usageType=SERVERLESS&groupBy=model_name"
+		);
+	});
+
+	test("aggregates Fireworks usage across discovered accounts", async () => {
+		const originalFetch = globalThis.fetch;
+		const requestedUrls: string[] = [];
+		globalThis.fetch = async (input) => {
+			const url = String(input);
+			requestedUrls.push(url);
+			if (url.startsWith("https://api.fireworks.ai/v1/accounts?")) {
+				return new Response(JSON.stringify({
+					accounts: [
+						{ name: "accounts/team-a", displayName: "Team A" },
+						{ name: "accounts/team-b" },
+					],
+				}), {
+					status: 200,
+					headers: { "content-type": "application/json" },
+				});
+			}
+			if (url.includes("/accounts/team-a/billingUsage?")) {
+				return new Response(JSON.stringify({
+					serverlessCosts: [
+						{
+							promptTokens: "1200",
+							completionTokens: "300",
+							group: { model_name: "accounts/fireworks/models/deepseek-v4-pro" },
+						},
+					],
+				}), { status: 200 });
+			}
+			if (url.includes("/accounts/team-b/billingUsage?")) {
+				return new Response(JSON.stringify({
+					serverlessCosts: [
+						{
+							promptTokens: "800",
+							completionTokens: "200",
+							group: { model_name: "accounts/fireworks/models/glm-5p2" },
+						},
+					],
+				}), { status: 200 });
+			}
+			return new Response("not found", { status: 404, statusText: "Not Found" });
+		};
+
+		try {
+			const result = await checkProviderUsage({
+				provider: "fireworks",
+				baseUrl: "https://api.fireworks.ai/inference/v1",
+				apiKey: "fw-test",
+			});
+
+			assert.strictEqual(result.adapter, "fireworks");
+			assert.strictEqual(result.summary, "2K input + 500 output tokens month-to-date across 2 accounts");
+			assert.ok(result.details.some((line) => line.includes("Team A (accounts/team-a)")));
+			assert.ok(result.details.some((line) => line.includes("accounts/team-b")));
+			assert.strictEqual(requestedUrls.length, 3);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
+	test("rejects malformed Fireworks account responses", () => {
+		assert.throws(() => parseFireworksAccounts({ accounts: "invalid" }), /Fireworks accounts must be an array/);
+		assert.throws(
+			() => parseFireworksBillingUsage({ serverlessCosts: [{ promptTokens: "bad", completionTokens: "1" }] }),
+			/Fireworks promptTokens must be a number/
+		);
 	});
 
 	test("parses LiteLLM key info and builds management endpoint", () => {

@@ -208,6 +208,9 @@ function getProviderUsageKind(provider, baseUrl) {
 	if (normalizedProvider === "deepseek" || normalizedBaseUrl.includes("deepseek.com")) {
 		return "deepseek";
 	}
+	if (normalizedProvider === "fireworks" || normalizedBaseUrl.includes("api.fireworks.ai")) {
+		return "fireworks";
+	}
 	if (
 		normalizedProvider === "kimi" ||
 		normalizedProvider === "moonshot" ||
@@ -270,6 +273,9 @@ function getProviderUsagePlan(usageKind) {
 	if (usageKind === "minimax") {
 		return "Token";
 	}
+	if (usageKind === "fireworks") {
+		return "Token usage";
+	}
 	if (usageKind === "openai" || usageKind === "anthropic") {
 		return "Cost usage";
 	}
@@ -285,6 +291,9 @@ function getProviderUsageTargetDescription(usageKind) {
 	}
 	if (usageKind === "minimax") {
 		return "Tokens left and reset time";
+	}
+	if (usageKind === "fireworks") {
+		return "Month-to-date serverless tokens";
 	}
 	if (usageKind === "openai" || usageKind === "anthropic") {
 		return "Month-to-date spend";

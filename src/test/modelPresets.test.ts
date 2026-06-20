@@ -66,6 +66,52 @@ suite("modelPresets", () => {
 		assert.strictEqual(preset.model.top_p, undefined);
 	});
 
+	test("contains Fireworks open-model quick setup presets", () => {
+		const expected = [
+			{
+				presetId: "fireworks-deepseek-v4-pro",
+				modelId: "accounts/fireworks/models/deepseek-v4-pro",
+				contextLength: 1048576,
+				maxTokens: 131072,
+				vision: false,
+			},
+			{
+				presetId: "fireworks-kimi-k2-7-code",
+				modelId: "accounts/fireworks/models/kimi-k2p7-code",
+				contextLength: 262144,
+				maxTokens: 32768,
+				vision: true,
+			},
+			{
+				presetId: "fireworks-glm-5-2",
+				modelId: "accounts/fireworks/models/glm-5p2",
+				contextLength: 1048576,
+				maxTokens: 131072,
+				vision: false,
+			},
+		];
+
+		for (const item of expected) {
+			const preset = MODEL_PRESETS.find((candidate) => candidate.id === item.presetId);
+			assert.ok(preset);
+			assert.strictEqual(preset.providerPresetId, "fireworks");
+			assert.strictEqual(preset.model.id, item.modelId);
+			assert.strictEqual(preset.model.owned_by, "fireworks");
+			assert.strictEqual(preset.model.baseUrl, "https://api.fireworks.ai/inference/v1");
+			assert.strictEqual(preset.model.apiMode, "openai");
+			assert.strictEqual(preset.model.context_length, item.contextLength);
+			assert.strictEqual(preset.model.max_tokens, item.maxTokens);
+			assert.strictEqual(preset.model.max_completion_tokens, undefined);
+			assert.strictEqual(preset.model.vision, item.vision);
+			assert.strictEqual(preset.model.toolCalling, true);
+			assert.strictEqual(preset.model.include_reasoning_in_request, true);
+			assert.deepStrictEqual(preset.model.prompt_cache, { enabled: true });
+			assert.strictEqual(preset.model.reasoning_effort, undefined);
+			assert.strictEqual(preset.model.thinking, undefined);
+			assert.ok(preset.model._comment?.includes("https://app.fireworks.ai/models/fireworks/"));
+		}
+	});
+
 	test("contains LiteLLM Kimi K2.6 quick setup preset", () => {
 		const preset = MODEL_PRESETS.find((item) => item.id === "litellm-kimi-k2-6");
 

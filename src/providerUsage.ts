@@ -1,4 +1,4 @@
-export type ProviderUsageAdapter = "anthropic" | "deepseek" | "kimi" | "litellm" | "minimax" | "openai";
+export type ProviderUsageAdapter = "anthropic" | "deepseek" | "fireworks" | "kimi" | "litellm" | "minimax" | "openai";
 
 export interface ProviderUsageResult {
 	provider: string;
@@ -20,11 +20,23 @@ export interface ProviderUsageRequest {
 	targetApiKey?: string;
 }
 
+export interface FireworksAccount {
+	name: string;
+	displayName?: string;
+}
+
+export interface FireworksServerlessUsage {
+	modelName: string;
+	promptTokens: number;
+	completionTokens: number;
+}
+
 const DEEPSEEK_BALANCE_ENDPOINT = "https://api.deepseek.com/user/balance";
 const KIMI_BALANCE_ENDPOINT = "https://api.moonshot.ai/v1/users/me/balance";
 const MINIMAX_TOKEN_PLAN_ENDPOINT = "https://api.minimax.io/v1/token_plan/remains";
 const OPENAI_COSTS_ENDPOINT = "https://api.openai.com/v1/organization/costs";
 const ANTHROPIC_COST_REPORT_ENDPOINT = "https://api.anthropic.com/v1/organizations/cost_report";
+const FIREWORKS_ACCOUNTS_ENDPOINT = "https://api.fireworks.ai/v1/accounts";
 const MIMO_USAGE_UNSUPPORTED_REASON =
 	"Xiaomi MiMo usage checks are unavailable because Xiaomi only exposes balance/usage through web Console endpoints; no public API-key usage endpoint is documented.";
 const ZAI_USAGE_UNSUPPORTED_REASON =
@@ -88,6 +100,9 @@ export function getProviderUsageAdapter(provider: string, baseUrl?: string): Pro
 	if (normalizedProvider === "deepseek" || normalizedBaseUrl.includes("deepseek.com")) {
 		return "deepseek";
 	}
+	if (normalizedProvider === "fireworks" || normalizedBaseUrl.includes("api.fireworks.ai")) {
+		return "fireworks";
+	}
 	if (
 		normalizedProvider === "kimi" ||
 		normalizedProvider === "moonshot" ||
@@ -133,6 +148,8 @@ export async function checkProviderUsage(request: ProviderUsageRequest): Promise
 	let parsed: ParsedProviderUsage;
 	if (adapter === "deepseek") {
 		parsed = parseDeepSeekBalance(await fetchJson(DEEPSEEK_BALANCE_ENDPOINT, "DeepSeek", bearerHeaders(request.apiKey)));
+	} else if (adapter === "fireworks") {
+		parsed = await checkFireworksUsage(request.apiKey);
 	} else if (adapter === "kimi") {
 		parsed = parseKimiBalance(await fetchJson(KIMI_BALANCE_ENDPOINT, "Kimi", bearerHeaders(request.apiKey)));
 	} else if (adapter === "minimax") {
@@ -222,6 +239,59 @@ export function parseKimiBalance(payload: unknown): ParsedProviderUsage {
 			`Voucher balance: ${formatDecimal(voucherBalance)}`,
 		],
 	};
+}
+
+export function parseFireworksAccounts(payload: unknown): {
+	accounts: FireworksAccount[];
+	nextPageToken?: string;
+} {
+	const obj = asRecord(payload, "Fireworks accounts response");
+	const accounts = asArray(obj.accounts, "Fireworks accounts").map((item) => {
+		const account = asRecord(item, "Fireworks account");
+		const name = asString(account.name, "Fireworks account name");
+		const displayName = optionalString(account.displayName);
+		return displayName ? { name, displayName } : { name };
+	});
+	return {
+		accounts,
+		nextPageToken: optionalString(obj.nextPageToken),
+	};
+}
+
+export function parseFireworksBillingUsage(payload: unknown): FireworksServerlessUsage[] {
+	const obj = asRecord(payload, "Fireworks billing usage response");
+	if (obj.serverlessCosts === undefined) {
+		return [];
+	}
+
+	return asArray(obj.serverlessCosts, "Fireworks serverlessCosts").map((item) => {
+		const usage = asRecord(item, "Fireworks serverless usage entry");
+		const group = usage.group === undefined ? undefined : asRecord(usage.group, "Fireworks usage group");
+		const modelName =
+			optionalString(group?.model_name) ??
+			optionalString(usage.modelName) ??
+			"Unknown model";
+		return {
+			modelName,
+			promptTokens: asNumber(usage.promptTokens, "Fireworks promptTokens"),
+			completionTokens: asNumber(usage.completionTokens, "Fireworks completionTokens"),
+		};
+	});
+}
+
+export function buildFireworksBillingUsageEndpoint(accountName: string, now = new Date()): string {
+	const accountId = accountName.trim().replace(/^accounts\//, "");
+	if (!accountId) {
+		throw new Error("Fireworks usage checks require a valid account name.");
+	}
+	const { start, end } = getMonthToDateRange(now);
+	const params = new URLSearchParams({
+		startTime: start.toISOString(),
+		endTime: end.toISOString(),
+		usageType: "SERVERLESS",
+		groupBy: "model_name",
+	});
+	return `https://api.fireworks.ai/v1/accounts/${encodeURIComponent(accountId)}/billingUsage?${params.toString()}`;
 }
 
 export function parseMiniMaxTokenPlan(payload: unknown): ParsedProviderUsage {
@@ -431,6 +501,80 @@ function formatCount(value: number): string {
 		return `${trimFixed(value / 1_000)}K`;
 	}
 	return value.toLocaleString();
+}
+
+async function checkFireworksUsage(apiKey: string): Promise<ParsedProviderUsage> {
+	const accounts = await fetchFireworksAccounts(apiKey);
+	if (accounts.length === 0) {
+		throw new Error("Fireworks account discovery did not return any accessible accounts.");
+	}
+
+	let promptTokens = 0;
+	let completionTokens = 0;
+	const details = [
+		"Source: Fireworks account billing usage API.",
+		"Rated cost totals are not exposed by this HTTP endpoint; values below are month-to-date serverless tokens.",
+	];
+
+	for (const account of accounts) {
+		const payload = await fetchJson(
+			buildFireworksBillingUsageEndpoint(account.name),
+			"Fireworks",
+			bearerHeaders(apiKey)
+		);
+		const entries = parseFireworksBillingUsage(payload);
+		const label = account.displayName ? `${account.displayName} (${account.name})` : account.name;
+		if (entries.length === 0) {
+			details.push(`${label}: no serverless token usage returned.`);
+			continue;
+		}
+
+		for (const entry of entries) {
+			promptTokens += entry.promptTokens;
+			completionTokens += entry.completionTokens;
+			details.push(
+				`${label} · ${entry.modelName}: ${formatCount(entry.promptTokens)} input, ${formatCount(entry.completionTokens)} output`
+			);
+		}
+	}
+
+	const totalTokens = promptTokens + completionTokens;
+	const accountLabel = `${accounts.length} account${accounts.length === 1 ? "" : "s"}`;
+	return {
+		summary: totalTokens > 0
+			? `${formatCount(promptTokens)} input + ${formatCount(completionTokens)} output tokens month-to-date across ${accountLabel}`
+			: `No serverless token usage returned month-to-date across ${accountLabel}`,
+		details,
+	};
+}
+
+async function fetchFireworksAccounts(apiKey: string): Promise<FireworksAccount[]> {
+	const accounts: FireworksAccount[] = [];
+	let pageToken: string | undefined;
+	const seenPageTokens = new Set<string>();
+
+	do {
+		const params = new URLSearchParams({ pageSize: "200" });
+		if (pageToken) {
+			params.set("pageToken", pageToken);
+		}
+		const payload = await fetchJson(
+			`${FIREWORKS_ACCOUNTS_ENDPOINT}?${params.toString()}`,
+			"Fireworks",
+			bearerHeaders(apiKey)
+		);
+		const page = parseFireworksAccounts(payload);
+		accounts.push(...page.accounts);
+		pageToken = page.nextPageToken;
+		if (pageToken) {
+			if (seenPageTokens.has(pageToken)) {
+				throw new Error("Fireworks account discovery returned a repeated page token.");
+			}
+			seenPageTokens.add(pageToken);
+		}
+	} while (pageToken);
+
+	return accounts;
 }
 
 function formatDecimal(value: number): string {
