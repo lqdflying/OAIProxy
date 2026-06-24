@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.1.25 (2026-06-24)
+
+- Fix the VS Code 1.126 model picker failing to open by removing the retired object-valued language-model category metadata.
+- Mark OAIProxy models as user-selectable BYOK models using the current VS Code proposed API contract.
+- Add regression coverage for VS Code 1.126-compatible picker metadata and document the still-open upstream Thinking Effort forwarding bug.
+
 ## 0.1.24 (2026-06-20)
 
 - Add Fireworks GLM-5.2 Thinking Effort choices for the documented `none`, `high`, and `max` tiers, with `max` as the preset default.

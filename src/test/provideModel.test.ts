@@ -3,8 +3,17 @@ import {
 	normalizeModelPickerContextLength,
 	resolveModelTokenLimits,
 } from "../modelTokenLimits";
+import { MODEL_PICKER_METADATA } from "../modelPickerMetadata";
 
 suite("provideModel", () => {
+	test("uses VS Code 1.126-compatible BYOK picker metadata", () => {
+		assert.deepStrictEqual(MODEL_PICKER_METADATA, {
+			isUserSelectable: true,
+			isBYOK: true,
+		});
+		assert.strictEqual("category" in MODEL_PICKER_METADATA, false);
+	});
+
 	test("normalizes one mebibyte context to one decimal million for picker display", () => {
 		const tokenLimits = resolveModelTokenLimits({
 			context_length: 1048576,

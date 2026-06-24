@@ -15,9 +15,9 @@ import {
 	getReasoningEfforts,
 	shouldExposeReasoningEffort,
 } from "./reasoningEffort";
+import { MODEL_PICKER_METADATA } from "./modelPickerMetadata";
 
 const EXTENSION_LABEL = "OAIProxy";
-const MODEL_PICKER_CATEGORY = { label: "OAIProxy", order: 100 };
 
 /**
  * Get the list of available language models contributed by this provider
@@ -59,8 +59,7 @@ export async function prepareLanguageModelChatInformation(
 					tooltip: detail,
 					family: m.family ?? EXTENSION_LABEL,
 					version: "1.0.0",
-					isUserSelectable: true,
-					category: MODEL_PICKER_CATEGORY,
+					...MODEL_PICKER_METADATA,
 					maxInputTokens: tokenLimits.maxInputTokens,
 					maxOutputTokens: tokenLimits.maxOutputTokens,
 					capabilities: {
@@ -107,8 +106,7 @@ export async function prepareLanguageModelChatInformation(
 					tooltip: detail,
 					family: m.family ?? EXTENSION_LABEL,
 					version: "1.0.0",
-					isUserSelectable: true,
-					category: MODEL_PICKER_CATEGORY,
+					...MODEL_PICKER_METADATA,
 					maxInputTokens: tokenLimits.maxInputTokens,
 					maxOutputTokens: tokenLimits.maxOutputTokens,
 					capabilities: {
@@ -128,8 +126,7 @@ export async function prepareLanguageModelChatInformation(
 					tooltip: EXTENSION_LABEL,
 					family: m.family ?? EXTENSION_LABEL,
 					version: "1.0.0",
-					isUserSelectable: true,
-					category: MODEL_PICKER_CATEGORY,
+					...MODEL_PICKER_METADATA,
 					maxInputTokens: tokenLimits.maxInputTokens,
 					maxOutputTokens: tokenLimits.maxOutputTokens,
 					capabilities: {
