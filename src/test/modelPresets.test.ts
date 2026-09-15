@@ -1,4 +1,7 @@
 import * as assert from "assert";
+import { readFileSync } from "fs";
+import * as path from "path";
+import { parseConfigFileTextToJson } from "typescript";
 import { MODEL_PRESETS } from "../modelPresets";
 import { PROVIDER_PRESETS } from "../providerPresets";
 
@@ -335,35 +338,6 @@ suite("modelPresets", () => {
 		});
 	});
 
-	test("contains LiteLLM DeepSeek V4 Flash quick setup preset", () => {
-		const preset = MODEL_PRESETS.find((item) => item.id === "litellm-deepseek-v4-flash");
-
-		assert.ok(preset);
-		assert.strictEqual(preset.label, "DeepSeek V4 Flash (LiteLLM)");
-		assert.strictEqual(preset.providerPresetId, "litellm");
-		assert.strictEqual(preset.category, "fast");
-		assert.deepStrictEqual(preset.tags, ["LiteLLM", "DeepSeek", "Fast", "Reasoning", "Tools"]);
-		assert.strictEqual(preset.model.id, "DeepSeek-V4-Flash");
-		assert.ok(preset.model._comment?.includes("https://api-docs.deepseek.com/quick_start/pricing"));
-		assert.ok(preset.model._comment?.includes("https://api-docs.deepseek.com/guides/thinking_mode"));
-		assert.strictEqual(preset.model.displayName, "DeepSeek V4 Flash (LiteLLM)");
-		assert.strictEqual(preset.model.owned_by, "litellm");
-		assert.strictEqual(preset.model.baseUrl, "https://ai.nube.sh/api/v1");
-		assert.strictEqual(preset.model.apiMode, "litellm");
-		assert.strictEqual(preset.model.context_length, 1048576);
-		assert.strictEqual(preset.model.max_tokens, 65536);
-		assert.strictEqual(preset.model.max_completion_tokens, undefined);
-		assert.strictEqual(preset.model.reasoning_effort, "max");
-		assert.deepStrictEqual(preset.model.supported_reasoning_efforts, ["high", "max"]);
-		assert.strictEqual(preset.model.default_reasoning_effort, "max");
-		assert.deepStrictEqual(preset.model.thinking, {
-			type: "enabled",
-		});
-		assert.strictEqual(preset.model.vision, false);
-		assert.strictEqual(preset.model.toolCalling, true);
-		assert.strictEqual(preset.model.include_reasoning_in_request, true);
-	});
-
 	test("contains LiteLLM GLM-5.2 quick setup preset", () => {
 		const preset = MODEL_PRESETS.find((item) => item.id === "litellm-glm-5-2");
 
@@ -441,37 +415,136 @@ suite("modelPresets", () => {
 		assert.strictEqual(preset.model.include_reasoning_in_request, true);
 	});
 
-	test("contains LiteLLM Kimi K3 quick setup preset", () => {
-		const preset = MODEL_PRESETS.find((item) => item.id === "litellm-kimi-k3");
+	test("contains the six current LiteLLM gateway aliases", () => {
+		const presets = MODEL_PRESETS.filter((preset) => preset.providerPresetId === "litellm");
+		assert.deepStrictEqual(presets.map((preset) => preset.model.id).sort(), [
+			"DeepSeek-V4.1-Flash",
+			"GLM-5.2",
+			"GLM-5.3",
+			"GLM-5.3-Flash",
+			"Kimi-K2.6",
+			"Qwen3.8-27B",
+		]);
+		assert.strictEqual(new Set(MODEL_PRESETS.map((preset) => preset.id)).size, MODEL_PRESETS.length);
+	});
 
-		assert.ok(preset);
-		assert.strictEqual(preset.label, "Kimi K3 (LiteLLM)");
-		assert.strictEqual(preset.providerPresetId, "litellm");
-		assert.strictEqual(preset.category, "latest");
-		assert.deepStrictEqual(preset.tags, ["LiteLLM", "Kimi", "Code", "Vision", "Thinking", "Tools", "Prompt Cache"]);
-		assert.strictEqual(preset.model.id, "Kimi-K3");
-		assert.ok(preset.model._comment?.includes("https://platform.kimi.ai/docs/guide/kimi-k3-quickstart"));
-		assert.strictEqual(preset.model.displayName, "Kimi K3 (LiteLLM)");
-		assert.strictEqual(preset.model.owned_by, "litellm");
-		assert.strictEqual(preset.model.baseUrl, "https://ai.nube.sh/api/v1");
-		assert.strictEqual(preset.model.apiMode, "litellm");
-		assert.strictEqual(preset.model.context_length, 1048576);
-		assert.strictEqual(preset.model.max_completion_tokens, 131072);
-		assert.strictEqual(preset.model.max_tokens, undefined);
-		assert.strictEqual(preset.model.reasoning_effort, "max");
-		assert.deepStrictEqual(preset.model.supported_reasoning_efforts, ["max"]);
-		assert.strictEqual(preset.model.default_reasoning_effort, "max");
-		assert.strictEqual(preset.model.vision, true);
-		assert.strictEqual(preset.model.toolCalling, true);
-		assert.strictEqual(preset.model.include_reasoning_in_request, true);
-		assert.strictEqual(preset.model.thinking, undefined);
-		assert.strictEqual(preset.model.temperature, undefined);
-		assert.strictEqual(preset.model.top_p, undefined);
-		assert.strictEqual(preset.model.prompt_cache, undefined);
+	for (const expected of [
+		{
+			presetId: "litellm-glm-5-3-flash",
+			modelId: "GLM-5.3-Flash",
+			label: "GLM-5.3-Flash (LiteLLM)",
+			category: "fast",
+			context: 1000000,
+			output: 131072,
+			vision: true,
+			efforts: ["low", "high", "max"],
+			defaultEffort: "max",
+			thinking: { type: "enabled", clear_thinking: false },
+			temperature: 1,
+			topP: 0.95,
+			source: "https://docs.z.ai/guides/vlm/glm-5.3-flash",
+		},
+		{
+			presetId: "litellm-glm-5-3",
+			modelId: "GLM-5.3",
+			label: "GLM-5.3 (LiteLLM)",
+			category: "latest",
+			context: 1000000,
+			output: 131072,
+			vision: false,
+			efforts: ["low", "high", "max"],
+			defaultEffort: "max",
+			thinking: { type: "enabled", clear_thinking: false },
+			temperature: 1,
+			topP: 0.95,
+			source: "https://docs.z.ai/guides/llm/glm-5.3",
+		},
+		{
+			presetId: "litellm-deepseek-v4-1-flash",
+			modelId: "DeepSeek-V4.1-Flash",
+			label: "DeepSeek V4.1 Flash (LiteLLM)",
+			category: "fast",
+			context: 1048576,
+			output: 393216,
+			vision: true,
+			efforts: ["low", "high", "max"],
+			defaultEffort: "max",
+			thinking: { type: "enabled" },
+			temperature: undefined,
+			topP: undefined,
+			source: "https://api-docs.deepseek.com/api/create-chat-completion",
+		},
+		{
+			presetId: "litellm-qwen3-8-27b",
+			modelId: "Qwen3.8-27B",
+			label: "Qwen3.8-27B (LiteLLM)",
+			category: "fast",
+			context: 262144,
+			output: 65536,
+			vision: true,
+			efforts: ["low", "medium", "xhigh"],
+			defaultEffort: "xhigh",
+			thinking: undefined,
+			temperature: 1,
+			topP: 0.95,
+			source: "https://huggingface.co/Qwen/Qwen3.8-27B",
+		},
+	]) {
+		test(`provides documented LiteLLM defaults for ${expected.modelId}`, () => {
+			const preset = MODEL_PRESETS.find((item) => item.id === expected.presetId);
+			assert.ok(preset);
+			assert.strictEqual(preset.providerPresetId, "litellm");
+			assert.strictEqual(preset.label, expected.label);
+			assert.strictEqual(preset.category, expected.category);
+			assert.ok(preset.tags.includes("LiteLLM"));
+			assert.ok(preset.tags.includes("Tools"));
+			assert.strictEqual(preset.tags.includes("Vision"), expected.vision);
+
+			const model = preset.model;
+			assert.strictEqual(model.id, expected.modelId);
+			assert.strictEqual(model.displayName, expected.label);
+			assert.strictEqual(model.owned_by, "litellm");
+			assert.strictEqual(model.baseUrl, "https://ai.nube.sh/api/v1");
+			assert.strictEqual(model.apiMode, "litellm");
+			assert.strictEqual(model.context_length, expected.context);
+			assert.strictEqual(model.max_tokens, expected.output);
+			assert.strictEqual(model.max_completion_tokens, undefined);
+			assert.strictEqual(model.vision, expected.vision);
+			assert.strictEqual(model.toolCalling, true);
+			assert.strictEqual(model.include_reasoning_in_request, true);
+			assert.strictEqual(model.reasoning_effort, expected.defaultEffort);
+			assert.strictEqual(model.default_reasoning_effort, expected.defaultEffort);
+			assert.deepStrictEqual(model.supported_reasoning_efforts, expected.efforts);
+			assert.deepStrictEqual(model.thinking, expected.thinking);
+			assert.strictEqual(model.temperature, expected.temperature);
+			assert.strictEqual(model.top_p, expected.topP);
+			assert.strictEqual(model.enable_thinking, undefined);
+			assert.strictEqual(model.extra_body, undefined);
+			assert.strictEqual(model.prompt_cache, undefined);
+			assert.ok(model._comment?.includes(expected.source));
+		});
+	}
+
+	test("LiteLLM settings example matches the current save-ready catalog", () => {
+		const file = path.join(__dirname, "../../examples/litellm.jsonc");
+		const example = parseConfigFileTextToJson(file, readFileSync(file, "utf8"));
+		assert.strictEqual(example.error, undefined);
+		assert.deepStrictEqual(
+			example.config["oaicopilot.models"],
+			MODEL_PRESETS.filter((preset) => preset.providerPresetId === "litellm").map((preset) => ({
+				...preset.model,
+				providerPresetId: preset.providerPresetId,
+			}))
+		);
 	});
 
 	test("omits retired LiteLLM quick setup presets", () => {
-		for (const presetId of ["litellm-glm-5-1", "litellm-qwen3-5-122b-a10b"]) {
+		for (const presetId of [
+			"litellm-glm-5-1",
+			"litellm-qwen3-5-122b-a10b",
+			"litellm-kimi-k3",
+			"litellm-deepseek-v4-flash",
+		]) {
 			assert.strictEqual(
 				MODEL_PRESETS.some((preset) => preset.id === presetId),
 				false

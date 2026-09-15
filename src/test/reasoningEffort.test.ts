@@ -61,42 +61,49 @@ suite("reasoningEffort", () => {
 		assert.strictEqual(getDefaultReasoningEffort(deepseek, getReasoningEfforts(deepseek)), "max");
 	});
 
-	test("preserves direct DeepSeek Flash tiers and normalizes the documented aliases", () => {
-		const preset = MODEL_PRESETS.find((item) => item.id === "deepseek-flash");
-		assert.ok(preset);
-		const flash = preset.model;
-		assert.strictEqual(shouldExposeReasoningEffort(flash), true);
-		assert.deepStrictEqual(getReasoningEfforts(flash), ["low", "high", "max"]);
-		assert.strictEqual(getDefaultReasoningEffort(flash, getReasoningEfforts(flash)), "max");
-		for (const [input, expected] of [
-			["minimal", "low"],
-			["low", "low"],
-			["medium", "high"],
-			["high", "high"],
-			["xhigh", "high"],
-			["max", "max"],
-			["ultra", "max"],
-			[" low ", "low"],
-		]) {
-			assert.strictEqual(normalizeReasoningEffortForModel(flash, input), expected, input);
-		}
-		assert.strictEqual(normalizeReasoningEffortForModel(flash, "invalid"), undefined);
-		assert.strictEqual(normalizeReasoningEffortForModel(flash, undefined), undefined);
-		assert.deepStrictEqual(getReasoningEfforts(flash, "xhigh"), ["low", "high", "max", "xhigh"]);
-	});
+	for (const presetId of ["deepseek-flash", "litellm-deepseek-v4-1-flash"]) {
+		test(`preserves ${presetId} tiers and normalizes the documented aliases`, () => {
+			const preset = MODEL_PRESETS.find((item) => item.id === presetId);
+			assert.ok(preset);
+			const flash = preset.model;
+			assert.strictEqual(shouldExposeReasoningEffort(flash), true);
+			assert.deepStrictEqual(getReasoningEfforts(flash), ["low", "high", "max"]);
+			assert.strictEqual(getDefaultReasoningEffort(flash, getReasoningEfforts(flash)), "max");
+			for (const [input, expected] of [
+				["minimal", "low"],
+				["low", "low"],
+				["medium", "high"],
+				["high", "high"],
+				["xhigh", "high"],
+				["max", "max"],
+				["ultra", "max"],
+				[" low ", "low"],
+			]) {
+				assert.strictEqual(normalizeReasoningEffortForModel(flash, input), expected, input);
+			}
+			assert.strictEqual(normalizeReasoningEffortForModel(flash, "invalid"), undefined);
+			assert.strictEqual(normalizeReasoningEffortForModel(flash, undefined), undefined);
+			assert.deepStrictEqual(getReasoningEfforts(flash, "xhigh"), ["low", "high", "max", "xhigh"]);
+		});
+	}
 
 	test("retains legacy effort mappings for other DeepSeek presets", () => {
-		for (const presetId of [
-			"deepseek-v4-pro",
-			"litellm-deepseek-v4-flash",
-			"fireworks-deepseek-v4-pro",
-			"azure-foundry-deepseek-v4-pro",
-		]) {
+		for (const presetId of ["deepseek-v4-pro", "fireworks-deepseek-v4-pro", "azure-foundry-deepseek-v4-pro"]) {
 			const preset = MODEL_PRESETS.find((item) => item.id === presetId);
 			assert.ok(preset);
 			assert.strictEqual(normalizeReasoningEffortForModel(preset.model, "low"), "high", presetId);
 			assert.strictEqual(normalizeReasoningEffortForModel(preset.model, "xhigh"), "max", presetId);
 		}
+	});
+
+	test("retains legacy effort mappings for saved LiteLLM V4 Flash configurations", () => {
+		const legacy = model({
+			id: "DeepSeek-V4-Flash",
+			owned_by: "litellm",
+			supported_reasoning_efforts: ["high", "max"],
+		});
+		assert.strictEqual(normalizeReasoningEffortForModel(legacy, "low"), "high");
+		assert.strictEqual(normalizeReasoningEffortForModel(legacy, "xhigh"), "max");
 	});
 
 	test("exposes Z.AI GLM-5.2 documented effort values", () => {

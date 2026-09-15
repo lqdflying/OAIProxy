@@ -4,10 +4,45 @@ import { LiteLLMApi } from "../litellm/litellmApi";
 import { getLatestCacheUsage, resetCacheUsageForTests } from "../cacheUsage";
 import { COPILOT_USAGE_MIME } from "../responseUsage";
 import type { HFModelItem } from "../types";
+import { MODEL_PRESETS } from "../modelPresets";
 
 suite("litellmApi", () => {
 	setup(() => {
 		resetCacheUsageForTests();
+	});
+
+	test("prepares current LiteLLM presets with reasoning and required tools", () => {
+		for (const [presetId, thinking] of [
+			["litellm-glm-5-3-flash", { type: "enabled", clear_thinking: false }],
+			["litellm-glm-5-3", { type: "enabled", clear_thinking: false }],
+			["litellm-deepseek-v4-1-flash", { type: "enabled" }],
+			["litellm-qwen3-8-27b", undefined],
+		] as const) {
+			const preset = MODEL_PRESETS.find((item) => item.id === presetId);
+			assert.ok(preset);
+			const api = new LiteLLMApi(preset.model.id);
+			const body = api.prepareRequestBody(
+				{ model: preset.model.id, messages: [], stream: true, stream_options: { include_usage: true } },
+				preset.model,
+				{
+					requestInitiator: "test",
+					toolMode: vscode.LanguageModelChatToolMode.Required,
+					tools: [{ name: "echo", description: "Echo a value", inputSchema: { type: "object" } }],
+				}
+			);
+			assert.strictEqual(body.model, preset.model.id);
+			assert.strictEqual(body.max_tokens, preset.model.max_tokens);
+			assert.strictEqual(body.max_completion_tokens, undefined);
+			assert.strictEqual(body.reasoning_effort, presetId === "litellm-qwen3-8-27b" ? "xhigh" : "max");
+			assert.strictEqual(body.thinking, undefined);
+			assert.strictEqual(body.enable_thinking, undefined);
+			assert.deepStrictEqual(body.extra_body, thinking ? { thinking } : undefined);
+			assert.deepStrictEqual(body.stream_options, { include_usage: true });
+			assert.deepStrictEqual(body.tool_choice, { type: "function", function: { name: "echo" } });
+			assert.deepStrictEqual(body.tools, [
+				{ type: "function", function: { name: "echo", description: "Echo a value", parameters: { type: "object" } } },
+			]);
+		}
 	});
 
 	test("maps thinking configuration into extra_body", () => {

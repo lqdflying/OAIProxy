@@ -109,8 +109,13 @@ export function normalizeReasoningEffortForModel(model: HFModelItem, value: stri
 		return undefined;
 	}
 
-	if (model.id.trim().toLowerCase() === "deepseek-flash" && model.owned_by?.trim().toLowerCase() === "deepseek") {
-		// Direct Flash uses the current API tiers and aliases, unlike the legacy DeepSeek presets.
+	const modelId = model.id.trim().toLowerCase();
+	const provider = model.owned_by?.trim().toLowerCase();
+	if (
+		(modelId === "deepseek-flash" && provider === "deepseek") ||
+		(modelId === "deepseek-v4.1-flash" && provider === "litellm")
+	) {
+		// Current direct and LiteLLM Flash models use the new API tiers and aliases.
 		// https://api-docs.deepseek.com/guides/thinking_mode
 		switch (normalized) {
 			case "minimal":
