@@ -1,5 +1,13 @@
 # Change Log
 
+## 0.1.35 (2026-09-16)
+
+- Add LiteLLM Quick Setup presets for GLM-5.3-Flash, GLM-5.3, DeepSeek-V4.1-Flash, and Qwen3.8-27B with documented context, output, thinking, reasoning, tool, and vision settings.
+- Remove the LiteLLM Kimi-K3, DeepSeek-V4-Flash, and GLM-5.2 Quick Setup cards and update the sample configuration while preserving existing saved models.
+- Preserve the `low` reasoning effort for LiteLLM DeepSeek-V4.1-Flash and retain legacy effort mappings for older saved DeepSeek configurations.
+- Document Nube probe configuration and the DeepSeek gateway limitation: automatic tool selection works with thinking, while named and required tool choices are rejected.
+- Verify provider-reported cache hits and streamed usage forwarding for all five remaining LiteLLM presets, and add regression coverage for preset defaults and request construction.
+
 ## 0.1.34 (2026-09-10)
 
 - Update the direct DeepSeek Flash Quick Setup card to use `deepseek-flash`, with vision, tool calling, a 1M context window, and a 384K output limit.
