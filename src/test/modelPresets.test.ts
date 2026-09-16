@@ -338,45 +338,6 @@ suite("modelPresets", () => {
 		});
 	});
 
-	test("contains LiteLLM GLM-5.2 quick setup preset", () => {
-		const preset = MODEL_PRESETS.find((item) => item.id === "litellm-glm-5-2");
-
-		assert.ok(preset);
-		assert.strictEqual(preset.label, "GLM-5.2 (LiteLLM)");
-		assert.strictEqual(preset.providerPresetId, "litellm");
-		assert.strictEqual(preset.category, "latest");
-		assert.deepStrictEqual(preset.tags, ["LiteLLM", "Z.AI", "GLM", "Coding", "Thinking", "Tools"]);
-		assert.strictEqual(preset.model.id, "GLM-5.2");
-		assert.ok(preset.model._comment?.includes("https://docs.z.ai/devpack/quick-start"));
-		assert.ok(preset.model._comment?.includes("https://docs.z.ai/devpack/latest-model"));
-		assert.ok(preset.model._comment?.includes("https://docs.z.ai/api-reference/llm/chat-completion"));
-		assert.strictEqual(preset.model.displayName, "GLM-5.2 (LiteLLM)");
-		assert.strictEqual(preset.model.owned_by, "litellm");
-		assert.strictEqual(preset.model.baseUrl, "https://ai.nube.sh/api/v1");
-		assert.strictEqual(preset.model.apiMode, "litellm");
-		assert.strictEqual(preset.model.context_length, 1000000);
-		assert.strictEqual(preset.model.max_tokens, 131072);
-		assert.strictEqual(preset.model.max_completion_tokens, undefined);
-		assert.strictEqual(preset.model.reasoning_effort, "max");
-		assert.deepStrictEqual(preset.model.supported_reasoning_efforts, [
-			"none",
-			"minimal",
-			"low",
-			"medium",
-			"high",
-			"xhigh",
-			"max",
-		]);
-		assert.strictEqual(preset.model.default_reasoning_effort, "max");
-		assert.deepStrictEqual(preset.model.thinking, {
-			type: "enabled",
-			clear_thinking: false,
-		});
-		assert.strictEqual(preset.model.vision, false);
-		assert.strictEqual(preset.model.toolCalling, true);
-		assert.strictEqual(preset.model.include_reasoning_in_request, true);
-	});
-
 	test("contains Z.AI GLM-5.2 quick setup preset", () => {
 		const preset = MODEL_PRESETS.find((item) => item.id === "zai-glm-5-2");
 
@@ -415,11 +376,10 @@ suite("modelPresets", () => {
 		assert.strictEqual(preset.model.include_reasoning_in_request, true);
 	});
 
-	test("contains the six current LiteLLM gateway aliases", () => {
+	test("contains the five current LiteLLM gateway aliases", () => {
 		const presets = MODEL_PRESETS.filter((preset) => preset.providerPresetId === "litellm");
 		assert.deepStrictEqual(presets.map((preset) => preset.model.id).sort(), [
 			"DeepSeek-V4.1-Flash",
-			"GLM-5.2",
 			"GLM-5.3",
 			"GLM-5.3-Flash",
 			"Kimi-K2.6",
@@ -541,6 +501,7 @@ suite("modelPresets", () => {
 	test("omits retired LiteLLM quick setup presets", () => {
 		for (const presetId of [
 			"litellm-glm-5-1",
+			"litellm-glm-5-2",
 			"litellm-qwen3-5-122b-a10b",
 			"litellm-kimi-k3",
 			"litellm-deepseek-v4-flash",
