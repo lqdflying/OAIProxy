@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.1.36 (2026-09-16)
+
+- Replace the direct Z.AI GLM-5.2 Quick Setup card with concise GLM-5.3 and GLM-5.3-Flash cards using the existing GLM Coding Plan endpoint.
+- Configure both models with 1M context, 131,072 max output tokens, mandatory thinking, preserved reasoning history, streaming tool calls, and low/high/max reasoning effort with max selected by default; enable vision for Flash.
+- Preserve existing saved models and other providers' GLM cards, and update the Z.AI documentation and sample configuration.
+- Add regression coverage for preset defaults, example consistency, reasoning effort choices, and OpenAI-compatible request construction.
+
 ## 0.1.35 (2026-09-16)
 
 - Add LiteLLM Quick Setup presets for GLM-5.3-Flash, GLM-5.3, DeepSeek-V4.1-Flash, and Qwen3.8-27B with documented context, output, thinking, reasoning, tool, and vision settings.
