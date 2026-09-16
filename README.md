@@ -123,9 +123,13 @@ The direct DeepSeek Quick Setup card uses `deepseek-flash`, displayed as **DeepS
 
 This card replaces the legacy Flash names `deepseek-v4-flash` and `deepseek-v4-flash-vision-exp` in Quick Setup. Existing saved models remain as configured. See the official [model details](https://api-docs.deepseek.com/quick_start/pricing), [Chat Completions API](https://api-docs.deepseek.com/api/create-chat-completion), and [vision guide](https://api-docs.deepseek.com/guides/vision).
 
-## Z.AI GLM-5.2
+## Z.AI GLM-5.3 and GLM-5.3-Flash
 
-Use `glm-5.2` as the model ID with the Z.AI GLM Coding Plan endpoint (`https://api.z.ai/api/coding/paas/v4`). Z.AI's docs list GLM-5.2 as a text model with a 1,000,000-token context window, 131,072 max output tokens, thinking/reasoning support, reasoning effort, and tool use. The Quick Setup preset enables thinking, sets `reasoning_effort: "max"`, and sets `thinking.clear_thinking: false` to preserve returned reasoning content in follow-up requests.
+Quick Setup offers **GLM-5.3** (`glm-5.3`, text-only) and **GLM-5.3-Flash** (`glm-5.3-flash`, with vision) through the Z.AI GLM Coding Plan endpoint (`https://api.z.ai/api/coding/paas/v4`) in OpenAI Chat Completions mode. Both use a 1,000,000-token context window and `max_tokens: 131072`.
+
+Both presets enable mandatory thinking and tools, offer `low`, `high`, and `max` Thinking Effort with `max` selected by default, and preserve reasoning history with `thinking.clear_thinking: false` and `include_reasoning_in_request: true`. They set `temperature: 1`, `top_p: 0.95`, and `extra.tool_stream: true` for streamed tool calls. Context caching is provider-managed.
+
+These cards replace the direct Z.AI GLM-5.2 Quick Setup card; existing saved models remain as configured. See [GLM-5.3](https://docs.z.ai/guides/llm/glm-5.3), [GLM-5.3-Flash](https://docs.z.ai/guides/vlm/glm-5.3-flash), the [Coding Plan model guide](https://docs.z.ai/devpack/latest-model), and the [Chat Completions API](https://docs.z.ai/api-reference/llm/chat-completion). A complete configuration for both models is in `examples/zai-glm.jsonc`.
 
 ## MiniMax M3
 

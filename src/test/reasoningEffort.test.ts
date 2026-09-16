@@ -106,7 +106,24 @@ suite("reasoningEffort", () => {
 		assert.strictEqual(normalizeReasoningEffortForModel(legacy, "xhigh"), "max");
 	});
 
-	test("exposes Z.AI GLM-5.2 documented effort values", () => {
+	for (const presetId of ["zai-glm-5-3", "zai-glm-5-3-flash"]) {
+		test(`${presetId} exposes only low/high/max with max selected by default`, () => {
+			const preset = MODEL_PRESETS.find((item) => item.id === presetId);
+			assert.ok(preset);
+			const glm = preset.model;
+			assert.strictEqual(shouldExposeReasoningEffort(glm), true);
+			assert.deepStrictEqual(getReasoningEfforts(glm), ["low", "high", "max"]);
+			assert.strictEqual(getDefaultReasoningEffort(glm, getReasoningEfforts(glm)), "max");
+			for (const effort of ["low", "high", "max"]) {
+				assert.strictEqual(normalizeReasoningEffortForModel(glm, effort), effort);
+			}
+			for (const effort of ["none", "minimal", "medium", "xhigh"]) {
+				assert.strictEqual(normalizeReasoningEffortForModel(glm, effort), undefined);
+			}
+		});
+	}
+
+	test("retains configured effort values for saved Z.AI GLM-5.2 models", () => {
 		const glm = model({
 			id: "glm-5.2",
 			owned_by: "zai",

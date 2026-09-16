@@ -338,42 +338,75 @@ suite("modelPresets", () => {
 		});
 	});
 
-	test("contains Z.AI GLM-5.2 quick setup preset", () => {
-		const preset = MODEL_PRESETS.find((item) => item.id === "zai-glm-5-2");
+	test("replaces the direct Z.AI GLM-5.2 card with GLM-5.3 and GLM-5.3-Flash", () => {
+		const presets = MODEL_PRESETS.filter((preset) => preset.providerPresetId === "zai");
+		assert.deepStrictEqual(
+			presets.map((preset) => preset.id),
+			["zai-glm-5-3", "zai-glm-5-3-flash"]
+		);
+		assert.deepStrictEqual(
+			presets.map((preset) => preset.model.id),
+			["glm-5.3", "glm-5.3-flash"]
+		);
+	});
 
-		assert.ok(preset);
-		assert.strictEqual(preset.label, "GLM-5.2");
-		assert.strictEqual(preset.providerPresetId, "zai");
-		assert.strictEqual(preset.category, "latest");
-		assert.strictEqual(preset.model.id, "glm-5.2");
-		assert.ok(preset.model._comment?.includes("https://docs.z.ai/devpack/quick-start"));
-		assert.ok(preset.model._comment?.includes("https://docs.z.ai/devpack/latest-model"));
-		assert.ok(preset.model._comment?.includes("https://docs.z.ai/api-reference/llm/chat-completion"));
-		assert.strictEqual(preset.model.displayName, "GLM-5.2");
-		assert.strictEqual(preset.model.owned_by, "zai");
-		assert.strictEqual(preset.model.baseUrl, "https://api.z.ai/api/coding/paas/v4");
-		assert.strictEqual(preset.model.apiMode, "openai");
-		assert.strictEqual(preset.model.context_length, 1000000);
-		assert.strictEqual(preset.model.max_tokens, 131072);
-		assert.strictEqual(preset.model.max_completion_tokens, undefined);
-		assert.strictEqual(preset.model.reasoning_effort, "max");
-		assert.deepStrictEqual(preset.model.supported_reasoning_efforts, [
-			"none",
-			"minimal",
-			"low",
-			"medium",
-			"high",
-			"xhigh",
-			"max",
-		]);
-		assert.strictEqual(preset.model.default_reasoning_effort, "max");
-		assert.deepStrictEqual(preset.model.thinking, {
-			type: "enabled",
-			clear_thinking: false,
+	for (const expected of [
+		{
+			presetId: "zai-glm-5-3",
+			label: "GLM-5.3",
+			category: "latest",
+			vision: false,
+			source: "https://docs.z.ai/guides/llm/glm-5.3",
+		},
+		{
+			presetId: "zai-glm-5-3-flash",
+			label: "GLM-5.3-Flash",
+			category: "fast",
+			vision: true,
+			source: "https://docs.z.ai/guides/vlm/glm-5.3-flash",
+		},
+	]) {
+		test(`${expected.presetId} uses documented Z.AI Coding Plan defaults`, () => {
+			const preset = MODEL_PRESETS.find((item) => item.id === expected.presetId);
+			assert.ok(preset);
+			assert.strictEqual(preset.label, expected.label);
+			assert.strictEqual(preset.category, expected.category);
+			assert.strictEqual(preset.tags.includes("Vision"), expected.vision);
+			assert.ok(preset.model._comment?.includes(expected.source));
+			assert.ok(preset.model._comment?.includes("https://docs.z.ai/devpack/latest-model"));
+			assert.ok(preset.model._comment?.includes("https://docs.z.ai/api-reference/llm/chat-completion"));
+			assert.strictEqual(preset.model.displayName, expected.label);
+			assert.strictEqual(preset.model.owned_by, "zai");
+			assert.strictEqual(preset.model.baseUrl, "https://api.z.ai/api/coding/paas/v4");
+			assert.strictEqual(preset.model.apiMode, "openai");
+			assert.strictEqual(preset.model.context_length, 1000000);
+			assert.strictEqual(preset.model.max_tokens, 131072);
+			assert.strictEqual(preset.model.max_completion_tokens, undefined);
+			assert.strictEqual(preset.model.reasoning_effort, "max");
+			assert.deepStrictEqual(preset.model.supported_reasoning_efforts, ["low", "high", "max"]);
+			assert.strictEqual(preset.model.default_reasoning_effort, "max");
+			assert.deepStrictEqual(preset.model.thinking, { type: "enabled", clear_thinking: false });
+			assert.strictEqual(preset.model.vision, expected.vision);
+			assert.strictEqual(preset.model.toolCalling, true);
+			assert.strictEqual(preset.model.include_reasoning_in_request, true);
+			assert.strictEqual(preset.model.temperature, 1);
+			assert.strictEqual(preset.model.top_p, 0.95);
+			assert.deepStrictEqual(preset.model.extra, { tool_stream: true });
+			assert.strictEqual(preset.model.prompt_cache, undefined);
 		});
-		assert.strictEqual(preset.model.vision, false);
-		assert.strictEqual(preset.model.toolCalling, true);
-		assert.strictEqual(preset.model.include_reasoning_in_request, true);
+	}
+
+	test("Z.AI settings example matches the current save-ready catalog", () => {
+		const file = path.join(__dirname, "../../examples/zai-glm.jsonc");
+		const example = parseConfigFileTextToJson(file, readFileSync(file, "utf8"));
+		assert.strictEqual(example.error, undefined);
+		assert.deepStrictEqual(
+			example.config["oaicopilot.models"],
+			MODEL_PRESETS.filter((preset) => preset.providerPresetId === "zai").map((preset) => ({
+				...preset.model,
+				providerPresetId: preset.providerPresetId,
+			}))
+		);
 	});
 
 	test("contains the five current LiteLLM gateway aliases", () => {

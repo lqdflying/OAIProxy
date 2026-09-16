@@ -142,7 +142,30 @@ suite("openaiApi", () => {
 		assert.strictEqual(body.max_completion_tokens, 8192);
 	});
 
-	test("passes Z.AI preserved thinking configuration through request body", () => {
+	for (const presetId of ["zai-glm-5-3", "zai-glm-5-3-flash"]) {
+		test(`${presetId} sends preserved thinking and streaming tool controls`, () => {
+			const preset = MODEL_PRESETS.find((item) => item.id === presetId);
+			assert.ok(preset);
+			const body = new OpenaiApi(preset.model.id).prepareRequestBody(
+				{ model: preset.model.id, messages: [], stream: true },
+				preset.model
+			);
+			assert.strictEqual(body.model, presetId === "zai-glm-5-3" ? "glm-5.3" : "glm-5.3-flash");
+			assert.strictEqual(body.max_tokens, 131072);
+			assert.strictEqual(body.max_completion_tokens, undefined);
+			assert.strictEqual(body.reasoning_effort, "max");
+			assert.deepStrictEqual(body.thinking, { type: "enabled", clear_thinking: false });
+			assert.strictEqual(body.temperature, 1);
+			assert.strictEqual(body.top_p, 0.95);
+			assert.strictEqual(body.stream, true);
+			assert.strictEqual(body.tool_stream, true);
+			assert.strictEqual(body.extra, undefined);
+			assert.strictEqual(body.prompt_cache_key, undefined);
+			assert.strictEqual(body.prompt_cache_retention, undefined);
+		});
+	}
+
+	test("passes saved Z.AI GLM-5.2 preserved thinking configuration through request body", () => {
 		const api = new OpenaiApi("glm-5.2");
 		const body = api.prepareRequestBody(
 			{
