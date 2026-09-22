@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.1.37 (2026-09-22)
+
+- Fix the first LiteLLM/Nube GLM-5.3 and GLM-5.3-Flash agent request by omitting explicit `thinking` fields that the vLLM backend rejects for named tool calls.
+- Sanitize legacy saved GLM configurations, retain upstream-default thinking and reasoning effort, and add regression coverage plus updated LiteLLM examples.
+
 ## 0.1.36 (2026-09-16)
 
 - Replace the direct Z.AI GLM-5.2 Quick Setup card with concise GLM-5.3 and GLM-5.3-Flash cards using the existing GLM Coding Plan endpoint.
