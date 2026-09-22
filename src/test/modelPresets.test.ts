@@ -129,7 +129,52 @@ suite("modelPresets", () => {
 
 	test("contains the approved MiMo chat presets", () => {
 		const mimoIds = MODEL_PRESETS.filter((preset) => preset.model.owned_by === "mimo").map((preset) => preset.model.id);
-		assert.deepStrictEqual(mimoIds, ["mimo-v2.5-pro", "mimo-v2.5", "mimo-v2-flash"]);
+		assert.deepStrictEqual(mimoIds, [
+			"mimo-v2.6-pro",
+			"mimo-v2.6-flash",
+			"mimo-v2.5-pro",
+			"mimo-v2.5",
+			"mimo-v2-flash",
+		]);
+
+		for (const expected of [
+			{
+				presetId: "mimo-v2-6-pro",
+				label: "MiMo V2.6 Pro",
+				category: "latest",
+				tags: ["MiMo", "Vision", "Thinking", "Tools"],
+				modelId: "mimo-v2.6-pro",
+			},
+			{
+				presetId: "mimo-v2-6-flash",
+				label: "MiMo V2.6 Flash",
+				category: "fast",
+				tags: ["MiMo", "Fast", "Vision", "Thinking", "Tools"],
+				modelId: "mimo-v2.6-flash",
+			},
+		] as const) {
+			const preset = MODEL_PRESETS.find((item) => item.id === expected.presetId);
+
+			assert.ok(preset);
+			assert.strictEqual(preset.label, expected.label);
+			assert.strictEqual(preset.providerPresetId, "mimo");
+			assert.strictEqual(preset.category, expected.category);
+			assert.deepStrictEqual(preset.tags, expected.tags);
+			assert.strictEqual(preset.model.id, expected.modelId);
+			assert.ok(preset.model._comment?.includes("https://mimo.mi.com/docs/en-US/quick-start/summary/model"));
+			assert.ok(preset.model._comment?.includes("https://mimo.mi.com/docs/en-US/api/chat/openai-api"));
+			assert.strictEqual(preset.model.displayName, expected.label);
+			assert.strictEqual(preset.model.owned_by, "mimo");
+			assert.strictEqual(preset.model.baseUrl, "https://api.xiaomimimo.com/v1");
+			assert.strictEqual(preset.model.apiMode, "openai");
+			assert.strictEqual(preset.model.context_length, 1048576);
+			assert.strictEqual(preset.model.max_completion_tokens, 131072);
+			assert.strictEqual(preset.model.max_tokens, undefined);
+			assert.strictEqual(preset.model.vision, true);
+			assert.strictEqual(preset.model.toolCalling, true);
+			assert.strictEqual(preset.model.include_reasoning_in_request, true);
+			assert.deepStrictEqual(preset.model.thinking, { type: "enabled" });
+		}
 	});
 
 	test("contains Kimi K3 quick setup preset", () => {
