@@ -79,12 +79,28 @@ export class LiteLLMApi extends OpenaiApi {
 			isPlainObject(rb.extra_body) ? rb.extra_body as Record<string, unknown> : undefined,
 			um?.extra_body
 		);
+		if (usesUpstreamDefaultThinking(um)) {
+			// Nube's GLM-5.3 aliases run behind vLLM, where thinking is enabled by
+			// the chat template. LiteLLM may promote extra_body.thinking into the
+			// upstream request, and named tool calls then fail with an unknown
+			// top-level `thinking` field. Keep reasoning_effort, but omit the
+			// unsupported explicit thinking controls for both new and saved rows.
+			delete rb.thinking;
+			delete extraBody.thinking;
+		}
 		if (Object.keys(extraBody).length > 0) {
 			rb.extra_body = extraBody;
+		} else {
+			delete rb.extra_body;
 		}
 
 		return rb;
 	}
+}
+
+function usesUpstreamDefaultThinking(model: HFModelItem | undefined): boolean {
+	const modelId = model?.id.trim().toLowerCase();
+	return modelId === "glm-5.3" || modelId === "glm-5.3-flash";
 }
 
 export function buildLiteLLMExtraBody(model: HFModelItem | undefined): Record<string, unknown> {

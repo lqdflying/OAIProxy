@@ -647,11 +647,11 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		providerPresetId: "litellm",
 		category: "fast",
 		tags: ["LiteLLM", "Z.AI", "GLM", "Fast", "Vision", "Thinking", "Tools"],
-		description: "GLM-5.3-Flash through the LiteLLM proxy sample endpoint with vision and preserved thinking.",
+		description: "GLM-5.3-Flash through the LiteLLM proxy sample endpoint with vision and upstream-default thinking.",
 		model: {
 			id: "GLM-5.3-Flash",
 			_comment:
-				"Quick Setup defaults based on official Z.AI GLM-5.3-Flash and Chat Completions docs: https://docs.z.ai/guides/vlm/glm-5.3-flash and https://docs.z.ai/api-reference/llm/chat-completion. Uses the Nube gateway alias GLM-5.3-Flash with mandatory thinking, max reasoning, and preserved reasoning content; context caching is provider-managed.",
+				"Quick Setup defaults based on official Z.AI GLM-5.3-Flash, vLLM, and Chat Completions docs: https://docs.z.ai/guides/vlm/glm-5.3-flash, https://docs.vllm.ai/projects/ascend/zh-cn/main/tutorials/models/GLM5.3-Flash.html, and https://docs.z.ai/api-reference/llm/chat-completion. Uses the Nube gateway alias GLM-5.3-Flash with upstream-default thinking and max reasoning; do not send an explicit thinking field because the vLLM backend rejects it for named tool calls. Context caching is provider-managed.",
 			displayName: "GLM-5.3-Flash (LiteLLM)",
 			owned_by: "litellm",
 			baseUrl: "https://ai.nube.sh/api/v1",
@@ -662,10 +662,6 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 			reasoning_effort: "max",
 			supported_reasoning_efforts: ["low", "high", "max"],
 			default_reasoning_effort: "max",
-			thinking: {
-				type: "enabled",
-				clear_thinking: false,
-			},
 			temperature: 1,
 			top_p: 0.95,
 			toolCalling: true,
@@ -678,11 +674,11 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 		providerPresetId: "litellm",
 		category: "latest",
 		tags: ["LiteLLM", "Z.AI", "GLM", "Coding", "Thinking", "Tools"],
-		description: "GLM-5.3 through the LiteLLM proxy sample endpoint with mandatory thinking and tools.",
+		description: "GLM-5.3 through the LiteLLM proxy sample endpoint with tools and upstream-default thinking.",
 		model: {
 			id: "GLM-5.3",
 			_comment:
-				"Quick Setup defaults based on official Z.AI GLM-5.3 and Chat Completions docs: https://docs.z.ai/guides/llm/glm-5.3 and https://docs.z.ai/api-reference/llm/chat-completion. Uses the Nube gateway alias GLM-5.3 with mandatory thinking, max reasoning, and preserved reasoning content; context caching is provider-managed.",
+				"Quick Setup defaults based on official Z.AI GLM-5.3, vLLM, and Chat Completions docs: https://docs.z.ai/guides/llm/glm-5.3, https://docs.vllm.ai/projects/vllm-ascend-cn/zh-cn/latest/tutorials/models/GLM5.3.html, and https://docs.z.ai/api-reference/llm/chat-completion. Uses the Nube gateway alias GLM-5.3 with upstream-default thinking and max reasoning; do not send an explicit thinking field because the vLLM backend rejects it for named tool calls. Context caching is provider-managed.",
 			displayName: "GLM-5.3 (LiteLLM)",
 			owned_by: "litellm",
 			baseUrl: "https://ai.nube.sh/api/v1",
@@ -693,10 +689,6 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 			reasoning_effort: "max",
 			supported_reasoning_efforts: ["low", "high", "max"],
 			default_reasoning_effort: "max",
-			thinking: {
-				type: "enabled",
-				clear_thinking: false,
-			},
 			temperature: 1,
 			top_p: 0.95,
 			toolCalling: true,

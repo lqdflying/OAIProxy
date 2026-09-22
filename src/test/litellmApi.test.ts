@@ -13,8 +13,8 @@ suite("litellmApi", () => {
 
 	test("prepares current LiteLLM presets with reasoning and required tools", () => {
 		for (const [presetId, thinking] of [
-			["litellm-glm-5-3-flash", { type: "enabled", clear_thinking: false }],
-			["litellm-glm-5-3", { type: "enabled", clear_thinking: false }],
+			["litellm-glm-5-3-flash", undefined],
+			["litellm-glm-5-3", undefined],
 			["litellm-deepseek-v4-1-flash", { type: "enabled" }],
 			["litellm-qwen3-8-27b", undefined],
 		] as const) {
@@ -43,6 +43,24 @@ suite("litellmApi", () => {
 				{ type: "function", function: { name: "echo", description: "Echo a value", parameters: { type: "object" } } },
 			]);
 		}
+	});
+
+	test("strips legacy GLM thinking fields before named tool calls", () => {
+		const body = prepare({
+			id: "GLM-5.3-Flash",
+			thinking: { type: "enabled", clear_thinking: false },
+			extra: {
+				thinking: { type: "enabled" },
+				extra_body: { thinking: { type: "enabled", clear_thinking: false }, metadata: { source: "legacy" } },
+			},
+			extra_body: { thinking: { type: "enabled" }, allowed_openai_params: ["tools"] },
+		});
+
+		assert.strictEqual(body.thinking, undefined);
+		assert.deepStrictEqual(body.extra_body, {
+			metadata: { source: "legacy" },
+			allowed_openai_params: ["tools"],
+		});
 	});
 
 	test("maps thinking configuration into extra_body", () => {
