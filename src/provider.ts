@@ -1129,6 +1129,7 @@ function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
 	const body = requestBody && typeof requestBody === "object"
 		? requestBody as Record<string, unknown>
 		: {};
+	const assistantSummary = summarizeAssistantMessages(body.messages);
 	const cacheControlCount = countCacheControlMarkers(requestBody);
 	const systemCacheControlCount = countCacheControlMarkers(body.system);
 	const toolCacheControlCount = countCacheControlMarkers(body.tools);
@@ -1142,6 +1143,7 @@ function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
 		model: typeof body.model === "string" ? body.model : undefined,
 		stream: typeof body.stream === "boolean" ? body.stream : undefined,
 		messageCount: getArrayLength(body.messages),
+		...assistantSummary,
 		inputCount: getArrayLength(body.input),
 		contentCount: getArrayLength(body.contents),
 		toolCount: getArrayLength(body.tools),
@@ -1177,6 +1179,56 @@ function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
 		hasOutputConfig: body.output_config !== undefined,
 		outputConfigEffort: getNestedString(body.output_config, "effort"),
 	};
+}
+
+function summarizeAssistantMessages(messages: unknown): Record<string, unknown> {
+	if (!Array.isArray(messages)) {
+		return {};
+	}
+
+	let assistantCount = 0;
+	let assistantToolCallCount = 0;
+	let assistantReasoningPresentCount = 0;
+	let assistantReasoningEmptyCount = 0;
+	let assistantReasoningMissingCount = 0;
+	let assistantToolCallContentMissingCount = 0;
+	for (const message of messages) {
+		if (!isRecord(message) || message.role !== "assistant") {
+			continue;
+		}
+		assistantCount++;
+		const hasToolCalls = Array.isArray(message.tool_calls) && message.tool_calls.length > 0;
+		if (hasToolCalls) {
+			assistantToolCallCount++;
+			if (message.content === undefined || message.content === null) {
+				assistantToolCallContentMissingCount++;
+			}
+		}
+		if (typeof message.reasoning_content === "string") {
+			assistantReasoningPresentCount++;
+			if (message.reasoning_content.length === 0) {
+				assistantReasoningEmptyCount++;
+			}
+		} else {
+			assistantReasoningMissingCount++;
+		}
+	}
+
+	if (assistantCount === 0) {
+		return {};
+	}
+	return {
+		assistantMessageCount: assistantCount,
+		assistantToolCallMessageCount: assistantToolCallCount,
+		assistantReasoningContentPresentCount: assistantReasoningPresentCount,
+		assistantReasoningContentEmptyCount: assistantReasoningEmptyCount,
+		assistantReasoningContentMissingCount: assistantReasoningMissingCount,
+		assistantToolCallContentMissingCount: assistantToolCallContentMissingCount,
+	};
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+	return !!value && typeof value === "object" && !Array.isArray(value);
 }
 
 function countCacheControlMarkers(value: unknown, depth = 0): number {

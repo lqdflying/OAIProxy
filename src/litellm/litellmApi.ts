@@ -88,6 +88,9 @@ export class LiteLLMApi extends OpenaiApi {
 			delete rb.thinking;
 			delete extraBody.thinking;
 		}
+		if (usesDeepSeekThinking(um)) {
+			preserveDeepSeekReasoningContent(rb, extraBody);
+		}
 		if (Object.keys(extraBody).length > 0) {
 			rb.extra_body = extraBody;
 		} else {
@@ -101,6 +104,48 @@ export class LiteLLMApi extends OpenaiApi {
 function usesUpstreamDefaultThinking(model: HFModelItem | undefined): boolean {
 	const modelId = model?.id.trim().toLowerCase();
 	return modelId === "glm-5.3" || modelId === "glm-5.3-flash";
+}
+
+function usesDeepSeekThinking(model: HFModelItem | undefined): boolean {
+	const modelId = model?.id.trim().toLowerCase();
+	return modelId === "deepseek-v4.1-flash" || modelId === "deepseek-v4-flash";
+}
+
+/**
+ * DeepSeek's thinking-mode tool protocol requires reasoning_content on every
+ * assistant message that is replayed after tools are advertised. VS Code can
+ * provide an assistant turn without a visible thinking part when the upstream
+ * response contains no reasoning tokens. Preserve the required fields in that
+ * case instead of sending an invalid history to the LiteLLM/vLLM gateway.
+ */
+function preserveDeepSeekReasoningContent(
+	rb: Record<string, unknown>,
+	extraBody: Record<string, unknown>
+): void {
+	if (!Array.isArray(rb.tools) || rb.tools.length === 0 || !isThinkingEnabled(rb, extraBody)) {
+		return;
+	}
+	if (!Array.isArray(rb.messages)) {
+		return;
+	}
+
+	for (const message of rb.messages) {
+		if (!isPlainObject(message) || message.role !== "assistant") {
+			continue;
+		}
+		if (message.reasoning_content === undefined || message.reasoning_content === null) {
+			message.reasoning_content = "";
+		}
+		if (Array.isArray(message.tool_calls) && message.tool_calls.length > 0 && (message.content === undefined || message.content === null)) {
+			message.content = "";
+		}
+	}
+}
+
+function isThinkingEnabled(rb: Record<string, unknown>, extraBody: Record<string, unknown>): boolean {
+	const topLevelThinking = isPlainObject(rb.thinking) ? rb.thinking : undefined;
+	const nestedThinking = isPlainObject(extraBody.thinking) ? extraBody.thinking : undefined;
+	return topLevelThinking?.type === "enabled" || nestedThinking?.type === "enabled";
 }
 
 export function buildLiteLLMExtraBody(model: HFModelItem | undefined): Record<string, unknown> {

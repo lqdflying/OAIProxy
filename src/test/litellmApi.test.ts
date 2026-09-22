@@ -63,6 +63,63 @@ suite("litellmApi", () => {
 		});
 	});
 
+	test("preserves empty DeepSeek reasoning fields in thinking tool history", () => {
+		const body = new LiteLLMApi("DeepSeek-V4.1-Flash").prepareRequestBody(
+			{
+				model: "DeepSeek-V4.1-Flash",
+				messages: [
+					{ role: "assistant", tool_calls: [{ id: "call-1", type: "function", function: { name: "echo", arguments: "{}" } }] },
+					{ role: "assistant", content: "Visible answer." },
+				],
+				stream: true,
+			},
+			{
+				...model({
+					id: "DeepSeek-V4.1-Flash",
+					thinking: { type: "enabled" },
+				}),
+				max_tokens: 1024,
+			},
+			{
+				requestInitiator: "test",
+				toolMode: vscode.LanguageModelChatToolMode.Auto,
+				tools: [{ name: "echo", description: "Echo a value", inputSchema: { type: "object" } }],
+			}
+		);
+
+		assert.deepStrictEqual(body.extra_body, { thinking: { type: "enabled" } });
+		assert.deepStrictEqual(body.messages, [
+			{
+				role: "assistant",
+				tool_calls: [{ id: "call-1", type: "function", function: { name: "echo", arguments: "{}" } }],
+				reasoning_content: "",
+				content: "",
+			},
+			{ role: "assistant", content: "Visible answer.", reasoning_content: "" },
+		]);
+	});
+
+	test("does not add DeepSeek compatibility fields when thinking is disabled", () => {
+		const body = new LiteLLMApi("DeepSeek-V4.1-Flash").prepareRequestBody(
+			{
+				model: "DeepSeek-V4.1-Flash",
+				messages: [{ role: "assistant", tool_calls: [{ id: "call-1" }] }],
+				stream: true,
+			},
+			{
+				...model({ id: "DeepSeek-V4.1-Flash", thinking: { type: "disabled" } }),
+				max_tokens: 1024,
+			},
+			{
+				requestInitiator: "test",
+				toolMode: vscode.LanguageModelChatToolMode.Auto,
+				tools: [{ name: "echo", description: "Echo a value", inputSchema: { type: "object" } }],
+			}
+		);
+
+		assert.deepStrictEqual(body.messages, [{ role: "assistant", tool_calls: [{ id: "call-1" }] }]);
+	});
+
 	test("maps thinking configuration into extra_body", () => {
 		const body = prepare({
 			thinking: {
