@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.1.39 (2026-09-22)
+
+- Add MiMo V2.6 Pro and MiMo V2.6 Flash Quick Setup cards with Xiaomi's official 1M context, 131,072-token output, multimodal, thinking, and tool-calling defaults.
+- Add regression coverage for the new MiMo V2.6 preset metadata and saved source documentation links.
+
 ## 0.1.38 (2026-09-22)
 
 - Preserve empty `reasoning_content` and assistant content fields for DeepSeek LiteLLM tool histories when thinking mode is enabled, preventing Nube's vLLM gateway from rejecting turns that produced no visible reasoning tokens.
