@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.1.38 (2026-09-22)
+
+- Preserve empty `reasoning_content` and assistant content fields for DeepSeek LiteLLM tool histories when thinking mode is enabled, preventing Nube's vLLM gateway from rejecting turns that produced no visible reasoning tokens.
+- Add safe request diagnostics for assistant reasoning-field presence and regression coverage for DeepSeek thinking history.
+
 ## 0.1.37 (2026-09-22)
 
 - Fix the first LiteLLM/Nube GLM-5.3 and GLM-5.3-Flash agent request by omitting explicit `thinking` fields that the vLLM backend rejects for named tool calls.
