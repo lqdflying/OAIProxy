@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.1.40 (2026-09-23)
+
+- Add a Kimi K3 Quick Setup card for the Nube-backed LiteLLM gateway with 1M context, vision, tools, and max reasoning defaults.
+- Synchronize the LiteLLM example configuration and preset regression coverage, and document `UPSTREAM_NUBE_URL` and `NUBE_API_KEY` for future Nube validation.
+
 ## 0.1.39 (2026-09-22)
 
 - Add MiMo V2.6 Pro and MiMo V2.6 Flash Quick Setup cards with Xiaomi's official 1M context, 131,072-token output, multimodal, thinking, and tool-calling defaults.
