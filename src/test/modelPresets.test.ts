@@ -454,16 +454,44 @@ suite("modelPresets", () => {
 		);
 	});
 
-	test("contains the five current LiteLLM gateway aliases", () => {
+	test("contains the six current LiteLLM gateway aliases", () => {
 		const presets = MODEL_PRESETS.filter((preset) => preset.providerPresetId === "litellm");
 		assert.deepStrictEqual(presets.map((preset) => preset.model.id).sort(), [
 			"DeepSeek-V4.1-Flash",
 			"GLM-5.3",
 			"GLM-5.3-Flash",
 			"Kimi-K2.6",
+			"Kimi-K3",
 			"Qwen3.8-27B",
 		]);
 		assert.strictEqual(new Set(MODEL_PRESETS.map((preset) => preset.id)).size, MODEL_PRESETS.length);
+	});
+
+	test("contains the LiteLLM Kimi K3 quick setup preset", () => {
+		const preset = MODEL_PRESETS.find((item) => item.id === "litellm-kimi-k3");
+
+		assert.ok(preset);
+		assert.strictEqual(preset.label, "Kimi K3 (LiteLLM)");
+		assert.strictEqual(preset.providerPresetId, "litellm");
+		assert.strictEqual(preset.category, "latest");
+		assert.deepStrictEqual(preset.tags, ["LiteLLM", "Kimi", "Code", "Vision", "Thinking", "Tools", "Prompt Cache"]);
+		assert.strictEqual(preset.model.id, "Kimi-K3");
+		assert.ok(preset.model._comment?.includes("https://platform.kimi.ai/docs/guide/kimi-k3-quickstart"));
+		assert.strictEqual(preset.model.displayName, "Kimi K3 (LiteLLM)");
+		assert.strictEqual(preset.model.owned_by, "litellm");
+		assert.strictEqual(preset.model.baseUrl, "https://ai.nube.sh/api/v1");
+		assert.strictEqual(preset.model.apiMode, "litellm");
+		assert.strictEqual(preset.model.context_length, 1048576);
+		assert.strictEqual(preset.model.max_completion_tokens, 131072);
+		assert.strictEqual(preset.model.max_tokens, undefined);
+		assert.strictEqual(preset.model.reasoning_effort, "max");
+		assert.deepStrictEqual(preset.model.supported_reasoning_efforts, ["max"]);
+		assert.strictEqual(preset.model.default_reasoning_effort, "max");
+		assert.strictEqual(preset.model.vision, true);
+		assert.strictEqual(preset.model.toolCalling, true);
+		assert.strictEqual(preset.model.include_reasoning_in_request, true);
+		assert.strictEqual(preset.model.thinking, undefined);
+		assert.strictEqual(preset.model.prompt_cache, undefined);
 	});
 
 	for (const expected of [
@@ -581,7 +609,6 @@ suite("modelPresets", () => {
 			"litellm-glm-5-1",
 			"litellm-glm-5-2",
 			"litellm-qwen3-5-122b-a10b",
-			"litellm-kimi-k3",
 			"litellm-deepseek-v4-flash",
 		]) {
 			assert.strictEqual(
