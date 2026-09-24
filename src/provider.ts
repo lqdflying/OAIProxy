@@ -47,6 +47,7 @@ import { getRequestedReasoningEffort, normalizeReasoningEffortForModel } from ".
 import { applyOpenAIPromptCache, hasCacheControl } from "./promptCache";
 import { createTokenUsageReport, getTokenBudgetErrorMessage } from "./tokenUsage";
 import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "./vscodeCompat";
+import { getXaiOAuthAccessToken, isXaiGrokOAuthBaseUrl } from "./xaiOAuth";
 
 interface ChatInformationOptions {
 	readonly silent?: boolean;
@@ -351,13 +352,16 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			// Get API key for the model's provider
 			const provider = um?.owned_by;
 			const useGenericKey = !um?.baseUrl;
-			const modelApiKey = await this.ensureApiKey(
-				useGenericKey,
-				provider,
-				baseUrl,
-				apiMode,
-				!executionOptions.diagnostic
-			);
+			const modelApiKey =
+				um?.authMode === "oauth" && provider?.trim().toLowerCase() === "xai" && isXaiGrokOAuthBaseUrl(baseUrl)
+					? await getXaiOAuthAccessToken(this.secrets)
+					: await this.ensureApiKey(
+							useGenericKey,
+							provider,
+							baseUrl,
+							apiMode,
+							!executionOptions.diagnostic
+						);
 			if (!modelApiKey) {
 				logger.warn("apiKey.missing", {
 					provider: provider ?? "",

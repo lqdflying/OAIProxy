@@ -29,6 +29,11 @@ export interface HFModelItem {
 	owned_by: string;
 	configId?: string;
 	displayName?: string;
+	/**
+	 * Credential flow for this model. OAuth credentials are stored and refreshed
+	 * by OAIProxy; API-key models use the existing provider SecretStorage path.
+	 */
+	authMode?: "api-key" | "oauth";
 	baseUrl?: string;
 	/**
 	 * If true, provider transport fields (baseUrl, apiMode, headers) are resolved
@@ -133,6 +138,7 @@ export interface ProviderConfigItem {
 	provider: string;
 	baseUrl?: string;
 	apiMode?: HFApiMode;
+	authMode?: "api-key" | "oauth";
 	headers?: Record<string, string>;
 }
 

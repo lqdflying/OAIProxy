@@ -241,6 +241,7 @@ function migrateProviderPlaceholderModels(
 		nextProviders = upsertProviderConfig(nextProviders, model.owned_by, {
 			baseUrl: model.baseUrl,
 			apiMode: model.apiMode,
+			authMode: model.authMode,
 			headers: model.headers,
 		});
 	}

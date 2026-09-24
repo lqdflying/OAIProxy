@@ -19,6 +19,14 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
 		sortOrder: -100,
 	},
 	{
+		id: "xai-oauth",
+		label: "xAI / Grok (OAuth)",
+		provider: "xai",
+		baseUrl: "https://cli-chat-proxy.grok.com/v1",
+		apiMode: "openai-responses",
+		sortOrder: -90,
+	},
+	{
 		id: "openai",
 		label: "OpenAI",
 		provider: "openai",

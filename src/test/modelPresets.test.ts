@@ -6,6 +6,31 @@ import { MODEL_PRESETS } from "../modelPresets";
 import { PROVIDER_PRESETS } from "../providerPresets";
 
 suite("modelPresets", () => {
+	test("contains Grok 4.7 and 4.6 OAuth quick setup cards", () => {
+		for (const expected of [
+			{ id: "xai-grok-4-7-oauth", modelId: "grok-4.7", category: "latest" },
+			{ id: "xai-grok-4-6-oauth", modelId: "grok-4.6", category: "recommended" },
+		]) {
+			const preset = MODEL_PRESETS.find((item) => item.id === expected.id);
+			assert.ok(preset);
+			assert.strictEqual(preset.providerPresetId, "xai-oauth");
+			assert.strictEqual(preset.category, expected.category);
+			assert.strictEqual(preset.model.id, expected.modelId);
+			assert.strictEqual(preset.model.configId, "xai-oauth");
+			assert.strictEqual(preset.model.owned_by, "xai");
+			assert.strictEqual(preset.model.authMode, "oauth");
+			assert.strictEqual(preset.model.baseUrl, "https://cli-chat-proxy.grok.com/v1");
+			assert.strictEqual(preset.model.apiMode, "openai-responses");
+			assert.strictEqual(preset.model.context_length, 500000);
+			assert.strictEqual(preset.model.max_tokens, 64000);
+			assert.strictEqual(preset.model.max_completion_tokens, undefined);
+			assert.strictEqual(preset.model.vision, true);
+			assert.strictEqual(preset.model.toolCalling, true);
+			assert.deepStrictEqual(preset.model.supported_reasoning_efforts, ["low", "medium", "high", "xhigh"]);
+			assert.strictEqual(preset.model.default_reasoning_effort, "high");
+			assert.ok(preset.model._comment?.includes("https://docs.x.ai/developers/rest-api-reference/inference"));
+		}
+	});
 	test("every preset has provider, API mode, base URL, context, and exactly one output token field", () => {
 		for (const preset of MODEL_PRESETS) {
 			const model = preset.model;

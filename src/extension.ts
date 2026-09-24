@@ -24,6 +24,11 @@ import {
 	providerRequiresUsageApiKey,
 	type ProviderUsageAdapter,
 } from "./providerUsage";
+import {
+	clearXaiOAuthCredential,
+	loginXaiOAuth as completeXaiOAuthLogin,
+	saveXaiOAuthCredential,
+} from "./xaiOAuth";
 
 const LANGUAGE_MODEL_VENDOR = "oaiproxy";
 const LAST_ACTIVATED_VERSION_KEY = "oaiproxy.lastActivatedVersion";
@@ -134,6 +139,42 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 
 			await configureApiKey(context, chatProvider, selectedProvider.provider);
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("oaiproxy.loginXaiOAuth", async () => {
+			try {
+				const credential = await completeXaiOAuthLogin({
+					onDeviceCode: async (info) => {
+						const verificationUri = info.verificationUriComplete ?? info.verificationUri;
+						try {
+							await vscode.env.openExternal(vscode.Uri.parse(verificationUri));
+						} catch {
+							// Remote/headless VS Code may not have a local browser bridge.
+						}
+						void vscode.window.showInformationMessage(
+							`xAI OAuth device sign-in: open ${verificationUri} and enter code ${info.userCode}.`
+						);
+					},
+				});
+				await saveXaiOAuthCredential(context.secrets, credential);
+				refreshLanguageModels(chatProvider);
+				vscode.window.showInformationMessage(
+					credential.email ? `Signed in to xAI/Grok as ${credential.email}.` : "Signed in to xAI/Grok."
+				);
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				vscode.window.showErrorMessage(message);
+			}
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("oaiproxy.logoutXaiOAuth", async () => {
+			await clearXaiOAuthCredential(context.secrets);
+			refreshLanguageModels(chatProvider);
+			vscode.window.showInformationMessage("Signed out of xAI/Grok OAuth.");
 		})
 	);
 

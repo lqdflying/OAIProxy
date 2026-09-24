@@ -6,6 +6,7 @@ export const PROVIDER_CONFIG_STORAGE_KEY = "oaiproxy.providers";
 export interface ProviderTransportFields {
 	baseUrl?: string;
 	apiMode?: HFApiMode;
+	authMode?: "api-key" | "oauth";
 	headers?: Record<string, string>;
 }
 
@@ -34,6 +35,9 @@ export function normalizeProviderConfigs(providers: unknown): ProviderConfigItem
 		if (isApiMode(obj.apiMode)) {
 			config.apiMode = obj.apiMode;
 		}
+		if (obj.authMode === "api-key" || obj.authMode === "oauth") {
+			config.authMode = obj.authMode;
+		}
 		if (obj.headers && typeof obj.headers === "object" && !Array.isArray(obj.headers)) {
 			config.headers = obj.headers as Record<string, string>;
 		}
@@ -59,6 +63,9 @@ export function upsertProviderConfig(
 	};
 	if (transport.baseUrl !== undefined) {
 		next.baseUrl = transport.baseUrl;
+	}
+	if (transport.authMode !== undefined) {
+		next.authMode = transport.authMode;
 	}
 	if (transport.headers !== undefined) {
 		next.headers = transport.headers;
@@ -177,6 +184,11 @@ export function resolveProviderBackedModel(
 	} else {
 		delete next.apiMode;
 	}
+	if (providerModel.authMode !== undefined) {
+		next.authMode = providerModel.authMode;
+	} else if (model.authMode === undefined) {
+		delete next.authMode;
+	}
 	if (providerModel.headers !== undefined) {
 		next.headers = providerModel.headers;
 	} else {
@@ -236,6 +248,7 @@ function isKnownPresetTransport(model: HFModelItem): boolean {
 	return (
 		(!model.baseUrl || normalizeUrl(model.baseUrl) === normalizeUrl(presetModel.baseUrl)) &&
 		(!model.apiMode || model.apiMode === presetModel.apiMode) &&
+		(!model.authMode || model.authMode === presetModel.authMode) &&
 		(model.headers === undefined || JSON.stringify(model.headers) === JSON.stringify(presetModel.headers))
 	);
 }
@@ -258,6 +271,9 @@ function providerConfigToModel(config: ProviderConfigItem): HFModelItem {
 	}
 	if (config.apiMode !== undefined) {
 		model.apiMode = config.apiMode;
+	}
+	if (config.authMode !== undefined) {
+		model.authMode = config.authMode;
 	}
 	if (config.headers !== undefined) {
 		model.headers = config.headers;
