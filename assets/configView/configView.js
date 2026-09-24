@@ -160,12 +160,6 @@ document.getElementById("importConfig").addEventListener("click", () => {
 document.getElementById("refreshGlobalConfig").addEventListener("click", handleRefresh);
 document.getElementById("refreshProviders").addEventListener("click", handleRefresh);
 document.getElementById("refreshModels").addEventListener("click", handleRefresh);
-document.getElementById("loginXaiOAuth").addEventListener("click", () => {
-	vscode.postMessage({ type: "loginXaiOAuth" });
-});
-document.getElementById("logoutXaiOAuth").addEventListener("click", () => {
-	vscode.postMessage({ type: "logoutXaiOAuth" });
-});
 testAllModelsBtn.addEventListener("click", () => {
 	const modelIds = state.models.filter((model) => !isProviderPlaceholderModel(model)).map(getFullModelId);
 	startModelTestRequest("testAllModels", modelIds);
@@ -1692,6 +1686,11 @@ function renderProviders() {
 			const hasProviderKey = Boolean(state.providerKeys[provider]);
 			const keyPlaceholder = hasProviderKey ? "Saved - leave blank to keep" : "API Key";
 			const modelCount = providerEntry.modelCount;
+			const oauthActions =
+				provider.trim().toLowerCase() === "xai"
+					? `<button class="login-xai-oauth-btn compact" data-provider="${providerAttr}" title="Sign in to xAI / Grok with OAuth">Sign in to Grok</button>
+						<button class="logout-xai-oauth-btn secondary compact" data-provider="${providerAttr}" title="Remove the saved xAI / Grok OAuth credential">Sign out of Grok</button>`
+					: "";
 
 			return `
 				<tr data-provider="${providerAttr}">
@@ -1715,6 +1714,7 @@ function renderProviders() {
 					<td class="provider-headers-cell"><textarea class="provider-input provider-headers-input" data-field="headers" rows="2" placeholder='{"X-API-Version": "v1"}'>${escapeHtml(headersJson)}</textarea></td>
 					<td class="action-cell">
 						<div class="action-buttons">
+							${oauthActions}
 							<button class="update-provider-btn compact" data-provider="${providerAttr}">Save</button>
 							<button class="clear-provider-key-btn secondary compact" data-provider="${providerAttr}" ${hasProviderKey ? "" : "disabled"}>Clear Key</button>
 							<button class="delete-provider-btn danger compact" data-provider="${providerAttr}">Delete</button>
@@ -1727,6 +1727,18 @@ function renderProviders() {
 	providerTableBody.innerHTML = rows;
 
 	// Add event listeners for provider rows
+	document.querySelectorAll(".login-xai-oauth-btn").forEach((btn) => {
+		btn.addEventListener("click", () => {
+			vscode.postMessage({ type: "loginXaiOAuth" });
+		});
+	});
+
+	document.querySelectorAll(".logout-xai-oauth-btn").forEach((btn) => {
+		btn.addEventListener("click", () => {
+			vscode.postMessage({ type: "logoutXaiOAuth" });
+		});
+	});
+
 	document.querySelectorAll(".update-provider-btn").forEach((btn) => {
 		btn.addEventListener("click", (event) => {
 			const provider = event.target.getAttribute("data-provider");
