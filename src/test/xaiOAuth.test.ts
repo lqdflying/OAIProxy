@@ -4,12 +4,25 @@ import {
 	XAI_OAUTH_CLIENT_ID,
 	XAI_OAUTH_SCOPE,
 	XAI_GROK_OAUTH_BASE_URL,
+	XAI_GROK_OAUTH_CLIENT_VERSION,
+	applyXaiGrokOAuthHeaders,
 	getXaiOAuthAccessToken,
 	loginXaiOAuth,
 	type SecretStorageLike,
 } from "../xaiOAuth";
 
 suite("xaiOAuth", () => {
+	test("adds the Grok CLI compatibility headers required by the subscription proxy", () => {
+		const headers: Record<string, string> = {};
+		applyXaiGrokOAuthHeaders(headers, "grok-4-fast");
+
+		assert.deepStrictEqual(headers, {
+			"X-XAI-Token-Auth": "xai-grok-cli",
+			"x-grok-client-version": XAI_GROK_OAUTH_CLIENT_VERSION,
+			"x-grok-model-override": "grok-4-fast",
+		});
+	});
+
 	test("completes device-code login and returns a refreshable credential", async () => {
 		const calls: { url: string; body: string }[] = [];
 		let tokenPolls = 0;

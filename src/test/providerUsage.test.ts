@@ -18,8 +18,10 @@ import {
 	parseMiniMaxTokenPlan,
 	parseLiteLLMKeyInfo,
 	parseOpenAICosts,
+	parseXaiGrokUsage,
 	parseTokenRouterWallet,
 	providerRequiresUsageApiKey,
+	XAI_GROK_BILLING_ENDPOINT,
 } from "../providerUsage";
 
 suite("providerUsage", () => {
@@ -219,8 +221,77 @@ suite("providerUsage", () => {
 		assert.strictEqual(getProviderUsageAdapter("fireworks", "https://api.fireworks.ai/inference/v1"), "fireworks");
 		assert.strictEqual(getProviderUsageAdapter("custom", "https://api.fireworks.ai/inference/v1"), "fireworks");
 		assert.strictEqual(getProviderUsageAdapter("tokenrouter", "https://api.tokenrouter.com/v1"), "tokenrouter");
+		assert.strictEqual(getProviderUsageAdapter("xai", "https://cli-chat-proxy.grok.com/v1"), "xai");
 		assert.strictEqual(providerRequiresUsageApiKey("tokenrouter"), true);
 		assert.strictEqual(getProviderUsageSecretKey("OpenAI"), "oaicopilot.usageApiKey.openai");
+	});
+
+	test("parses xAI Grok weekly credit usage", () => {
+		const result = parseXaiGrokUsage({
+			subscription_tier: "SuperGrok Heavy",
+			config: {
+				creditUsagePercent: 28.4,
+				currentPeriod: {
+					type: "SUBSCRIPTION_PERIOD_WEEKLY",
+					end: "2026-09-28T12:00:00Z",
+				},
+				prepaidBalance: { val: "1250" },
+			},
+		});
+
+		assert.strictEqual(
+			result.summary,
+			"Weekly credit remaining: 71.6% (28.4% used), resets 2026-09-28T12:00:00Z"
+		);
+		assert.deepStrictEqual(result.details, [
+			"Source: xAI Grok subscription billing endpoint.",
+			"Plan: SuperGrok Heavy",
+			"Weekly credit remaining: 71.6%",
+			"Weekly credit used: 28.4%",
+			"Weekly period ends: 2026-09-28T12:00:00Z",
+			"Prepaid balance: USD 12.5",
+		]);
+	});
+
+	test("checks xAI Grok usage with subscription proxy headers", async () => {
+		const originalFetch = globalThis.fetch;
+		let request: { url: string; headers: Record<string, string> } | undefined;
+		globalThis.fetch = (async (input, init) => {
+			request = {
+				url: String(input),
+				headers: (init?.headers ?? {}) as Record<string, string>,
+			};
+			return new Response(
+				JSON.stringify({
+					config: {
+						creditUsagePercent: 12.5,
+						currentPeriod: { type: "SUBSCRIPTION_PERIOD_WEEKLY" },
+					},
+				}),
+				{ status: 200 }
+			);
+		}) as typeof fetch;
+
+		try {
+			const result = await checkProviderUsage({
+				provider: "xai",
+				baseUrl: "https://cli-chat-proxy.grok.com/v1",
+				apiKey: "oauth-access-token",
+			});
+			assert.strictEqual(result.summary, "Weekly credit remaining: 87.5% (12.5% used)");
+			assert.deepStrictEqual(request, {
+				url: XAI_GROK_BILLING_ENDPOINT,
+				headers: {
+					Accept: "application/json",
+					Authorization: "Bearer oauth-access-token",
+					"Content-Type": "application/json",
+					"x-grok-client-mode": "cli",
+					"x-grok-client-version": "1.0.4",
+				},
+			});
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
 	});
 
 	test("parses Fireworks accounts and serverless billing usage", () => {

@@ -212,6 +212,9 @@ function applyProviderPreset(row, presetId) {
 function getProviderUsageKind(provider, baseUrl) {
 	const normalizedProvider = (provider || "").trim().toLowerCase();
 	const normalizedBaseUrl = (baseUrl || "").trim().toLowerCase();
+	if (normalizedProvider === "xai" && normalizedBaseUrl.includes("cli-chat-proxy.grok.com")) {
+		return "xai";
+	}
 	if (normalizedProvider === "tokenrouter" || normalizedBaseUrl.includes("api.tokenrouter.com")) {
 		return "tokenrouter";
 	}
@@ -301,6 +304,9 @@ function providerUsageNeedsSeparateKey(usageKind) {
 }
 
 function getProviderUsagePlan(usageKind) {
+	if (usageKind === "xai") {
+		return "Weekly credit";
+	}
 	if (usageKind === "deepseek" || usageKind === "kimi") {
 		return "Credit";
 	}
@@ -323,6 +329,9 @@ function getProviderUsagePlan(usageKind) {
 }
 
 function getProviderUsageTargetDescription(usageKind) {
+	if (usageKind === "xai") {
+		return "Weekly credit remaining";
+	}
 	if (usageKind === "deepseek" || usageKind === "kimi") {
 		return "Remaining credit balance";
 	}
@@ -857,6 +866,9 @@ function renderProviderUsageValue(usageState, usageKind, unsupportedReason, unsu
 function renderProviderUsageKeyCell(provider, usageKind, unsupportedReason) {
 	if (unsupportedReason) {
 		return '<div class="usage-key-note">Not used</div>';
+	}
+	if (usageKind === "xai") {
+		return '<div class="usage-key-note">OAuth sign-in</div>';
 	}
 	if (providerUsageNeedsSeparateKey(usageKind)) {
 		const placeholder =
@@ -1688,8 +1700,8 @@ function renderProviders() {
 			const modelCount = providerEntry.modelCount;
 			const oauthActions =
 				provider.trim().toLowerCase() === "xai"
-					? `<button class="login-xai-oauth-btn compact" data-provider="${providerAttr}" title="Sign in to xAI / Grok with OAuth">Sign in to Grok</button>
-						<button class="logout-xai-oauth-btn secondary compact" data-provider="${providerAttr}" title="Remove the saved xAI / Grok OAuth credential">Sign out of Grok</button>`
+					? `<button class="login-xai-oauth-btn compact" data-provider="${providerAttr}" title="Sign in to xAI / Grok with OAuth">Sign in</button>
+						<button class="logout-xai-oauth-btn secondary compact" data-provider="${providerAttr}" title="Remove the saved xAI / Grok OAuth credential">Sign out</button>`
 					: "";
 
 			return `

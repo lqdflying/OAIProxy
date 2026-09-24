@@ -27,6 +27,7 @@ import {
 	type ProviderUsageAdapter,
 	type ProviderUsageResult,
 } from "../providerUsage";
+import { getXaiOAuthAccessToken, isXaiGrokOAuthBaseUrl } from "../xaiOAuth";
 
 interface InitPayload {
 	baseUrl: string;
@@ -906,7 +907,7 @@ export class ConfigViewPanel {
 		await this.sendInit();
 	}
 
-	private async checkProviderUsage(provider: string, usageApiKey?: string) {
+	private async checkProviderUsage(provider: string, suppliedUsageApiKey?: string) {
 		const trimmedProvider = provider.trim();
 		const normalizedProvider = trimmedProvider.toLowerCase();
 		try {
@@ -924,23 +925,27 @@ export class ConfigViewPanel {
 						`Provider ${trimmedProvider} does not support usage checks yet.`
 				);
 			}
+			const isXaiOAuth = adapter === "xai" && isXaiGrokOAuthBaseUrl(baseUrl);
 
 			const secretKey = providerRequiresUsageApiKey(adapter)
 				? getProviderUsageSecretKey(trimmedProvider)
 				: getProviderSecretKey(trimmedProvider);
 			const providerApiKey = await this.secrets.get(getProviderSecretKey(trimmedProvider));
-			const trimmedUsageApiKey = usageApiKey?.trim();
+			const trimmedUsageApiKey = suppliedUsageApiKey?.trim();
 			if (providerRequiresUsageApiKey(adapter) && trimmedUsageApiKey) {
 				await this.secrets.store(secretKey, trimmedUsageApiKey);
 			}
 			const apiKey = providerRequiresUsageApiKey(adapter) && trimmedUsageApiKey
 				? trimmedUsageApiKey
 				: await this.secrets.get(secretKey);
-			if (!apiKey) {
+			const effectiveUsageApiKey = isXaiOAuth ? await getXaiOAuthAccessToken(this.secrets) : apiKey;
+			if (!effectiveUsageApiKey) {
 				throw new Error(
-					providerRequiresUsageApiKey(adapter)
-						? getMissingProviderUsageKeyMessage(trimmedProvider, adapter)
-						: `No API key found for provider ${trimmedProvider}. Configure its provider API key first.`
+					isXaiOAuth
+						? "Sign in to xAI / Grok with OAuth before checking weekly usage."
+						: providerRequiresUsageApiKey(adapter)
+							? getMissingProviderUsageKeyMessage(trimmedProvider, adapter)
+							: `No API key found for provider ${trimmedProvider}. Configure its provider API key first.`
 				);
 			}
 			if (adapter === "litellm" && !providerApiKey) {
@@ -950,7 +955,7 @@ export class ConfigViewPanel {
 			const result = await checkProviderUsage({
 				provider: trimmedProvider,
 				baseUrl,
-				apiKey,
+				apiKey: effectiveUsageApiKey,
 				targetApiKey: adapter === "litellm" ? providerApiKey : undefined,
 			});
 			this.panel.webview.postMessage({

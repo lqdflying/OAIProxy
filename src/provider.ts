@@ -47,7 +47,7 @@ import { getRequestedReasoningEffort, normalizeReasoningEffortForModel } from ".
 import { applyOpenAIPromptCache, hasCacheControl } from "./promptCache";
 import { createTokenUsageReport, getTokenBudgetErrorMessage } from "./tokenUsage";
 import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "./vscodeCompat";
-import { getXaiOAuthAccessToken, isXaiGrokOAuthBaseUrl } from "./xaiOAuth";
+import { applyXaiGrokOAuthHeaders, getXaiOAuthAccessToken, isXaiGrokOAuthBaseUrl } from "./xaiOAuth";
 
 interface ChatInformationOptions {
 	readonly silent?: boolean;
@@ -395,6 +395,9 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 
 			// prepare headers with custom headers if specified
 			const requestHeaders = CommonApi.prepareHeaders(modelApiKey, apiMode, um?.headers);
+			if (um?.authMode === "oauth" && provider?.trim().toLowerCase() === "xai" && isXaiGrokOAuthBaseUrl(baseUrl)) {
+				applyXaiGrokOAuthHeaders(requestHeaders, model.id);
+			}
 			logger.debug("request.headers", {
 				headers: logger.sanitizeHeaders(requestHeaders as Record<string, string>),
 			});
