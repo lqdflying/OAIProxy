@@ -272,6 +272,8 @@ interface ExportConfig {
 
 type IncomingMessage =
 	| { type: "requestInit" }
+	| { type: "loginXaiOAuth" }
+	| { type: "logoutXaiOAuth" }
 	| {
 			type: "saveGlobalConfig";
 			baseUrl: string;
@@ -449,9 +451,15 @@ export class ConfigViewPanel {
 	}
 
 	async handleMessage(message: IncomingMessage) {
-		switch (message.type) {
+			switch (message.type) {
 			case "requestInit":
 				await this.sendInit();
+				break;
+			case "loginXaiOAuth":
+				await vscode.commands.executeCommand("oaiproxy.loginXaiOAuth");
+				break;
+			case "logoutXaiOAuth":
+				await vscode.commands.executeCommand("oaiproxy.logoutXaiOAuth");
 				break;
 			case "saveGlobalConfig":
 				await this.saveGlobalConfig(

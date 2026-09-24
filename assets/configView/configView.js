@@ -160,6 +160,12 @@ document.getElementById("importConfig").addEventListener("click", () => {
 document.getElementById("refreshGlobalConfig").addEventListener("click", handleRefresh);
 document.getElementById("refreshProviders").addEventListener("click", handleRefresh);
 document.getElementById("refreshModels").addEventListener("click", handleRefresh);
+document.getElementById("loginXaiOAuth").addEventListener("click", () => {
+	vscode.postMessage({ type: "loginXaiOAuth" });
+});
+document.getElementById("logoutXaiOAuth").addEventListener("click", () => {
+	vscode.postMessage({ type: "logoutXaiOAuth" });
+});
 testAllModelsBtn.addEventListener("click", () => {
 	const modelIds = state.models.filter((model) => !isProviderPlaceholderModel(model)).map(getFullModelId);
 	startModelTestRequest("testAllModels", modelIds);
