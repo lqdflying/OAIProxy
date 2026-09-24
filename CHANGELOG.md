@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.1.41 (2026-09-24)
+
+- Add Grok 4.7 and Grok 4.6 Quick Setup cards using xAI subscription OAuth.
+- Add device-code sign-in and sign-out actions to the xAI provider row, with a single active action and clear OAuth authentication status.
+- Send the Grok CLI compatibility headers required by the subscription proxy and add xAI/Grok weekly credit remaining to Provider Usage Check.
+- Add regression coverage and documentation for Grok OAuth setup, proxy compatibility, authentication state, and weekly usage checks.
+
 ## 0.1.40 (2026-09-23)
 
 - Add a Kimi K3 Quick Setup card for the Nube-backed LiteLLM gateway with 1M context, vision, tools, and max reasoning defaults.
