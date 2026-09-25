@@ -31,6 +31,13 @@ import {
 	loginXaiOAuth as completeXaiOAuthLogin,
 	saveXaiOAuthCredential,
 } from "./xaiOAuth";
+import {
+	clearOpenAIOAuthCredential,
+	getOpenAIOAuthCredential,
+	isOpenAICodexOAuthBaseUrl,
+	loginOpenAIOAuth as completeOpenAIOAuthLogin,
+	saveOpenAIOAuthCredential,
+} from "./openaiOAuth";
 
 const LANGUAGE_MODEL_VENDOR = "oaiproxy";
 const LAST_ACTIVATED_VERSION_KEY = "oaiproxy.lastActivatedVersion";
@@ -177,6 +184,41 @@ export function activate(context: vscode.ExtensionContext) {
 			await clearXaiOAuthCredential(context.secrets);
 			refreshLanguageModels(chatProvider);
 			vscode.window.showInformationMessage("Signed out of xAI/Grok OAuth.");
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("oaiproxy.loginOpenAIOAuth", async () => {
+			try {
+				const credential = await completeOpenAIOAuthLogin({
+					onDeviceCode: async (info) => {
+						try {
+							await vscode.env.openExternal(vscode.Uri.parse(info.verificationUri));
+						} catch {
+							// Remote/headless VS Code may not have a local browser bridge.
+						}
+						void vscode.window.showInformationMessage(
+							`OpenAI Codex sign-in: open ${info.verificationUri} and enter code ${info.userCode}.`
+						);
+					},
+				});
+				await saveOpenAIOAuthCredential(context.secrets, credential);
+				refreshLanguageModels(chatProvider);
+				vscode.window.showInformationMessage(
+					credential.email ? `Signed in to OpenAI/Codex as ${credential.email}.` : "Signed in to OpenAI/Codex."
+				);
+			} catch (error) {
+				const message = error instanceof Error ? error.message : String(error);
+				vscode.window.showErrorMessage(message);
+			}
+		})
+	);
+
+	context.subscriptions.push(
+		vscode.commands.registerCommand("oaiproxy.logoutOpenAIOAuth", async () => {
+			await clearOpenAIOAuthCredential(context.secrets);
+			refreshLanguageModels(chatProvider);
+			vscode.window.showInformationMessage("Signed out of OpenAI/Codex OAuth.");
 		})
 	);
 
@@ -347,8 +389,25 @@ function getProviderUsageTargets(
 ): ProviderUsageTarget[] {
 	return getProviderKeyTargets(userModels, providerConfigs)
 		.map((target) => {
-			const adapter = getProviderUsageAdapter(target.provider, target.baseUrl);
-			return adapter ? { ...target, adapter } : undefined;
+			const codexOAuthModel =
+				target.provider.toLowerCase() === "openai"
+					? userModels.find(
+							(model) =>
+								model.owned_by?.trim().toLowerCase() === "openai" &&
+								model.authMode === "oauth" &&
+								isOpenAICodexOAuthBaseUrl(model.baseUrl)
+						)
+					: undefined;
+			const baseUrl = codexOAuthModel?.baseUrl ?? target.baseUrl;
+			const adapter = getProviderUsageAdapter(target.provider, baseUrl);
+			return adapter
+				? {
+						provider: target.provider,
+						label: target.label,
+						...(baseUrl ? { baseUrl } : {}),
+						adapter,
+					}
+				: undefined;
 		})
 		.filter((target): target is ProviderUsageTarget => target !== undefined);
 }
@@ -368,9 +427,13 @@ async function runProviderUsageCheck(
 			return;
 		}
 		const isXaiOAuth = adapter === "xai" && isXaiGrokOAuthBaseUrl(baseUrl);
+		const isOpenAICodexOAuth = adapter === "openai-codex" && isOpenAICodexOAuthBaseUrl(baseUrl);
+		const openAIOAuthCredential = isOpenAICodexOAuth ? await getOpenAIOAuthCredential(context.secrets) : undefined;
 
 		let apiKey = isXaiOAuth
 			? await getXaiOAuthAccessToken(context.secrets)
+			: isOpenAICodexOAuth
+				? openAIOAuthCredential?.accessToken
 			: await context.secrets.get(
 				providerRequiresUsageApiKey(adapter) ? getProviderUsageSecretKey(provider) : getProviderSecretKey(provider)
 			);
@@ -381,6 +444,8 @@ async function runProviderUsageCheck(
 			vscode.window.showErrorMessage(
 				isXaiOAuth
 					? "Sign in to xAI / Grok with OAuth before checking weekly usage."
+					: isOpenAICodexOAuth
+						? "Sign in to OpenAI / Codex with OAuth before checking quota."
 					: providerRequiresUsageApiKey(adapter)
 						? getMissingUsageApiKeyMessage(provider, adapter)
 						: `No API key found for provider ${provider}. Configure its provider API key first.`
@@ -388,7 +453,7 @@ async function runProviderUsageCheck(
 			return;
 		}
 
-		const result = await checkProviderUsage({ provider, baseUrl, apiKey });
+		const result = await checkProviderUsage({ provider, baseUrl, apiKey, accountId: openAIOAuthCredential?.accountId });
 		outputChannel.appendLine(`\n[${new Date().toISOString()}] ${provider}`);
 		outputChannel.appendLine(formatProviderUsageResult(result));
 		outputChannel.show(true);

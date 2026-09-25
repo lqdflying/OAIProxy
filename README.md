@@ -25,7 +25,7 @@ English | [简体中文](README.zh-CN.md)
 - **Advanced configuration**: Flexible chat request options with thinking/reasoning control
 - **Multi-provider management**: Configure models from multiple providers simultaneously with automatic API key management
 - **Model connection tests**: Test one configured model or run up to four tests in parallel from Model Management using the model's real saved request configuration
-- **Provider usage checks**: Check xAI/Grok weekly subscription credit remaining, Fireworks month-to-date serverless tokens, DeepSeek/Kimi credit balance, TokenRouter Management Key credit balance, MiniMax token-plan remaining quota, and OpenAI/Anthropic month-to-date cost usage from a standalone Provider Usage Check table; Azure Foundry, Z.AI, and MiMo explain where no public inference-key usage endpoint is available
+- **Provider usage checks**: Check xAI/Grok weekly subscription credit remaining, OpenAI Codex OAuth quota windows, Fireworks month-to-date serverless tokens, DeepSeek/Kimi credit balance, TokenRouter Management Key credit balance, MiniMax token-plan remaining quota, and OpenAI/Anthropic month-to-date cost usage from a standalone Provider Usage Check table; Azure Foundry, Z.AI, and MiMo explain where no public inference-key usage endpoint is available
 - **Multi-config per model**: Define different settings for the same model (e.g., GLM-4.6 with/without thinking)
 - **Visual configuration UI**: Intuitive interface for managing providers and models
 - **Auto-retry**: Handles API errors (429, 500, 502, 503, 504) with exponential backoff
@@ -38,7 +38,7 @@ English | [简体中文](README.zh-CN.md)
 
 ## Requirements
 - VS Code 1.120.0 or higher.
-- OpenAI-compatible provider API key.
+- OpenAI-compatible provider API key, or an eligible ChatGPT/Codex account for the OpenAI OAuth cards.
 
 ## Quick Start
 1. Install the OAIProxy VSIX package (`lqdflying.oaiproxy`).
@@ -89,9 +89,11 @@ The Provider Management form lists Azure Foundry first, followed by presets for 
 
 Quick Setup also includes **Grok 4.7 (OAuth)** and **Grok 4.6 (OAuth)**. These cards use xAI's subscription Responses route at `https://cli-chat-proxy.grok.com/v1`; they do not require an API key. In the xAI provider row's **Actions**, click **Sign in**, complete the device-code approval in a browser, then add either card. The equivalent commands are **OAIProxy: Sign in to xAI / Grok with OAuth** and **OAIProxy: Sign out of xAI / Grok OAuth**. OAIProxy stores the refreshable credential in VS Code SecretStorage and refreshes it before requests. OAuth availability is controlled by xAI account eligibility; xAI API-key models remain available separately through `https://api.x.ai/v1`.
 
+Quick Setup also includes **GPT-6 Astra/Sol/Luna** and **GPT-5.6 Sol/Terra/Luna (Codex OAuth)** cards. These use `https://chatgpt.com/backend-api/codex` and do not require an OpenAI API key. In the OpenAI provider row's **Actions**, click **Sign in**, open the displayed device URL, enter the code, then add a Codex card. The equivalent commands are **OAIProxy: Sign in to OpenAI / Codex with OAuth** and **OAIProxy: Sign out of OpenAI / Codex OAuth**. Credentials are stored in VS Code SecretStorage and refreshed before requests. OpenAI documents ChatGPT/Codex sign-in eligibility and plan-based usage separately from API-key billing; account availability can change.
+
 Model Management provides a per-model `Test` action and a parallel `Test all` action. Each test sends a small real inference request through the model's saved provider, API mode, headers, and advanced request settings, so it may incur minimal provider usage.
 
-The standalone Provider Usage Check table lists configured supported providers dynamically and reports xAI/Grok weekly credit remaining, credit, token, token-plan, or cost usage. xAI/Grok uses the saved OAuth credential and the subscription billing endpoint. Fireworks account discovery and month-to-date serverless token checks reuse the normal Fireworks provider key. OpenAI and Anthropic usage/admin keys are stored separately from chat API keys. TokenRouter uses a separate Management Key and reports account credits from its Management API self-wallet endpoint. Azure Foundry inference keys cannot call an official usage/cost endpoint; use Azure Monitor or Cost Management with Azure RBAC. Z.AI and MiMo entries are likewise shown with unavailable reasons when their public docs do not expose API-key usage or balance endpoints.
+The standalone Provider Usage Check table lists configured supported providers dynamically and reports xAI/Grok weekly credit remaining, Codex OAuth quota windows, credit, token, token-plan, or cost usage. Codex quota uses the saved OAuth credential and OpenClaw-compatible `https://chatgpt.com/backend-api/wham/usage` bearer endpoint; it is best-effort compatibility support and may become unavailable if OpenAI changes that undocumented route. Fireworks account discovery and month-to-date serverless token checks reuse the normal Fireworks provider key. OpenAI and Anthropic usage/admin keys are stored separately from chat API keys. TokenRouter uses a separate Management Key and reports account credits from its Management API self-wallet endpoint. Azure Foundry inference keys cannot call an official usage/cost endpoint; use Azure Monitor or Cost Management with Azure RBAC. Z.AI and MiMo entries are likewise shown with unavailable reasons when their public docs do not expose API-key usage or balance endpoints.
 
 → [Full Configuration Guide](doc/configuration.md)
 

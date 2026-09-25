@@ -18,13 +18,73 @@ import {
 	parseMiniMaxTokenPlan,
 	parseLiteLLMKeyInfo,
 	parseOpenAICosts,
+	parseOpenAICodexUsage,
 	parseXaiGrokUsage,
 	parseTokenRouterWallet,
 	providerRequiresUsageApiKey,
+	OPENAI_CODEX_USAGE_ENDPOINT,
 	XAI_GROK_BILLING_ENDPOINT,
 } from "../providerUsage";
 
 suite("providerUsage", () => {
+	test("parses OpenAI Codex quota windows and credits", () => {
+		const result = parseOpenAICodexUsage({
+			plan_type: "plus",
+			rate_limit: {
+				primary_window: { limit_window_seconds: 10800, used_percent: 12.5, reset_at: 1730505600 },
+				secondary_window: { limit_window_seconds: 604800, used_percent: 40, reset_at: 1731000000 },
+			},
+			credits: { balance: "3.5" },
+		});
+		assert.match(result.summary, /Primary 3h: 12.5% used/);
+		assert.deepStrictEqual(result.details.slice(0, 2), [
+			"Source: OpenAI Codex OAuth quota compatibility endpoint.",
+			"Plan: plus",
+		]);
+		assert.match(result.details.join("\n"), /Credits balance: 3.5/);
+	});
+
+	test("checks OpenAI Codex quota with OAuth headers", async () => {
+		const originalFetch = globalThis.fetch;
+		let request: { url: string; headers: Record<string, string> } | undefined;
+		globalThis.fetch = (async (input, init) => {
+			request = { url: String(input), headers: (init?.headers ?? {}) as Record<string, string> };
+			return new Response(JSON.stringify({ rate_limit: { primary_window: { used_percent: 1 } } }), { status: 200 });
+		}) as typeof fetch;
+		try {
+			assert.strictEqual(getProviderUsageAdapter("openai", "https://chatgpt.com/backend-api/codex"), "openai-codex");
+			const result = await checkProviderUsage({
+				provider: "openai",
+				baseUrl: "https://chatgpt.com/backend-api/codex",
+				apiKey: "oauth-token",
+				accountId: "acct-test",
+			});
+			assert.strictEqual(result.adapter, "openai-codex");
+			assert.strictEqual(request?.url, OPENAI_CODEX_USAGE_ENDPOINT);
+			assert.strictEqual(request?.headers.Authorization, "Bearer oauth-token");
+			assert.strictEqual(request?.headers["ChatGPT-Account-Id"], "acct-test");
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
+	test("reports a re-login message when Codex quota rejects OAuth", async () => {
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = (async () => new Response("expired", { status: 401, statusText: "Unauthorized" })) as typeof fetch;
+		try {
+			await assert.rejects(
+				checkProviderUsage({
+					provider: "openai",
+					baseUrl: "https://chatgpt.com/backend-api/codex",
+					apiKey: "expired-token",
+				}),
+				/OpenAI Codex OAuth session expired/
+			);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
 	test("parses DeepSeek balance response", () => {
 		const result = parseDeepSeekBalance({
 			is_available: true,

@@ -2,7 +2,7 @@
 	"name": "oaiproxy",
 	"publisher": "lqdflying",
 	"displayName": "OAIProxy",
-	"description": "Azure Foundry/OpenAI/LiteLLM/Ollama/Anthropic/Gemini/xAI provider for Copilot Chat, with Azure Foundry, OpenAI, TokenRouter, Anthropic, Fireworks, Kimi, DeepSeek, Z.AI GLM, Xiaomi MiMo, MiniMax, and Grok OAuth/API-key presets",
+	"description": "Azure Foundry/OpenAI/LiteLLM/Ollama/Anthropic/Gemini/xAI provider for Copilot Chat, with Azure Foundry, OpenAI, OpenAI Codex OAuth, TokenRouter, Anthropic, Fireworks, Kimi, DeepSeek, Z.AI GLM, Xiaomi MiMo, MiniMax, and Grok OAuth/API-key presets",
 	"icon": "assets/icon.png",
 	"keywords": [
 		"ai",
@@ -29,6 +29,8 @@
 		"gemini",
 		"xai",
 		"grok",
+		"codex",
+		"openai-oauth",
 		"litellm",
 		"openai-compatible",
 		"openai-responses",
@@ -54,6 +56,8 @@
 		"onCommand:oaiproxy.setProviderApikey",
 		"onCommand:oaiproxy.loginXaiOAuth",
 		"onCommand:oaiproxy.logoutXaiOAuth",
+		"onCommand:oaiproxy.loginOpenAIOAuth",
+		"onCommand:oaiproxy.logoutOpenAIOAuth",
 		"onCommand:oaiproxy.openConfig",
 		"onCommand:oaiproxy.generateGitCommitMessage",
 		"onCommand:oaiproxy.abortGitCommitMessage"
@@ -97,6 +101,16 @@
 				"command": "oaiproxy.logoutXaiOAuth",
 				"category": "OAIProxy",
 				"title": "Sign out of xAI / Grok OAuth"
+			},
+			{
+				"command": "oaiproxy.loginOpenAIOAuth",
+				"category": "OAIProxy",
+				"title": "Sign in to OpenAI / Codex with OAuth"
+			},
+			{
+				"command": "oaiproxy.logoutOpenAIOAuth",
+				"category": "OAIProxy",
+				"title": "Sign out of OpenAI / Codex OAuth"
 			},
 			{
 				"command": "oaiproxy.openConfig",
@@ -194,7 +208,7 @@
 							"authMode": {
 								"type": "string",
 								"enum": ["api-key", "oauth"],
-								"description": "Credential flow for this model. OAuth uses OAIProxy's refreshable xAI/Grok credential; api-key uses the provider API key."
+								"description": "Credential flow for this model. OAuth uses OAIProxy's refreshable xAI/Grok or OpenAI/Codex credential; api-key uses the provider API key."
 							},
 							"provider": {
 								"type": "string",

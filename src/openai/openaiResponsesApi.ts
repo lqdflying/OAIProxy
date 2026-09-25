@@ -25,6 +25,7 @@ import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "../vs
 import { logCacheUsage } from "../promptCache";
 import { ResponseUsageAccumulator } from "../responseUsage";
 import { applyXaiGrokOAuthHeaders, isXaiGrokOAuthBaseUrl } from "../xaiOAuth";
+import { applyOpenAICodexOAuthHeaders, isOpenAICodexOAuthBaseUrl } from "../openaiOAuth";
 
 export interface ResponsesInputMessage {
 	role: "user" | "assistant" | "system";
@@ -725,6 +726,9 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 		const headers = CommonApi.prepareHeaders(apiKey, model.apiMode ?? "openai-responses", model.headers);
 		if (model.authMode === "oauth" && model.owned_by?.trim().toLowerCase() === "xai" && isXaiGrokOAuthBaseUrl(baseUrl)) {
 			applyXaiGrokOAuthHeaders(headers, model.id);
+		}
+		if (model.authMode === "oauth" && model.owned_by?.trim().toLowerCase() === "openai" && isOpenAICodexOAuthBaseUrl(baseUrl)) {
+			applyOpenAICodexOAuthHeaders(headers);
 		}
 
 		const url = `${baseUrl.replace(/\/+$/, "")}/responses`;

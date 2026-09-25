@@ -6,10 +6,12 @@ export type ProviderUsageAdapter =
 	| "litellm"
 	| "minimax"
 	| "openai"
+	| "openai-codex"
 	| "xai"
 	| "tokenrouter";
 
 export const XAI_GROK_BILLING_ENDPOINT = "https://cli-chat-proxy.grok.com/v1/billing?format=credits";
+export const OPENAI_CODEX_USAGE_ENDPOINT = "https://chatgpt.com/backend-api/wham/usage";
 export const XAI_GROK_USAGE_CLIENT_MODE = "cli";
 export const XAI_GROK_USAGE_CLIENT_VERSION = "1.0.4";
 const XAI_GROK_OAUTH_BASE_HOST = "cli-chat-proxy.grok.com";
@@ -44,6 +46,7 @@ export interface ProviderUsageRequest {
 	baseUrl?: string;
 	apiKey: string;
 	targetApiKey?: string;
+	accountId?: string;
 }
 
 export interface FireworksAccount {
@@ -141,6 +144,9 @@ export function getProviderUsageAdapter(provider: string, baseUrl?: string): Pro
 	if (normalizedProvider === "xai" && isXaiGrokOAuthBaseUrl(baseUrl)) {
 		return "xai";
 	}
+	if (normalizedProvider === "openai" && normalizedBaseUrl.includes("chatgpt.com/backend-api/codex")) {
+		return "openai-codex";
+	}
 
 	if (isTokenRouterProvider(provider, baseUrl)) {
 		return "tokenrouter";
@@ -211,6 +217,25 @@ export async function checkProviderUsage(request: ProviderUsageRequest): Promise
 		);
 	} else if (adapter === "openai") {
 		parsed = parseOpenAICosts(await fetchJson(buildOpenAICostsEndpoint(), "OpenAI", bearerHeaders(request.apiKey)));
+	} else if (adapter === "openai-codex") {
+		try {
+			parsed = parseOpenAICodexUsage(
+				await fetchJson(
+					OPENAI_CODEX_USAGE_ENDPOINT,
+					"OpenAI Codex",
+					openAICodexUsageHeaders(request.apiKey, request.accountId)
+				)
+			);
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			if (/\[(401|403)\]/u.test(message)) {
+				throw new Error("OpenAI Codex OAuth session expired or was rejected. Sign in again.");
+			}
+			if (/\[404\]/u.test(message)) {
+				throw new Error("OpenAI Codex quota is unavailable because the compatibility endpoint is not enabled.");
+			}
+			throw error;
+		}
 	} else if (adapter === "anthropic") {
 		parsed = parseAnthropicCostReport(
 			await fetchJson(buildAnthropicCostReportEndpoint(), "Anthropic", anthropicAdminHeaders(request.apiKey))
@@ -380,6 +405,40 @@ export function parseXaiGrokUsage(payload: unknown): ParsedProviderUsage {
 			trimFixed(usagePercent, 1) +
 			"% used)" +
 			resetText,
+		details,
+	};
+}
+
+export function parseOpenAICodexUsage(payload: unknown): ParsedProviderUsage {
+	const obj = asRecord(payload, "OpenAI Codex usage response");
+	const rateLimit = optionalRecord(obj.rate_limit ?? obj.rateLimit);
+	const primary = optionalRecord(rateLimit?.primary_window ?? rateLimit?.primaryWindow);
+	const secondary = optionalRecord(rateLimit?.secondary_window ?? rateLimit?.secondaryWindow);
+	const windows: string[] = [];
+	for (const [label, window] of [["Primary", primary], ["Secondary", secondary]] as const) {
+		if (!window) {
+			continue;
+		}
+		const limitSeconds = optionalNumber(window.limit_window_seconds ?? window.limitWindowSeconds, "Codex limit window") ?? (label === "Primary" ? 3 * 3600 : 24 * 3600);
+		const usedPercent = optionalNumber(window.used_percent ?? window.usedPercent, "Codex used percent");
+		const resetAt = optionalNumber(window.reset_at ?? window.resetAt, "Codex reset time");
+		const hours = Math.max(1, Math.round(limitSeconds / 3600));
+		const duration = hours >= 168 ? "Week" : `${hours}h`;
+		windows.push(
+			`${label} ${duration}: ${usedPercent !== undefined ? trimFixed(Math.max(0, Math.min(100, usedPercent)), 1) + "% used" : "usage unavailable"}${resetAt !== undefined ? `, resets ${new Date(resetAt * 1000).toISOString()}` : ""}`
+		);
+	}
+	const plan = optionalString(obj.plan_type ?? obj.planType);
+	const credits = optionalRecord(obj.credits);
+	const balance = credits ? parseXaiValue(credits.balance) : undefined;
+	const details = [
+		"Source: OpenAI Codex OAuth quota compatibility endpoint.",
+		...(plan ? [`Plan: ${plan}`] : []),
+		...(windows.length > 0 ? windows : ["No quota windows returned."]),
+		...(balance !== undefined ? [`Credits balance: ${formatDecimal(balance)}`] : []),
+	];
+	return {
+		summary: windows.length > 0 ? windows.join("; ") : balance !== undefined ? `Credits balance: ${formatDecimal(balance)}` : "Codex quota unavailable",
 		details,
 	};
 }
@@ -817,6 +876,16 @@ function xaiGrokUsageHeaders(apiKey: string): Record<string, string> {
 	};
 }
 
+function openAICodexUsageHeaders(apiKey: string, accountId?: string): Record<string, string> {
+	return {
+		...bearerHeaders(apiKey),
+		originator: "oaiproxy",
+		version: "oaiproxy",
+		"User-Agent": "oaiproxy",
+		...(accountId ? { "ChatGPT-Account-Id": accountId } : {}),
+	};
+}
+
 function anthropicAdminHeaders(apiKey: string): Record<string, string> {
 	return {
 		Accept: "application/json",
@@ -944,6 +1013,10 @@ function optionalNumber(value: unknown, label: string): number | undefined {
 		return undefined;
 	}
 	return asNumber(value, label);
+}
+
+function optionalRecord(value: unknown): Record<string, unknown> | undefined {
+	return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
 }
 
 function parseXaiValue(value: unknown): number | undefined {

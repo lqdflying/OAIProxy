@@ -28,6 +28,7 @@ import {
 	type ProviderUsageResult,
 } from "../providerUsage";
 import { getXaiOAuthAccessToken, isXaiGrokOAuthBaseUrl, loadXaiOAuthCredential } from "../xaiOAuth";
+import { getOpenAIOAuthCredential, isOpenAICodexOAuthBaseUrl, loadOpenAIOAuthCredential } from "../openaiOAuth";
 
 interface InitPayload {
 	baseUrl: string;
@@ -47,6 +48,7 @@ interface InitPayload {
 	providerKeys: Record<string, string>;
 	providerUsageKeys: Record<string, string>;
 	xaiOAuthSignedIn: boolean;
+	openaiOAuthSignedIn: boolean;
 	providerPresets: readonly ProviderPreset[];
 	modelPresets: readonly ModelPreset[];
 }
@@ -276,6 +278,8 @@ type IncomingMessage =
 	| { type: "requestInit" }
 	| { type: "loginXaiOAuth" }
 	| { type: "logoutXaiOAuth" }
+	| { type: "loginOpenAIOAuth" }
+	| { type: "logoutOpenAIOAuth" }
 	| {
 			type: "saveGlobalConfig";
 			baseUrl: string;
@@ -465,6 +469,14 @@ export class ConfigViewPanel {
 				await vscode.commands.executeCommand("oaiproxy.logoutXaiOAuth");
 				await this.sendInit();
 				break;
+			case "loginOpenAIOAuth":
+				await vscode.commands.executeCommand("oaiproxy.loginOpenAIOAuth");
+				await this.sendInit();
+				break;
+			case "logoutOpenAIOAuth":
+				await vscode.commands.executeCommand("oaiproxy.logoutOpenAIOAuth");
+				await this.sendInit();
+				break;
 			case "saveGlobalConfig":
 				await this.saveGlobalConfig(
 					message.baseUrl,
@@ -644,6 +656,7 @@ export class ConfigViewPanel {
 		const providerKeys: Record<string, string> = {};
 		const providerUsageKeys: Record<string, string> = {};
 		const xaiOAuthSignedIn = Boolean(await loadXaiOAuthCredential(this.secrets));
+		const openaiOAuthSignedIn = Boolean(await loadOpenAIOAuthCredential(this.secrets));
 		const providerIds = Array.from(
 			new Set([
 				...models.map((m) => m.owned_by).filter(Boolean),
@@ -702,6 +715,7 @@ export class ConfigViewPanel {
 			providerKeys,
 			providerUsageKeys,
 			xaiOAuthSignedIn,
+			openaiOAuthSignedIn,
 			providerPresets: PROVIDER_PRESETS,
 			modelPresets: MODEL_PRESETS,
 		};
@@ -919,7 +933,14 @@ export class ConfigViewPanel {
 			const config = vscode.workspace.getConfiguration();
 			const models = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
 			const providers = this.getProviderConfigs();
+			const openAICodexOAuthModel = models.find(
+				(item) =>
+					item.owned_by?.trim().toLowerCase() === "openai" &&
+					item.authMode === "oauth" &&
+					isOpenAICodexOAuthBaseUrl(item.baseUrl)
+			);
 			const model =
+				(trimmedProvider.toLowerCase() === "openai" ? openAICodexOAuthModel : undefined) ??
 				findProviderTransportModel(models, trimmedProvider, providers) ??
 				models.find((item) => item.owned_by?.trim().toLowerCase() === normalizedProvider && item.baseUrl);
 			const baseUrl = model?.baseUrl;
@@ -931,6 +952,8 @@ export class ConfigViewPanel {
 				);
 			}
 			const isXaiOAuth = adapter === "xai" && isXaiGrokOAuthBaseUrl(baseUrl);
+			const isOpenAICodexOAuth = adapter === "openai-codex" && isOpenAICodexOAuthBaseUrl(baseUrl);
+			const openAIOAuthCredential = isOpenAICodexOAuth ? await getOpenAIOAuthCredential(this.secrets) : undefined;
 
 			const secretKey = providerRequiresUsageApiKey(adapter)
 				? getProviderUsageSecretKey(trimmedProvider)
@@ -943,11 +966,17 @@ export class ConfigViewPanel {
 			const apiKey = providerRequiresUsageApiKey(adapter) && trimmedUsageApiKey
 				? trimmedUsageApiKey
 				: await this.secrets.get(secretKey);
-			const effectiveUsageApiKey = isXaiOAuth ? await getXaiOAuthAccessToken(this.secrets) : apiKey;
+			const effectiveUsageApiKey = isXaiOAuth
+				? await getXaiOAuthAccessToken(this.secrets)
+				: isOpenAICodexOAuth
+					? openAIOAuthCredential?.accessToken
+					: apiKey;
 			if (!effectiveUsageApiKey) {
 				throw new Error(
 					isXaiOAuth
 						? "Sign in to xAI / Grok with OAuth before checking weekly usage."
+						: isOpenAICodexOAuth
+							? "Sign in to OpenAI / Codex with OAuth before checking quota."
 						: providerRequiresUsageApiKey(adapter)
 							? getMissingProviderUsageKeyMessage(trimmedProvider, adapter)
 							: `No API key found for provider ${trimmedProvider}. Configure its provider API key first.`
@@ -962,6 +991,7 @@ export class ConfigViewPanel {
 				baseUrl,
 				apiKey: effectiveUsageApiKey,
 				targetApiKey: adapter === "litellm" ? providerApiKey : undefined,
+				accountId: openAIOAuthCredential?.accountId,
 			});
 			this.panel.webview.postMessage({
 				type: "providerUsageResult",

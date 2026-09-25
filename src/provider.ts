@@ -48,6 +48,11 @@ import { applyOpenAIPromptCache, hasCacheControl } from "./promptCache";
 import { createTokenUsageReport, getTokenBudgetErrorMessage } from "./tokenUsage";
 import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "./vscodeCompat";
 import { applyXaiGrokOAuthHeaders, getXaiOAuthAccessToken, isXaiGrokOAuthBaseUrl } from "./xaiOAuth";
+import {
+	applyOpenAICodexOAuthHeaders,
+	getOpenAIOAuthCredential,
+	isOpenAICodexOAuthBaseUrl,
+} from "./openaiOAuth";
 
 interface ChatInformationOptions {
 	readonly silent?: boolean;
@@ -352,9 +357,20 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			// Get API key for the model's provider
 			const provider = um?.owned_by;
 			const useGenericKey = !um?.baseUrl;
+			const isXaiOAuth =
+				um?.authMode === "oauth" && provider?.trim().toLowerCase() === "xai" && isXaiGrokOAuthBaseUrl(baseUrl);
+			const isOpenAICodexOAuth =
+				um?.authMode === "oauth" &&
+				provider?.trim().toLowerCase() === "openai" &&
+				isOpenAICodexOAuthBaseUrl(baseUrl);
+			const openAIOAuthCredential = isOpenAICodexOAuth
+				? await getOpenAIOAuthCredential(this.secrets)
+				: undefined;
 			const modelApiKey =
-				um?.authMode === "oauth" && provider?.trim().toLowerCase() === "xai" && isXaiGrokOAuthBaseUrl(baseUrl)
+				isXaiOAuth
 					? await getXaiOAuthAccessToken(this.secrets)
+					: isOpenAICodexOAuth
+						? openAIOAuthCredential?.accessToken
 					: await this.ensureApiKey(
 							useGenericKey,
 							provider,
@@ -368,9 +384,11 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					useGenericKey,
 				});
 				throw new Error(
-					executionOptions.diagnostic && provider
-						? `No API key found for provider ${provider}.`
-						: "OAIProxy API key not found"
+					isOpenAICodexOAuth
+						? "Sign in to OpenAI / Codex with OAuth before using this model."
+						: executionOptions.diagnostic && provider
+							? `No API key found for provider ${provider}.`
+							: "OAIProxy API key not found"
 				);
 			}
 
@@ -395,8 +413,11 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 
 			// prepare headers with custom headers if specified
 			const requestHeaders = CommonApi.prepareHeaders(modelApiKey, apiMode, um?.headers);
-			if (um?.authMode === "oauth" && provider?.trim().toLowerCase() === "xai" && isXaiGrokOAuthBaseUrl(baseUrl)) {
+			if (isXaiOAuth) {
 				applyXaiGrokOAuthHeaders(requestHeaders, model.id);
+			}
+			if (isOpenAICodexOAuth) {
+				applyOpenAICodexOAuthHeaders(requestHeaders, openAIOAuthCredential);
 			}
 			logger.debug("request.headers", {
 				headers: logger.sanitizeHeaders(requestHeaders as Record<string, string>),

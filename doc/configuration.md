@@ -176,6 +176,12 @@ The configuration UI lists Azure Foundry first, then the existing OpenAI, TokenR
 
 Settings snippets are available in `examples/openai-responses.jsonc`, `examples/openai-chat-completions.jsonc`, `examples/tokenrouter.jsonc`, `examples/anthropic.jsonc`, `examples/fireworks.jsonc`, `examples/zai-glm.jsonc`, `examples/mimo.jsonc`, `examples/minimax-openai.jsonc`, and `examples/minimax-anthropic.jsonc`. xAI/Grok usage checks use the saved OAuth credential and report weekly subscription credit remaining. Fireworks usage checks reuse the normal provider key and report month-to-date serverless tokens across accessible accounts. OpenAI and Anthropic usage/cost checks require separate admin keys; enter those in the configuration UI's `Usage Key` field instead of adding them to `settings.json`. TokenRouter uses a separate Management Key in the `Usage Key` field and reports account credits from the Management API self-wallet endpoint. Azure Foundry inference keys do not expose usage/cost; use Azure Monitor or Cost Management with Azure RBAC. Z.AI and MiMo usage checks are shown as unavailable because their current public docs do not expose API-key usage or balance endpoints.
 
+### OpenAI/Codex OAuth
+
+Quick Setup's GPT-6 and GPT-5.6 Codex cards use `authMode: "oauth"` and `https://chatgpt.com/backend-api/codex`. In Provider Management, use **Sign in** on the OpenAI row or run **OAIProxy: Sign in to OpenAI / Codex with OAuth**. OAIProxy opens OpenAI's device page, displays the one-time code, stores the refreshable credential in VS Code SecretStorage, and refreshes it before requests. OAuth cards do not read `oaicopilot.apiKey.openai`; direct `https://api.openai.com/v1` cards continue to use the normal OpenAI API key.
+
+The Provider Usage Check table reports Codex quota windows through the OpenClaw-compatible `https://chatgpt.com/backend-api/wham/usage` endpoint when a Codex OAuth model is configured. This route is best-effort compatibility support and may stop working if OpenAI changes it; no browser cookies or console credentials are used. OpenAI's documented ChatGPT/Codex usage and eligibility rules remain authoritative.
+
 ### Fireworks AI
 
 Use full Fireworks model IDs with the `https://api.fireworks.ai/inference/v1` base URL. The built-in Quick Setup cards currently cover `accounts/fireworks/models/deepseek-v4-pro`, `accounts/fireworks/models/kimi-k2p7-code`, and `accounts/fireworks/models/glm-5p2`.

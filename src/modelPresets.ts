@@ -10,7 +10,106 @@ export interface ModelPreset {
 	model: HFModelItem;
 }
 
+const OPENAI_CODEX_OAUTH_BASE_URL = "https://chatgpt.com/backend-api/codex";
+const OPENAI_CODEX_OAUTH_COMMENT =
+	"Quick Setup defaults based on the official OpenAI model catalog and Responses API documentation: https://developers.openai.com/api/docs/models and https://developers.openai.com/api/docs, plus the OpenClaw Codex OAuth catalog: https://github.com/openclaw/openclaw/blob/main/extensions/openai/openclaw.plugin.json";
+
+function createOpenAICodexOAuthPreset(options: {
+	id: string;
+	modelId: string;
+	label: string;
+	category: ModelPreset["category"];
+	tags: string[];
+	description: string;
+	supportedReasoningEfforts: string[];
+}): ModelPreset {
+	return {
+		id: options.id,
+		label: options.label,
+		providerPresetId: "openai",
+		category: options.category,
+		tags: options.tags,
+		description: options.description,
+		model: {
+			id: options.modelId,
+			configId: "openai-codex-oauth",
+			displayName: `${options.label} (OAuth)`,
+			_comment: OPENAI_CODEX_OAUTH_COMMENT,
+			owned_by: "openai",
+			authMode: "oauth",
+			baseUrl: OPENAI_CODEX_OAUTH_BASE_URL,
+			apiMode: "openai-responses",
+			family: options.modelId,
+			vision: true,
+			context_length: 1050000,
+			max_tokens: 128000,
+			reasoning_effort: options.supportedReasoningEfforts.at(-1),
+			supported_reasoning_efforts: options.supportedReasoningEfforts,
+			default_reasoning_effort: options.supportedReasoningEfforts.at(-1),
+			toolCalling: true,
+		},
+	};
+}
+
+const OPENAI_CODEX_OAUTH_PRESETS: readonly ModelPreset[] = [
+	createOpenAICodexOAuthPreset({
+		id: "openai-gpt-6-astra-codex-oauth",
+		modelId: "gpt-6-astra",
+		label: "GPT-6 Astra",
+		category: "latest",
+		tags: ["OpenAI", "Codex", "OAuth", "Vision", "Reasoning", "Tools"],
+		description: "GPT-6 Astra through the ChatGPT/Codex OAuth Responses route.",
+		supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+	}),
+	createOpenAICodexOAuthPreset({
+		id: "openai-gpt-6-sol-codex-oauth",
+		modelId: "gpt-6-sol",
+		label: "GPT-6 Sol",
+		category: "recommended",
+		tags: ["OpenAI", "Codex", "OAuth", "Vision", "Reasoning", "Tools"],
+		description: "GPT-6 Sol through the ChatGPT/Codex OAuth Responses route.",
+		supportedReasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
+	}),
+	createOpenAICodexOAuthPreset({
+		id: "openai-gpt-6-luna-codex-oauth",
+		modelId: "gpt-6-luna",
+		label: "GPT-6 Luna",
+		category: "fast",
+		tags: ["OpenAI", "Codex", "OAuth", "Vision", "Reasoning", "Tools"],
+		description: "GPT-6 Luna through the ChatGPT/Codex OAuth Responses route.",
+		supportedReasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
+	}),
+	createOpenAICodexOAuthPreset({
+		id: "openai-gpt-5-6-sol-codex-oauth",
+		modelId: "gpt-5.6-sol",
+		label: "GPT-5.6 Sol",
+		category: "latest",
+		tags: ["OpenAI", "Codex", "OAuth", "Vision", "Reasoning", "Tools"],
+		description: "GPT-5.6 Sol through the ChatGPT/Codex OAuth Responses route.",
+		supportedReasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
+	}),
+	createOpenAICodexOAuthPreset({
+		id: "openai-gpt-5-6-terra-codex-oauth",
+		modelId: "gpt-5.6-terra",
+		label: "GPT-5.6 Terra",
+		category: "recommended",
+		tags: ["OpenAI", "Codex", "OAuth", "Vision", "Reasoning", "Tools"],
+		description: "GPT-5.6 Terra through the ChatGPT/Codex OAuth Responses route.",
+		supportedReasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
+	}),
+	createOpenAICodexOAuthPreset({
+		id: "openai-gpt-5-6-luna-codex-oauth",
+		modelId: "gpt-5.6-luna",
+		label: "GPT-5.6 Luna",
+		category: "fast",
+		tags: ["OpenAI", "Codex", "OAuth", "Vision", "Reasoning", "Tools"],
+		description: "GPT-5.6 Luna through the ChatGPT/Codex OAuth Responses route.",
+		supportedReasoningEfforts: ["none", "low", "medium", "high", "xhigh", "max"],
+	}),
+];
+
 export const MODEL_PRESETS: readonly ModelPreset[] = [
+	...OPENAI_CODEX_OAUTH_PRESETS,
 	{
 		id: "xai-grok-4-7-oauth",
 		label: "Grok 4.7 (OAuth)",
