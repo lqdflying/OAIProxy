@@ -35,6 +35,7 @@ import {
 	clearOpenAIOAuthCredential,
 	getOpenAIOAuthCredential,
 	isOpenAICodexOAuthBaseUrl,
+	isOpenAICodexOAuthProvider,
 	loginOpenAIOAuth as completeOpenAIOAuthLogin,
 	saveOpenAIOAuthCredential,
 } from "./openaiOAuth";
@@ -83,7 +84,9 @@ export function activate(context: vscode.ExtensionContext) {
 				return;
 			}
 
-			const providerTargets = getProviderKeyTargets(userModels, providerConfigs);
+			const providerTargets = getProviderKeyTargets(userModels, providerConfigs).filter(
+				(target) => !isOpenAICodexOAuthProvider(target.provider)
+			);
 			if (providerTargets.length > 0) {
 				const selectedTarget = await vscode.window.showQuickPick(
 					[
@@ -121,7 +124,9 @@ export function activate(context: vscode.ExtensionContext) {
 			const config = vscode.workspace.getConfiguration();
 			const userModels = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
 			const providerConfigs = normalizeProviderConfigs(context.globalState.get<unknown>(PROVIDER_CONFIG_STORAGE_KEY, []));
-			const providers = getProviderKeyTargets(userModels, providerConfigs);
+			const providers = getProviderKeyTargets(userModels, providerConfigs).filter(
+				(target) => !isOpenAICodexOAuthProvider(target.provider)
+			);
 
 			if (providers.length === 0) {
 				vscode.window.showErrorMessage(
@@ -192,14 +197,7 @@ export function activate(context: vscode.ExtensionContext) {
 			try {
 				const credential = await completeOpenAIOAuthLogin({
 					onDeviceCode: async (info) => {
-						try {
-							await vscode.env.openExternal(vscode.Uri.parse(info.verificationUri));
-						} catch {
-							// Remote/headless VS Code may not have a local browser bridge.
-						}
-						void vscode.window.showInformationMessage(
-							`OpenAI Codex sign-in: open ${info.verificationUri} and enter code ${info.userCode}.`
-						);
+						await showOpenAIDeviceCode(info.verificationUri, info.userCode, info.expiresInMs);
 					},
 				});
 				await saveOpenAIOAuthCredential(context.secrets, credential);
@@ -287,6 +285,32 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 		})
 	);
+}
+
+async function showOpenAIDeviceCode(verificationUri: string, userCode: string, expiresInMs: number): Promise<void> {
+	try {
+		await vscode.env.openExternal(vscode.Uri.parse(verificationUri));
+	} catch {
+		// Remote/headless VS Code may not have a local browser bridge.
+	}
+
+	const expiresMinutes = Math.max(1, Math.ceil(expiresInMs / 60_000));
+	const action = await vscode.window.showInformationMessage(
+		`OpenAI OAuth device sign-in\n\nDevice code: ${userCode}\n\nSign-in page: ${verificationUri}\n\nThe code expires in about ${expiresMinutes} minutes.`,
+		{ modal: true },
+		"Copy device code",
+		"Open sign-in page"
+	);
+	if (action === "Copy device code") {
+		await vscode.env.clipboard.writeText(userCode);
+		void vscode.window.showInformationMessage("OpenAI device code copied to the clipboard.");
+	} else if (action === "Open sign-in page") {
+		try {
+			await vscode.env.openExternal(vscode.Uri.parse(verificationUri));
+		} catch {
+			void vscode.window.showErrorMessage(`Open ${verificationUri} manually and enter code ${userCode}.`);
+		}
+	}
 }
 
 export function deactivate() {}
@@ -390,10 +414,10 @@ function getProviderUsageTargets(
 	return getProviderKeyTargets(userModels, providerConfigs)
 		.map((target) => {
 			const codexOAuthModel =
-				target.provider.toLowerCase() === "openai"
+				isOpenAICodexOAuthProvider(target.provider)
 					? userModels.find(
 							(model) =>
-								model.owned_by?.trim().toLowerCase() === "openai" &&
+								isOpenAICodexOAuthProvider(model.owned_by) &&
 								model.authMode === "oauth" &&
 								isOpenAICodexOAuthBaseUrl(model.baseUrl)
 						)

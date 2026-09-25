@@ -8,6 +8,7 @@
 import type { SecretStorageLike } from "./xaiOAuth";
 
 export const OPENAI_OAUTH_SECRET_KEY = "oaicopilot.oauth.openai";
+export const OPENAI_OAUTH_PROVIDER = "openai-oauth";
 export const OPENAI_OAUTH_ISSUER = "https://auth.openai.com";
 export const OPENAI_OAUTH_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 export const OPENAI_OAUTH_VERIFICATION_URL = `${OPENAI_OAUTH_ISSUER}/codex/device`;
@@ -88,6 +89,15 @@ export function isOpenAICodexOAuthBaseUrl(baseUrl: string | undefined): boolean 
 	} catch {
 		return false;
 	}
+}
+
+/**
+ * Returns true for the dedicated OAuth provider and the legacy OpenAI provider
+ * used by pre-separation model settings.
+ */
+export function isOpenAICodexOAuthProvider(provider: string | undefined): boolean {
+	const normalized = provider?.trim().toLowerCase();
+	return normalized === OPENAI_OAUTH_PROVIDER || normalized === "openai";
 }
 
 export function applyOpenAICodexOAuthHeaders(

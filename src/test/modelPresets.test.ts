@@ -9,7 +9,7 @@ suite("modelPresets", () => {
 	test("contains the verified OpenAI Codex OAuth cards", () => {
 		const expectedModels = ["gpt-6-astra", "gpt-6-sol", "gpt-6-luna", "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"];
 		assert.deepStrictEqual(
-			MODEL_PRESETS.filter((preset) => preset.model.authMode === "oauth" && preset.model.owned_by === "openai").map(
+			MODEL_PRESETS.filter((preset) => preset.model.authMode === "oauth" && preset.model.owned_by === "openai-oauth").map(
 				(preset) => preset.model.id
 			),
 			expectedModels
@@ -17,8 +17,8 @@ suite("modelPresets", () => {
 		for (const modelId of expectedModels) {
 			const preset = MODEL_PRESETS.find((item) => item.model.id === modelId && item.model.authMode === "oauth");
 			assert.ok(preset);
-			assert.strictEqual(preset.providerPresetId, "openai");
-			assert.strictEqual(preset.model.configId, "openai-codex-oauth");
+			assert.strictEqual(preset.providerPresetId, "openai-oauth");
+			assert.strictEqual(preset.model.configId, "openai-oauth");
 			assert.strictEqual(preset.model.baseUrl, "https://chatgpt.com/backend-api/codex");
 			assert.strictEqual(preset.model.apiMode, "openai-responses");
 			assert.strictEqual(preset.model.context_length, 1050000);

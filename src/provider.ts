@@ -52,6 +52,7 @@ import {
 	applyOpenAICodexOAuthHeaders,
 	getOpenAIOAuthCredential,
 	isOpenAICodexOAuthBaseUrl,
+	isOpenAICodexOAuthProvider,
 } from "./openaiOAuth";
 
 interface ChatInformationOptions {
@@ -361,7 +362,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				um?.authMode === "oauth" && provider?.trim().toLowerCase() === "xai" && isXaiGrokOAuthBaseUrl(baseUrl);
 			const isOpenAICodexOAuth =
 				um?.authMode === "oauth" &&
-				provider?.trim().toLowerCase() === "openai" &&
+				isOpenAICodexOAuthProvider(provider) &&
 				isOpenAICodexOAuthBaseUrl(baseUrl);
 			const openAIOAuthCredential = isOpenAICodexOAuth
 				? await getOpenAIOAuthCredential(this.secrets)

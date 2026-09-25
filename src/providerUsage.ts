@@ -144,7 +144,10 @@ export function getProviderUsageAdapter(provider: string, baseUrl?: string): Pro
 	if (normalizedProvider === "xai" && isXaiGrokOAuthBaseUrl(baseUrl)) {
 		return "xai";
 	}
-	if (normalizedProvider === "openai" && normalizedBaseUrl.includes("chatgpt.com/backend-api/codex")) {
+	if (
+		(normalizedProvider === "openai-oauth" || normalizedProvider === "openai") &&
+		normalizedBaseUrl.includes("chatgpt.com/backend-api/codex")
+	) {
 		return "openai-codex";
 	}
 

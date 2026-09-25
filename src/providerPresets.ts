@@ -6,6 +6,7 @@ export interface ProviderPreset {
 	provider: string;
 	baseUrl: string;
 	apiMode: HFApiMode;
+	authMode?: "api-key" | "oauth";
 	sortOrder?: number;
 }
 
@@ -24,14 +25,24 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
 		provider: "xai",
 		baseUrl: "https://cli-chat-proxy.grok.com/v1",
 		apiMode: "openai-responses",
+		authMode: "oauth",
 		sortOrder: -90,
 	},
 	{
 		id: "openai",
-		label: "OpenAI",
+		label: "OpenAI (API key)",
 		provider: "openai",
 		baseUrl: "https://api.openai.com/v1",
 		apiMode: "openai",
+	},
+	{
+		id: "openai-oauth",
+		label: "OpenAI OAuth (Codex)",
+		provider: "openai-oauth",
+		baseUrl: "https://chatgpt.com/backend-api/codex",
+		apiMode: "openai-responses",
+		authMode: "oauth",
+		sortOrder: -89,
 	},
 	{
 		id: "tokenrouter",

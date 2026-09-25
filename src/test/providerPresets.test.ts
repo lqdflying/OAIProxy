@@ -23,6 +23,19 @@ suite("providerPresets", () => {
 		assert.strictEqual(preset.apiMode, "openai");
 	});
 
+	test("separates OpenAI OAuth from the API-key provider", () => {
+		const apiKeyPreset = PROVIDER_PRESETS.find((item) => item.id === "openai");
+		const oauthPreset = PROVIDER_PRESETS.find((item) => item.id === "openai-oauth");
+
+		assert.ok(apiKeyPreset);
+		assert.strictEqual(apiKeyPreset.provider, "openai");
+		assert.strictEqual(apiKeyPreset.label, "OpenAI (API key)");
+		assert.ok(oauthPreset);
+		assert.strictEqual(oauthPreset.provider, "openai-oauth");
+		assert.strictEqual(oauthPreset.authMode, "oauth");
+		assert.strictEqual(oauthPreset.baseUrl, "https://chatgpt.com/backend-api/codex");
+	});
+
 	test("includes MiniMax OpenAI-compatible preset", () => {
 		const preset = PROVIDER_PRESETS.find((item) => item.id === "minimax");
 

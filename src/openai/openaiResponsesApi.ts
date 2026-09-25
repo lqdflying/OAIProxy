@@ -25,7 +25,11 @@ import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "../vs
 import { logCacheUsage } from "../promptCache";
 import { ResponseUsageAccumulator } from "../responseUsage";
 import { applyXaiGrokOAuthHeaders, isXaiGrokOAuthBaseUrl } from "../xaiOAuth";
-import { applyOpenAICodexOAuthHeaders, isOpenAICodexOAuthBaseUrl } from "../openaiOAuth";
+import {
+	applyOpenAICodexOAuthHeaders,
+	isOpenAICodexOAuthBaseUrl,
+	isOpenAICodexOAuthProvider,
+} from "../openaiOAuth";
 
 export interface ResponsesInputMessage {
 	role: "user" | "assistant" | "system";
@@ -727,7 +731,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 		if (model.authMode === "oauth" && model.owned_by?.trim().toLowerCase() === "xai" && isXaiGrokOAuthBaseUrl(baseUrl)) {
 			applyXaiGrokOAuthHeaders(headers, model.id);
 		}
-		if (model.authMode === "oauth" && model.owned_by?.trim().toLowerCase() === "openai" && isOpenAICodexOAuthBaseUrl(baseUrl)) {
+		if (model.authMode === "oauth" && isOpenAICodexOAuthProvider(model.owned_by) && isOpenAICodexOAuthBaseUrl(baseUrl)) {
 			applyOpenAICodexOAuthHeaders(headers);
 		}
 

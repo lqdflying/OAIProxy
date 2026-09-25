@@ -158,12 +158,13 @@ Mixed configuration with multiple API modes:
 
 ### Provider Presets
 
-The configuration UI lists Azure Foundry first, then the existing OpenAI, TokenRouter, Anthropic, Fireworks, Kimi, DeepSeek, Z.AI GLM, Xiaomi MiMo, and MiniMax providers. Azure Foundry stores its key as `oaicopilot.apiKey.azure-foundry`; its two Quick Setup cards use `Kimi-K2.6` and `DeepSeek-V4-Pro`.
+The configuration UI lists Azure Foundry first, then OpenAI API key, OpenAI OAuth/Codex, TokenRouter, Anthropic, Fireworks, Kimi, DeepSeek, Z.AI GLM, Xiaomi MiMo, and MiniMax providers. Azure Foundry stores its key as `oaicopilot.apiKey.azure-foundry`; its two Quick Setup cards use `Kimi-K2.6` and `DeepSeek-V4-Pro`.
 
 | Provider | Provider ID | Base URL | API Mode |
 |---|---|---|---|
 | Azure Foundry | `azure-foundry` | `https://YOUR-RESOURCE-NAME.services.ai.azure.com/openai/v1` | `azure-foundry` |
-| OpenAI | `openai` | `https://api.openai.com/v1` | `openai` |
+| OpenAI (API key) | `openai` | `https://api.openai.com/v1` | `openai` |
+| OpenAI OAuth (Codex) | `openai-oauth` | `https://chatgpt.com/backend-api/codex` | `openai-responses` |
 | TokenRouter | `tokenrouter` | `https://api.tokenrouter.com/v1` | `openai` |
 | Anthropic | `anthropic` | `https://api.anthropic.com` | `anthropic` |
 | Kimi (Moonshot AI) | `kimi` | `https://api.moonshot.ai/v1` | `openai` |
@@ -178,7 +179,7 @@ Settings snippets are available in `examples/openai-responses.jsonc`, `examples/
 
 ### OpenAI/Codex OAuth
 
-Quick Setup's GPT-6 and GPT-5.6 Codex cards use `authMode: "oauth"` and `https://chatgpt.com/backend-api/codex`. In Provider Management, use **Sign in** on the OpenAI row or run **OAIProxy: Sign in to OpenAI / Codex with OAuth**. OAIProxy opens OpenAI's device page, displays the one-time code, stores the refreshable credential in VS Code SecretStorage, and refreshes it before requests. OAuth cards do not read `oaicopilot.apiKey.openai`; direct `https://api.openai.com/v1` cards continue to use the normal OpenAI API key.
+Quick Setup's GPT-6 and GPT-5.6 Codex cards use provider `openai-oauth`, `configId: "openai-oauth"`, `authMode: "oauth"`, and `https://chatgpt.com/backend-api/codex`. In Provider Management, use **Sign in** on the **OpenAI OAuth (Codex)** row or run **OAIProxy: Sign in to OpenAI / Codex with OAuth**. OAIProxy opens OpenAI's device page, displays the one-time device code in a modal with copy/open actions, stores the refreshable credential in VS Code SecretStorage, and refreshes it before requests. OAuth cards do not read `oaicopilot.apiKey.openai`; direct `https://api.openai.com/v1` cards continue to use the normal OpenAI API key.
 
 The Provider Usage Check table reports Codex quota windows through the OpenClaw-compatible `https://chatgpt.com/backend-api/wham/usage` endpoint when a Codex OAuth model is configured. This route is best-effort compatibility support and may stop working if OpenAI changes it; no browser cookies or console credentials are used. OpenAI's documented ChatGPT/Codex usage and eligibility rules remain authoritative.
 

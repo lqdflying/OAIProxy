@@ -52,6 +52,7 @@ suite("providerUsage", () => {
 			return new Response(JSON.stringify({ rate_limit: { primary_window: { used_percent: 1 } } }), { status: 200 });
 		}) as typeof fetch;
 		try {
+			assert.strictEqual(getProviderUsageAdapter("openai-oauth", "https://chatgpt.com/backend-api/codex"), "openai-codex");
 			assert.strictEqual(getProviderUsageAdapter("openai", "https://chatgpt.com/backend-api/codex"), "openai-codex");
 			const result = await checkProviderUsage({
 				provider: "openai",
