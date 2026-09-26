@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.1.42 (2026-09-26)
+
+- Add OpenAI Codex OAuth sign-in/sign-out with device-code authentication, GPT-6/GPT-5.6 Quick Setup cards, credential refresh, and Codex quota usage checks.
+- Add Codex Responses compatibility handling for `store:false`, encrypted reasoning, unsupported parameter removal, and ChatHub-compatible easy-input replay items.
+- Stabilize Codex prompt-cache affinity with conversation-scoped `session_id` and `x-client-request-id` headers, deterministic replay shaping, and cached-token telemetry.
+- Document the OpenAI OAuth cache requirements and add regression coverage for OAuth, request shaping, provider presets, usage checks, and prompt caching.
+
 ## 0.1.41 (2026-09-24)
 
 - Add Grok 4.7 and Grok 4.6 Quick Setup cards using xAI subscription OAuth.
