@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import type { HFModelItem } from "./types";
 import { logger } from "./logger";
 import { recordCacheTelemetryUnavailable, recordCacheUsage } from "./cacheUsage";
+import { isOpenAICodexOAuthBaseUrl } from "./openaiOAuth";
 
 export const CACHE_CONTROL_MIME = "cache_control";
 
@@ -200,13 +201,13 @@ function extractUsageObservation(payload: unknown): { summary: CacheUsageSummary
 
 function isOfficialOpenAIEndpoint(model: HFModelItem | undefined, baseUrl: string): boolean {
 	const provider = model?.owned_by?.trim().toLowerCase();
-	if (provider === "openai") {
+	if (provider === "openai" || provider === "openai-oauth") {
 		return true;
 	}
 
 	try {
 		const host = new URL(baseUrl).hostname.toLowerCase();
-		return host === "api.openai.com";
+		return host === "api.openai.com" || isOpenAICodexOAuthBaseUrl(baseUrl);
 	} catch {
 		return false;
 	}

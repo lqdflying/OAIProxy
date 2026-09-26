@@ -66,6 +66,17 @@ suite("promptCache", () => {
 		assert.strictEqual(azureFoundryBody.user, undefined);
 	});
 
+	test("applies a stable prompt cache key to Codex OAuth", () => {
+		const body: Record<string, unknown> = {};
+		applyOpenAIPromptCache(body, {
+			model: model({ id: "gpt-6-astra", owned_by: "openai-oauth", authMode: "oauth" }),
+			baseUrl: "https://chatgpt.com/backend-api/codex",
+			modelId: "gpt-6-astra",
+		});
+
+		assert.strictEqual(body.prompt_cache_key, "oaiproxy-openai-oauth-gpt-6-astra");
+	});
+
 	test("respects explicit OpenAI prompt cache configuration", () => {
 		const body: Record<string, unknown> = {
 			prompt_cache_key: "from-extra",

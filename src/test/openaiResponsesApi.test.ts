@@ -30,6 +30,30 @@ suite("openaiResponsesApi", () => {
 		assert.strictEqual(body.max_output_tokens, 131072);
 	});
 
+	test("serializes replayed Responses items deterministically", () => {
+		const api = new OpenaiResponsesApi("gpt-6-astra");
+		const messages = [
+			{
+				role: vscode.LanguageModelChatMessageRole.Assistant,
+				name: undefined,
+				content: [
+					new vscode.LanguageModelTextPart("assistant reply"),
+					new vscode.LanguageModelToolCallPart("", "read_file", { path: "README.md" }),
+				],
+			},
+			{
+				role: vscode.LanguageModelChatMessageRole.User,
+				name: undefined,
+				content: [{ callId: "call_0_1", content: [new vscode.LanguageModelTextPart("tool result")] }],
+			},
+		] as unknown as vscode.LanguageModelChatRequestMessage[];
+
+		const first = api.convertMessages(messages, { includeReasoningInRequest: false });
+		const second = api.convertMessages(messages, { includeReasoningInRequest: false });
+
+		assert.deepStrictEqual(second, first);
+	});
+
 	test("disables response storage for OpenAI Codex OAuth", () => {
 		const api = new OpenaiResponsesApi("gpt-6-astra");
 		const body = api.prepareRequestBody(

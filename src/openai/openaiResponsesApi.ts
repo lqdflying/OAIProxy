@@ -94,7 +94,8 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 	): ResponsesInputItem[] {
 		const out: ResponsesInputItem[] = [];
 
-		for (const m of messages) {
+		for (let messageIndex = 0; messageIndex < messages.length; messageIndex++) {
+			const m = messages[messageIndex];
 			const role = mapRole(m);
 			const textParts: string[] = [];
 			const imageParts: vscode.LanguageModelDataPart[] = [];
@@ -102,13 +103,14 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			const toolResults: { callId: string; content: string }[] = [];
 			const thinkingParts: string[] = [];
 
-			for (const part of m.content ?? []) {
+			for (let partIndex = 0; partIndex < (m.content ?? []).length; partIndex++) {
+				const part = m.content?.[partIndex];
 				if (part instanceof vscode.LanguageModelTextPart) {
 					textParts.push(part.value);
 				} else if (part instanceof vscode.LanguageModelDataPart && isImageMimeType(part.mimeType)) {
 					imageParts.push(part);
 				} else if (part instanceof vscode.LanguageModelToolCallPart) {
-					const id = part.callId || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+					const id = part.callId || `call_${messageIndex}_${partIndex}`;
 					let args = "{}";
 					try {
 						args = JSON.stringify(part.input ?? {});
@@ -135,7 +137,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 						role: "assistant",
 						content: [{ type: "output_text", text: joinedText }],
 						type: "message",
-						id: `msg_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+						id: `msg_${messageIndex}`,
 						status: "completed",
 					});
 				}
@@ -144,7 +146,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 					out.push({
 						summary: [{ type: "summary_text", text: joinedThinking }],
 						type: "reasoning",
-						id: `tk_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+						id: `tk_${messageIndex}`,
 						status: "completed",
 					});
 				}
@@ -162,7 +164,8 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			}
 
 			// tool outputs
-			for (const tr of toolResults) {
+			for (let toolResultIndex = 0; toolResultIndex < toolResults.length; toolResultIndex++) {
+				const tr = toolResults[toolResultIndex];
 				if (!tr.callId) {
 					continue;
 				}
@@ -170,7 +173,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 					type: "function_call_output",
 					call_id: tr.callId,
 					output: tr.content || "",
-					id: `fco_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+					id: `fco_${messageIndex}_${toolResultIndex}`,
 					status: "completed",
 				});
 			}
