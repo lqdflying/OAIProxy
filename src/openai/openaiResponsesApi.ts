@@ -716,13 +716,13 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 
 		// Add system prompt as a system message or via instructions
 		if (systemPrompt) {
-				input.push({
-					role: "system",
-					content: [{ type: "input_text", text: systemPrompt }],
-					type: "message",
-					id: "msg_system",
-					status: "completed",
-				});
+			input.push({
+				role: "system",
+				content: [{ type: "input_text", text: systemPrompt }],
+				type: "message",
+				id: "msg_system",
+				status: "completed",
+			});
 		}
 
 		// Add user/assistant messages
@@ -730,11 +730,11 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			const msg = messages[i];
 			const role = msg.role === "user" || msg.role === "assistant" || msg.role === "system" ? msg.role : "user";
 			input.push({
-					role,
-					content: [{ type: "input_text", text: msg.content }],
-					type: "message",
-					id: `msg_${i}`,
-					status: "completed",
+				role,
+				content: [{ type: "input_text", text: msg.content }],
+				type: "message",
+				id: `msg_${i}`,
+				status: "completed",
 			});
 		}
 
