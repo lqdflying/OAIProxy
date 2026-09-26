@@ -29,6 +29,7 @@ interface OpenAIPromptCacheTarget {
 	model?: HFModelItem;
 	baseUrl: string;
 	modelId: string;
+	promptCacheKey?: string;
 }
 
 export function applyOpenAIPromptCache(
@@ -59,6 +60,8 @@ export function applyOpenAIPromptCache(
 	if (requestBody.prompt_cache_key === undefined) {
 		requestBody.prompt_cache_key = typeof config?.key === "string" && config.key.trim()
 			? config.key.trim()
+			: target.promptCacheKey?.trim()
+				? target.promptCacheKey.trim()
 			: createDefaultPromptCacheKey(target.model, target.modelId);
 	}
 

@@ -77,6 +77,18 @@ suite("promptCache", () => {
 		assert.strictEqual(body.prompt_cache_key, "oaiproxy-openai-oauth-gpt-6-astra");
 	});
 
+	test("uses a caller-provided Codex conversation cache key", () => {
+		const body: Record<string, unknown> = {};
+		applyOpenAIPromptCache(body, {
+			model: model({ id: "gpt-6-astra", owned_by: "openai-oauth", authMode: "oauth" }),
+			baseUrl: "https://chatgpt.com/backend-api/codex",
+			modelId: "gpt-6-astra",
+			promptCacheKey: "oaiproxy-openai-oauth-conversation-123",
+		});
+
+		assert.strictEqual(body.prompt_cache_key, "oaiproxy-openai-oauth-conversation-123");
+	});
+
 	test("respects explicit OpenAI prompt cache configuration", () => {
 		const body: Record<string, unknown> = {
 			prompt_cache_key: "from-extra",

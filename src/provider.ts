@@ -537,9 +537,16 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				const openaiResponsesApi = new OpenaiResponsesApi(model.id);
 				const normalizedBaseUrl = BASE_URL.replace(/\/+$/, "");
 				const statefulModelId = parsedModelId.baseId;
+				const codexResponsesConversionOptions = isOpenAICodexOAuth
+					? { replayResponsesItemIds: false }
+					: undefined;
 
 				// Convert full history once (also extracts system `instructions`).
-				const fullInput = openaiResponsesApi.convertMessages(workingMessages, modelConfig);
+				const fullInput = openaiResponsesApi.convertMessages(
+					workingMessages,
+					modelConfig,
+					codexResponsesConversionOptions
+				);
 
 				const marker = executionOptions.diagnostic
 					? undefined
@@ -547,7 +554,11 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				let markerDeltaInput: unknown[] | null = null;
 				if (marker && marker.index >= 0 && marker.index < workingMessages.length - 1) {
 					const deltaMessages = workingMessages.slice(marker.index + 1);
-					const converted = openaiResponsesApi.convertMessages(deltaMessages, modelConfig);
+					const converted = openaiResponsesApi.convertMessages(
+						deltaMessages,
+						modelConfig,
+						codexResponsesConversionOptions
+					);
 					if (converted.length > 0) {
 						markerDeltaInput = converted;
 					}
@@ -629,6 +640,9 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					memorySkippedAssistantInputCount: memoryState.memorySkippedAssistantInputCount,
 					previousResponseIdUnsupported,
 				};
+				const codexPromptCacheKey = isOpenAICodexOAuth
+					? createCodexPromptCacheKey(memoryState.stateKey)
+					: undefined;
 
 				// requestBody
 				let requestBody: Record<string, unknown> = {
@@ -640,6 +654,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					model: um,
 					baseUrl: BASE_URL,
 					modelId: parsedModelId.baseId,
+					promptCacheKey: codexPromptCacheKey,
 				});
 				// send Responses API request with retry
 				const url = `${normalizedBaseUrl}/responses`;
@@ -709,6 +724,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 						model: um,
 						baseUrl: BASE_URL,
 						modelId: parsedModelId.baseId,
+						promptCacheKey: codexPromptCacheKey,
 					});
 					delete fallbackBody.previous_response_id;
 					logRequestBody(url, fallbackBody, isVisionBridgeRequest, {
@@ -1393,6 +1409,14 @@ function createOpenAIResponsesStatefulMarkerPart(modelId: string, marker: string
 	const payload = `${modelId}\\${marker}`;
 	const bytes = new TextEncoder().encode(payload);
 	return new vscode.LanguageModelDataPart(bytes, HuggingFaceChatModelProvider.OPENAI_RESPONSES_STATEFUL_MARKER_MIME);
+}
+
+function createCodexPromptCacheKey(stateKey: string): string | undefined {
+	const normalized = stateKey.trim();
+	if (!normalized) {
+		return undefined;
+	}
+	return `oaiproxy-openai-oauth-${normalized.slice(0, 42)}`;
 }
 
 function parseOpenAIResponsesStatefulMarkerPart(part: unknown): { modelId: string; marker: string } | null {

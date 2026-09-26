@@ -48,7 +48,7 @@ export interface ResponsesContentPart {
 
 export interface ResponsesFunctionCall {
 	type: "function_call";
-	id: string;
+	id?: string;
 	call_id: string;
 	name: string;
 	arguments: string;
@@ -59,14 +59,14 @@ export interface ResponsesFunctionCallOutput {
 	type: "function_call_output";
 	call_id: string;
 	output: string;
-	id: string;
+	id?: string;
 	status: "completed";
 }
 
 export interface ResponsesReasoning {
 	type: "reasoning";
 	summary: ResponsesContentPart[];
-	id: string;
+	id?: string;
 	status: "completed";
 }
 
@@ -90,9 +90,11 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 
 	convertMessages(
 		messages: readonly LanguageModelChatRequestMessage[],
-		modelConfig: { includeReasoningInRequest: boolean }
+		modelConfig: { includeReasoningInRequest: boolean },
+		options?: { replayResponsesItemIds?: boolean }
 	): ResponsesInputItem[] {
 		const out: ResponsesInputItem[] = [];
+		const replayResponsesItemIds = options?.replayResponsesItemIds !== false;
 
 		for (let messageIndex = 0; messageIndex < messages.length; messageIndex++) {
 			const m = messages[messageIndex];
@@ -137,7 +139,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 						role: "assistant",
 						content: [{ type: "output_text", text: joinedText }],
 						type: "message",
-						id: `msg_${messageIndex}`,
+						...(replayResponsesItemIds ? { id: `msg_${messageIndex}` } : {}),
 						status: "completed",
 					});
 				}
@@ -146,7 +148,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 					out.push({
 						summary: [{ type: "summary_text", text: joinedThinking }],
 						type: "reasoning",
-						id: `tk_${messageIndex}`,
+						...(replayResponsesItemIds ? { id: `tk_${messageIndex}` } : {}),
 						status: "completed",
 					});
 				}
@@ -154,7 +156,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 				for (const tc of toolCalls) {
 					out.push({
 						type: "function_call",
-						id: `fc_${tc.id}`,
+						...(replayResponsesItemIds ? { id: `fc_${tc.id}` } : {}),
 						call_id: tc.id,
 						name: tc.function.name,
 						arguments: tc.function.arguments,
@@ -173,7 +175,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 					type: "function_call_output",
 					call_id: tr.callId,
 					output: tr.content || "",
-					id: `fco_${messageIndex}_${toolResultIndex}`,
+					...(replayResponsesItemIds ? { id: `fco_${messageIndex}_${toolResultIndex}` } : {}),
 					status: "completed",
 				});
 			}
@@ -308,6 +310,12 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 		// Keep direct OpenAI API-key Responses requests unchanged.
 		if (um?.authMode === "oauth" && isOpenAICodexOAuthProvider(um.owned_by)) {
 			rb.store = false;
+			const include = Array.isArray(rb.include)
+				? rb.include.filter((value): value is string => typeof value === "string")
+				: [];
+			if (!include.includes("reasoning.encrypted_content")) {
+				rb.include = [...include, "reasoning.encrypted_content"];
+			}
 			for (const field of [
 				"context_management",
 				"metadata",

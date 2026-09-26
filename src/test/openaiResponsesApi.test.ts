@@ -54,6 +54,32 @@ suite("openaiResponsesApi", () => {
 		assert.deepStrictEqual(second, first);
 	});
 
+	test("omits replayed item IDs for Codex OAuth requests", () => {
+		const api = new OpenaiResponsesApi("gpt-6-astra");
+		const messages = [
+			{
+				role: vscode.LanguageModelChatMessageRole.Assistant,
+				name: undefined,
+				content: [
+					new vscode.LanguageModelTextPart("assistant reply"),
+					new vscode.LanguageModelToolCallPart("call_0_1", "read_file", { path: "README.md" }),
+				],
+			},
+			{
+				role: vscode.LanguageModelChatMessageRole.User,
+				name: undefined,
+				content: [{ callId: "call_0_1", content: [new vscode.LanguageModelTextPart("tool result")] }],
+			},
+		] as unknown as vscode.LanguageModelChatRequestMessage[];
+
+		const items = api.convertMessages(messages, { includeReasoningInRequest: false }, { replayResponsesItemIds: false });
+
+		assert.ok(items.length > 0);
+		for (const item of items) {
+			assert.strictEqual("id" in item, false);
+		}
+	});
+
 	test("disables response storage for OpenAI Codex OAuth", () => {
 		const api = new OpenaiResponsesApi("gpt-6-astra");
 		const body = api.prepareRequestBody(
@@ -81,6 +107,7 @@ suite("openaiResponsesApi", () => {
 		);
 
 		assert.strictEqual(body.store, false);
+		assert.deepStrictEqual(body.include, ["reasoning.encrypted_content"]);
 		assert.strictEqual(body.max_output_tokens, undefined);
 		assert.strictEqual(body.temperature, undefined);
 		assert.strictEqual(body.top_p, undefined);
