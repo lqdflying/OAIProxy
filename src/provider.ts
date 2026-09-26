@@ -1207,6 +1207,10 @@ function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
 		hasExtraBodyReasoning: getNestedObject(body.extra_body, "reasoning") !== undefined,
 		hasOutputConfig: body.output_config !== undefined,
 		outputConfigEffort: getNestedString(body.output_config, "effort"),
+		hasMaxOutputTokens: body.max_output_tokens !== undefined,
+		maxOutputTokens: typeof body.max_output_tokens === "number" ? body.max_output_tokens : undefined,
+		hasTemperature: body.temperature !== undefined,
+		hasTopP: body.top_p !== undefined,
 		hasStore: body.store !== undefined,
 		store: typeof body.store === "boolean" ? body.store : undefined,
 	};

@@ -44,11 +44,25 @@ suite("openaiResponsesApi", () => {
 				authMode: "oauth",
 				baseUrl: "https://chatgpt.com/backend-api/codex",
 				apiMode: "openai-responses",
-				extra: { store: true },
+				max_tokens: 128000,
+				temperature: 0.2,
+				top_p: 0.9,
+				extra: {
+					store: true,
+					metadata: { source: "test" },
+					context_management: { compact_threshold: 0.8 },
+					prompt_cache_retention: "24h",
+				},
 			})
 		);
 
 		assert.strictEqual(body.store, false);
+		assert.strictEqual(body.max_output_tokens, undefined);
+		assert.strictEqual(body.temperature, undefined);
+		assert.strictEqual(body.top_p, undefined);
+		assert.strictEqual(body.metadata, undefined);
+		assert.strictEqual(body.context_management, undefined);
+		assert.strictEqual(body.prompt_cache_retention, undefined);
 	});
 
 	test("does not force storage for normal OpenAI API-key Responses", () => {
