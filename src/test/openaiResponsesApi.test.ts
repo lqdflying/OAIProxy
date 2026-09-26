@@ -30,6 +30,42 @@ suite("openaiResponsesApi", () => {
 		assert.strictEqual(body.max_output_tokens, 131072);
 	});
 
+	test("disables response storage for OpenAI Codex OAuth", () => {
+		const api = new OpenaiResponsesApi("gpt-6-astra");
+		const body = api.prepareRequestBody(
+			{
+				model: "gpt-6-astra",
+				input: [],
+				stream: true,
+			},
+			model({
+				id: "gpt-6-astra",
+				owned_by: "openai-oauth",
+				authMode: "oauth",
+				baseUrl: "https://chatgpt.com/backend-api/codex",
+				apiMode: "openai-responses",
+				extra: { store: true },
+			})
+		);
+
+		assert.strictEqual(body.store, false);
+	});
+
+	test("does not force storage for normal OpenAI API-key Responses", () => {
+		const api = new OpenaiResponsesApi("gpt-6-astra");
+		const body = api.prepareRequestBody(
+			{ model: "gpt-6-astra", input: [], stream: true },
+			model({
+				id: "gpt-6-astra",
+				owned_by: "openai",
+				baseUrl: "https://api.openai.com/v1",
+				apiMode: "openai-responses",
+			})
+		);
+
+		assert.strictEqual(body.store, undefined);
+	});
+
 	test("emits nested response usage after a completed stream", async () => {
 		const api = new OpenaiResponsesApi("responses-usage-model");
 		const parts: vscode.LanguageModelResponsePart2[] = [];

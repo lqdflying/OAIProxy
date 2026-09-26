@@ -1207,6 +1207,8 @@ function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
 		hasExtraBodyReasoning: getNestedObject(body.extra_body, "reasoning") !== undefined,
 		hasOutputConfig: body.output_config !== undefined,
 		outputConfigEffort: getNestedString(body.output_config, "effort"),
+		hasStore: body.store !== undefined,
+		store: typeof body.store === "boolean" ? body.store : undefined,
 	};
 }
 

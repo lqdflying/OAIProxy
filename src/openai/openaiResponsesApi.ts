@@ -300,6 +300,12 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			}
 		}
 
+		// The ChatGPT/Codex OAuth Responses route is stateless and rejects omitted
+		// or true storage. Keep direct OpenAI API-key Responses requests unchanged.
+		if (um?.authMode === "oauth" && isOpenAICodexOAuthProvider(um.owned_by)) {
+			rb.store = false;
+		}
+
 		return rb;
 	}
 
