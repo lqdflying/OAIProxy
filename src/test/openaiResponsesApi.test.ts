@@ -54,7 +54,7 @@ suite("openaiResponsesApi", () => {
 		assert.deepStrictEqual(second, first);
 	});
 
-	test("omits replayed item IDs for Codex OAuth requests", () => {
+	test("uses ChatHub-compatible easy input for Codex OAuth replays", () => {
 		const api = new OpenaiResponsesApi("gpt-6-astra");
 		const messages = [
 			{
@@ -72,12 +72,28 @@ suite("openaiResponsesApi", () => {
 			},
 		] as unknown as vscode.LanguageModelChatRequestMessage[];
 
-		const items = api.convertMessages(messages, { includeReasoningInRequest: false }, { replayResponsesItemIds: false });
+		const items = api.convertMessages(
+			messages,
+			{ includeReasoningInRequest: false },
+			{
+				replayResponsesItemIds: false,
+				codexEasyInput: true,
+			}
+		);
 
 		assert.ok(items.length > 0);
-		for (const item of items) {
-			assert.strictEqual("id" in item, false);
-		}
+		assert.deepStrictEqual(items[0], { role: "assistant", content: "assistant reply" });
+		assert.deepStrictEqual(items[1], {
+			type: "function_call",
+			call_id: "call_0_1",
+			name: "read_file",
+			arguments: JSON.stringify({ path: "README.md" }),
+		});
+		assert.deepStrictEqual(items[2], {
+			type: "function_call_output",
+			call_id: "call_0_1",
+			output: "tool result",
+		});
 	});
 
 	test("disables response storage for OpenAI Codex OAuth", () => {

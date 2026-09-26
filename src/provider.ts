@@ -50,6 +50,7 @@ import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "./vsc
 import { applyXaiGrokOAuthHeaders, getXaiOAuthAccessToken, isXaiGrokOAuthBaseUrl } from "./xaiOAuth";
 import {
 	applyOpenAICodexOAuthHeaders,
+	applyOpenAICodexSessionHeaders,
 	getOpenAIOAuthCredential,
 	isOpenAICodexOAuthBaseUrl,
 	isOpenAICodexOAuthProvider,
@@ -538,7 +539,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				const normalizedBaseUrl = BASE_URL.replace(/\/+$/, "");
 				const statefulModelId = parsedModelId.baseId;
 				const codexResponsesConversionOptions = isOpenAICodexOAuth
-					? { replayResponsesItemIds: false }
+					? { replayResponsesItemIds: false, codexEasyInput: true }
 					: undefined;
 
 				// Convert full history once (also extracts system `instructions`).
@@ -643,6 +644,14 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				const codexPromptCacheKey = isOpenAICodexOAuth
 					? createCodexPromptCacheKey(memoryState.stateKey)
 					: undefined;
+				if (isOpenAICodexOAuth) {
+					applyOpenAICodexSessionHeaders(requestHeaders, codexPromptCacheKey);
+					logger.debug("responses.codex.affinity", {
+						hasSessionId: typeof requestHeaders.session_id === "string",
+						hasClientRequestId: typeof requestHeaders["x-client-request-id"] === "string",
+						sessionIdLength: requestHeaders.session_id?.length,
+					});
+				}
 
 				// requestBody
 				let requestBody: Record<string, unknown> = {
@@ -656,6 +665,9 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					modelId: parsedModelId.baseId,
 					promptCacheKey: codexPromptCacheKey,
 				});
+				if (isOpenAICodexOAuth) {
+					delete requestBody.prompt_cache_key;
+				}
 				// send Responses API request with retry
 				const url = `${normalizedBaseUrl}/responses`;
 
@@ -726,6 +738,9 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 						modelId: parsedModelId.baseId,
 						promptCacheKey: codexPromptCacheKey,
 					});
+					if (isOpenAICodexOAuth) {
+						delete fallbackBody.prompt_cache_key;
+					}
 					delete fallbackBody.previous_response_id;
 					logRequestBody(url, fallbackBody, isVisionBridgeRequest, {
 						...statefulMetadata,

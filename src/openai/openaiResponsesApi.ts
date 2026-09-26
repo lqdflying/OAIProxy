@@ -33,7 +33,7 @@ import {
 
 export interface ResponsesInputMessage {
 	role: "user" | "assistant" | "system";
-	content: ResponsesContentPart[];
+	content: ResponsesContentPart[] | string;
 	type?: "message";
 	id?: string;
 	status?: "completed" | "incomplete";
@@ -52,7 +52,7 @@ export interface ResponsesFunctionCall {
 	call_id: string;
 	name: string;
 	arguments: string;
-	status: "completed";
+	status?: "completed";
 }
 
 export interface ResponsesFunctionCallOutput {
@@ -60,14 +60,14 @@ export interface ResponsesFunctionCallOutput {
 	call_id: string;
 	output: string;
 	id?: string;
-	status: "completed";
+	status?: "completed";
 }
 
 export interface ResponsesReasoning {
 	type: "reasoning";
 	summary: ResponsesContentPart[];
 	id?: string;
-	status: "completed";
+	status?: "completed";
 }
 
 export type ResponsesInputItem =
@@ -91,10 +91,11 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 	convertMessages(
 		messages: readonly LanguageModelChatRequestMessage[],
 		modelConfig: { includeReasoningInRequest: boolean },
-		options?: { replayResponsesItemIds?: boolean }
+		options?: { replayResponsesItemIds?: boolean; codexEasyInput?: boolean }
 	): ResponsesInputItem[] {
 		const out: ResponsesInputItem[] = [];
 		const replayResponsesItemIds = options?.replayResponsesItemIds !== false;
+		const codexEasyInput = options?.codexEasyInput === true;
 
 		for (let messageIndex = 0; messageIndex < messages.length; messageIndex++) {
 			const m = messages[messageIndex];
@@ -134,17 +135,28 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 
 			// assistant message (optional)
 			if (role === "assistant") {
-				if (joinedText) {
+				if (codexEasyInput && joinedThinking) {
 					out.push({
-						role: "assistant",
-						content: [{ type: "output_text", text: joinedText }],
-						type: "message",
-						...(replayResponsesItemIds ? { id: `msg_${messageIndex}` } : {}),
-						status: "completed",
+						summary: [{ type: "summary_text", text: joinedThinking }],
+						type: "reasoning",
 					});
 				}
 
-				if (joinedThinking) {
+				if (joinedText) {
+					if (codexEasyInput) {
+						out.push({ role: "assistant", content: joinedText });
+					} else {
+						out.push({
+							role: "assistant",
+							content: [{ type: "output_text", text: joinedText }],
+							type: "message",
+							...(replayResponsesItemIds ? { id: `msg_${messageIndex}` } : {}),
+							status: "completed",
+						});
+					}
+				}
+
+				if (joinedThinking && !codexEasyInput) {
 					out.push({
 						summary: [{ type: "summary_text", text: joinedThinking }],
 						type: "reasoning",
@@ -160,7 +172,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 						call_id: tc.id,
 						name: tc.function.name,
 						arguments: tc.function.arguments,
-						status: "completed",
+						...(codexEasyInput ? {} : { status: "completed" as const }),
 					});
 				}
 			}
@@ -176,7 +188,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 					call_id: tr.callId,
 					output: tr.content || "",
 					...(replayResponsesItemIds ? { id: `fco_${messageIndex}_${toolResultIndex}` } : {}),
-					status: "completed",
+					...(codexEasyInput ? {} : { status: "completed" as const }),
 				});
 			}
 
@@ -191,12 +203,19 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 					contentArray.push({ type: "input_image", image_url: dataUrl, detail: "auto" });
 				}
 				if (contentArray.length > 0) {
-					out.push({
-						role: "user",
-						content: contentArray,
-						type: "message",
-						status: "completed",
-					});
+					if (codexEasyInput) {
+						out.push({
+							role: "user",
+							content: imageParts.length > 0 ? contentArray : joinedText,
+						});
+					} else {
+						out.push({
+							role: "user",
+							content: contentArray,
+							type: "message",
+							status: "completed",
+						});
+					}
 				}
 			}
 

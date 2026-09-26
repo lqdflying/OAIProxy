@@ -104,12 +104,23 @@ export function applyOpenAICodexOAuthHeaders(
 	headers: Record<string, string>,
 	credential?: Pick<OpenAIOAuthCredential, "accountId">
 ): void {
+	headers["OpenAI-Beta"] = "responses=experimental";
+	headers.Accept = "text/event-stream";
 	headers.originator = OPENAI_OAUTH_ORIGINATOR;
 	headers.version = OPENAI_OAUTH_CLIENT_VERSION;
 	headers["User-Agent"] = OPENAI_OAUTH_CLIENT_VERSION;
 	if (credential?.accountId) {
 		headers["ChatGPT-Account-Id"] = credential.accountId;
 	}
+}
+
+export function applyOpenAICodexSessionHeaders(headers: Record<string, string>, sessionId?: string): void {
+	const normalized = sessionId?.trim();
+	if (!normalized) {
+		return;
+	}
+	headers.session_id = normalized;
+	headers["x-client-request-id"] = normalized;
 }
 
 export async function loadOpenAIOAuthCredential(

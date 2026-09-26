@@ -7,6 +7,7 @@ import {
 	OPENAI_OAUTH_TOKEN_URL,
 	OPENAI_OAUTH_VERIFICATION_URL,
 	applyOpenAICodexOAuthHeaders,
+	applyOpenAICodexSessionHeaders,
 	getOpenAIOAuthAccessToken,
 	getOpenAIOAuthCredential,
 	isOpenAICodexOAuthBaseUrl,
@@ -22,11 +23,16 @@ suite("openaiOAuth", () => {
 		const headers: Record<string, string> = {};
 		applyOpenAICodexOAuthHeaders(headers, { accountId: "acct-test" });
 		assert.deepStrictEqual(headers, {
+			"OpenAI-Beta": "responses=experimental",
+			Accept: "text/event-stream",
 			originator: "oaiproxy",
 			version: "oaiproxy",
 			"User-Agent": "oaiproxy",
 			"ChatGPT-Account-Id": "acct-test",
 		});
+		applyOpenAICodexSessionHeaders(headers, "cache-session");
+		assert.strictEqual((headers as Record<string, string>).session_id, "cache-session");
+		assert.strictEqual((headers as Record<string, string>)["x-client-request-id"], "cache-session");
 	});
 
 	test("completes the OpenAI device-code flow", async () => {
