@@ -1009,7 +1009,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				const openaiApi = apiMode === "litellm"
 					? new LiteLLMApi(model.id)
 					: new OpenaiApi(model.id, apiMode === "azure-foundry" ? "azure-foundry" : "openai");
-				const openaiMessages = openaiApi.convertMessages(workingMessages, modelConfig);
+				const openaiMessages = openaiApi.convertMessages(workingMessages, modelConfig, um, options);
 
 				// requestBody
 				let requestBody: Record<string, unknown> = {

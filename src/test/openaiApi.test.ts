@@ -281,6 +281,72 @@ suite("openaiApi", () => {
 		assert.strictEqual((body.messages as Array<Record<string, unknown>>)[0].reasoning_content, reasoning);
 	});
 
+	test("preserves available direct DeepSeek reasoning when the replay flag is false", () => {
+		const preset = MODEL_PRESETS.find((item) => item.id === "deepseek-flash");
+		assert.ok(preset);
+		const reasoning = "  Keep this reasoning even when the flag is false.  ";
+		const toolOptions = {
+			requestInitiator: "test",
+			toolMode: vscode.LanguageModelChatToolMode.Auto,
+			tools: [{ name: "read_file", description: "Read a file", inputSchema: { type: "object" } }],
+		};
+		const api = new OpenaiApi(preset.model.id);
+		const messages = api.convertMessages(
+			[
+				{
+					role: vscode.LanguageModelChatMessageRole.Assistant,
+					name: undefined,
+					content: [
+						new vscode.LanguageModelThinkingPart(reasoning),
+						new vscode.LanguageModelToolCallPart("call-1", "read_file", { path: "README.md" }),
+					],
+				} as unknown as vscode.LanguageModelChatRequestMessage,
+			],
+			{ includeReasoningInRequest: false },
+			preset.model,
+			toolOptions
+		);
+		const body = api.prepareRequestBody({ model: preset.model.id, messages, stream: true }, preset.model, toolOptions);
+		const withoutTools = api.convertMessages(
+			[
+				{
+					role: vscode.LanguageModelChatMessageRole.Assistant,
+					name: undefined,
+					content: [
+						new vscode.LanguageModelThinkingPart(reasoning),
+						new vscode.LanguageModelTextPart("Visible answer."),
+					],
+				} as unknown as vscode.LanguageModelChatRequestMessage,
+			],
+			{ includeReasoningInRequest: false },
+			preset.model
+		);
+		const otherProvider = api.convertMessages(
+			[
+				{
+					role: vscode.LanguageModelChatMessageRole.Assistant,
+					name: undefined,
+					content: [
+						new vscode.LanguageModelThinkingPart(reasoning),
+						new vscode.LanguageModelTextPart("Visible answer."),
+					],
+				} as unknown as vscode.LanguageModelChatRequestMessage,
+			],
+			{ includeReasoningInRequest: false },
+			model({
+				id: "glm-5.2",
+				owned_by: "zai",
+				baseUrl: "https://api.z.ai/api/coding/paas/v4",
+				thinking: { type: "enabled" },
+			}),
+			toolOptions
+		);
+
+		assert.strictEqual((body.messages as Array<Record<string, unknown>>)[0].reasoning_content, reasoning);
+		assert.strictEqual(withoutTools[0].reasoning_content, undefined);
+		assert.strictEqual(otherProvider[0].reasoning_content, undefined);
+	});
+
 	test("adds DeepSeek replay fields only for thinking-mode tool requests", () => {
 		const preset = MODEL_PRESETS.find((item) => item.id === "deepseek-flash");
 		assert.ok(preset);

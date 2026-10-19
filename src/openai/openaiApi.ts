@@ -61,14 +61,20 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 	 * Convert VS Code chat request messages into OpenAI-compatible message objects.
 	 * @param messages The VS Code chat messages to convert.
 	 * @param modelConfig model configuration that may affect message conversion.
+	 * @param model model configuration used for provider-specific replay requirements.
+	 * @param options request options used to detect advertised tools.
 	 * @returns OpenAI-compatible messages array.
 	 */
 	convertMessages(
 		messages: readonly LanguageModelChatRequestMessage[],
-		modelConfig: { includeReasoningInRequest: boolean } & ContentOptions
+		modelConfig: { includeReasoningInRequest: boolean } & ContentOptions,
+		model?: HFModelItem,
+		options?: ProvideLanguageModelChatResponseOptions
 	): OpenAIChatMessage[] {
 		messages = prepareMessagesForApi(messages, { ...modelConfig, apiMode: "openai" });
 		const out: OpenAIChatMessage[] = [];
+		const includeReasoning =
+			modelConfig.includeReasoningInRequest || shouldPreserveDirectDeepSeekReasoning(model, options);
 		for (const m of messages) {
 			const role = mapRole(m);
 			const textParts: string[] = [];
@@ -116,7 +122,7 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 					assistantMessage.content = joinedText;
 				}
 
-				if (modelConfig.includeReasoningInRequest && joinedThinking.length > 0) {
+				if (includeReasoning && joinedThinking.length > 0) {
 					assistantMessage.reasoning_content = joinedThinking;
 				}
 
@@ -871,6 +877,23 @@ function isDirectDeepSeekModel(model: HFModelItem | undefined): boolean {
 	} catch {
 		return false;
 	}
+}
+
+function shouldPreserveDirectDeepSeekReasoning(
+	model: HFModelItem | undefined,
+	options: ProvideLanguageModelChatResponseOptions | undefined
+): boolean {
+	if (!isDirectDeepSeekModel(model) || (options?.tools?.length ?? 0) === 0) {
+		return false;
+	}
+	const extraThinking = model?.extra?.thinking;
+	if (extraThinking !== null && typeof extraThinking === "object" && !Array.isArray(extraThinking)) {
+		const type = (extraThinking as Record<string, unknown>).type;
+		if (typeof type === "string") {
+			return type === "enabled";
+		}
+	}
+	return model?.thinking?.type === "enabled" || model?.enable_thinking === true;
 }
 
 function isThinkingEnabled(requestBody: Record<string, unknown>, model: HFModelItem | undefined): boolean {
