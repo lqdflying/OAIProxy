@@ -453,6 +453,106 @@ suite("configuration panel lifecycle", () => {
 		assert.strictEqual(keyExport.providers[0].headers["X-Api-Key"], "provider-header-secret");
 	});
 
+	test("preserves current header values when importing a redacted export", async () => {
+		configuration["oaicopilot.models"] = [
+			{
+				id: "gpt-test",
+				configId: "work",
+				owned_by: "openai",
+				baseUrl: "https://api.openai.com/v1",
+				headers: { "Custom-Auth-Token": "model-header-secret", "X-Trace": "old-trace" },
+			},
+		];
+		globalStateValues[PROVIDER_CONFIG_STORAGE_KEY] = [
+			{
+				provider: "openai",
+				baseUrl: "https://api.openai.com/v1",
+				apiMode: "openai",
+				authMode: "api-key",
+				headers: { "X-Api-Key": "provider-header-secret", "X-Request-Mode": "old-mode" },
+			},
+		];
+		inputFiles.set(
+			"/tmp/import-redacted-preserve.json",
+			JSON.stringify({
+				models: [
+					{
+						id: "gpt-test",
+						configId: "work",
+						owned_by: "openai",
+						baseUrl: "https://api.openai.com/v1",
+						headers: { "Custom-Auth-Token": "[REDACTED]", "X-Trace": "new-trace" },
+					},
+				],
+				providers: [
+					{
+						provider: "openai",
+						baseUrl: "https://api.openai.com/v1",
+						apiMode: "openai",
+						authMode: "api-key",
+						headers: { "X-Api-Key": "[REDACTED]", "X-Request-Mode": "new-mode" },
+					},
+				],
+			})
+		);
+		openDialogUris = [vscode.Uri.file("/tmp/import-redacted-preserve.json")];
+		const view = open();
+
+		await view.handleMessage({ type: "importConfig" });
+
+		const models = configuration["oaicopilot.models"] as HFModelItem[];
+		const providers = globalStateValues[PROVIDER_CONFIG_STORAGE_KEY] as ProviderConfigItem[];
+		assert.deepStrictEqual(models[0].headers, {
+			"Custom-Auth-Token": "model-header-secret",
+			"X-Trace": "new-trace",
+		});
+		assert.deepStrictEqual(providers[0].headers, {
+			"X-Api-Key": "provider-header-secret",
+			"X-Request-Mode": "new-mode",
+		});
+		assert.strictEqual(
+			informationMessages.at(-1),
+			"Configuration imported successfully. Existing API keys were preserved."
+		);
+	});
+
+	test("omits redacted headers without a current matching value", async () => {
+		inputFiles.set(
+			"/tmp/import-redacted-omit.json",
+			JSON.stringify({
+				models: [
+					{
+						id: "gpt-test",
+						owned_by: "openai",
+						headers: { Authorization: "[REDACTED]", "Custom-Auth-Token": "[REDACTED]", "X-Trace": "trace-value" },
+					},
+				],
+				providers: [
+					{
+						provider: "openai",
+						apiMode: "openai",
+						authMode: "api-key",
+						headers: { "X-Api-Key": "[REDACTED]", "X-Request-Mode": "provider-mode" },
+					},
+				],
+			})
+		);
+		openDialogUris = [vscode.Uri.file("/tmp/import-redacted-omit.json")];
+		const view = open();
+
+		await view.handleMessage({ type: "importConfig" });
+
+		const models = configuration["oaicopilot.models"] as HFModelItem[];
+		const providers = globalStateValues[PROVIDER_CONFIG_STORAGE_KEY] as ProviderConfigItem[];
+		assert.deepStrictEqual(models[0].headers, { "X-Trace": "trace-value" });
+		assert.deepStrictEqual(providers[0].headers, { "X-Request-Mode": "provider-mode" });
+		assert.strictEqual(
+			informationMessages.at(-1),
+			"Configuration imported successfully. Existing API keys were preserved. " +
+				"Redacted header values without a current match were omitted: Authorization, Custom-Auth-Token, X-Api-Key."
+		);
+	});
+
 	test("rejects a malformed import before mutating configuration or secrets", async () => {
 		configuration["oaicopilot.baseUrl"] = "https://existing.example/v1";
 		configuration["oaicopilot.models"] = [{ id: "existing", owned_by: "openai" }];

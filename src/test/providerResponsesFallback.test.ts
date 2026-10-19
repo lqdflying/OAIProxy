@@ -174,4 +174,27 @@ suite("Responses previous_response_id fallback", () => {
 		assert.strictEqual(received.length, 4);
 		assert.strictEqual(received[3].previous_response_id, undefined);
 	});
+
+	test("marks the scope unsupported for an unrecognized previous_response_id failure", async () => {
+		failures.push({
+			status: 400,
+			body: JSON.stringify({
+				error: {
+					message: "previous_response_id is only supported when store is enabled",
+					type: "invalid_request_error",
+				},
+			}),
+		});
+		const first = msg(1, "first");
+		await run([first]);
+		await run([first, msg(2, "OK"), msg(1, "second")]);
+
+		assert.strictEqual(received.length, 3);
+		assert.strictEqual(received[1].previous_response_id, "resp_1");
+		assert.strictEqual(received[2].previous_response_id, undefined);
+
+		await run([first, msg(2, "OK"), msg(1, "second"), msg(2, "OK"), msg(1, "third")]);
+		assert.strictEqual(received.length, 4);
+		assert.strictEqual(received[3].previous_response_id, undefined);
+	});
 });

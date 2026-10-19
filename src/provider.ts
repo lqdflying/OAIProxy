@@ -896,11 +896,10 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 						throw err;
 					}
 
-					const previousResponseErrorKind = classifyPreviousResponseIdError(errorText);
-					if (previousResponseErrorKind === "unsupported") {
+					previousResponseIdNotFoundFallback = isPreviousResponseIdNotFoundError(errorText);
+					if (!previousResponseIdNotFoundFallback) {
 						this._openaiResponsesPreviousResponseIdUnsupportedScopes.add(responsesStateScopeKey);
 					}
-					previousResponseIdNotFoundFallback = previousResponseErrorKind === "not-found";
 
 					let fallbackBody: Record<string, unknown> = {
 						model: parsedModelId.baseId,
@@ -926,7 +925,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 						usedStatefulDeltaInput: false,
 						stateSource: "none",
 						attemptedStateSource: stateSource,
-						previousResponseIdUnsupported: previousResponseErrorKind === "unsupported",
+						previousResponseIdUnsupported: !previousResponseIdNotFoundFallback,
 						previousResponseIdNotFound: previousResponseIdNotFoundFallback,
 						previousResponseIdFallback: true,
 					});
@@ -1640,17 +1639,11 @@ function containsVideoPayload(value: unknown, depth = 0): boolean {
 	return Object.values(obj).some((item) => containsVideoPayload(item, depth + 1));
 }
 
-function classifyPreviousResponseIdError(errorText: string): "not-found" | "unsupported" | "other" {
-	const notFound =
+function isPreviousResponseIdNotFoundError(errorText: string): boolean {
+	return (
 		/previous_response_not_found/i.test(errorText) ||
-		/previous[_\s-]*response(?:[_\s-]*id)?[\s\S]{0,120}?(?:not[_\s-]*found|does[_\s-]*not[_\s-]*exist|no[_\s-]*longer[_\s-]*exists|expired)/i.test(errorText);
-	if (notFound) {
-		return "not-found";
-	}
-	if (/(unsupported|not[\s_-]+supported|unknown|unrecognized|unexpected)/i.test(errorText)) {
-		return "unsupported";
-	}
-	return "other";
+		/previous[_\s-]*response(?:[_\s-]*id)?[\s\S]{0,120}?(?:not[_\s-]*found|does[_\s-]*not[_\s-]*exist|no[_\s-]*longer[_\s-]*exists|expired)/i.test(errorText)
+	);
 }
 
 function createOpenAIResponsesStatefulMarkerPart(

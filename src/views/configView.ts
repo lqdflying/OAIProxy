@@ -194,6 +194,44 @@ function redactSensitiveHeaders<T extends { headers?: Record<string, string> }>(
 	});
 }
 
+const REDACTED_HEADER_VALUE = "[REDACTED]";
+
+function restoreRedactedHeaders<T extends { headers?: Record<string, string> }>(
+	items: readonly T[],
+	currentItems: readonly T[],
+	keyOf: (item: T) => string,
+	omittedHeaders: Set<string>
+): T[] {
+	const currentByKey = new Map(currentItems.map((item): [string, T] => [keyOf(item), item]));
+	return items.map((item) => {
+		if (!item.headers) {
+			return item;
+		}
+
+		const currentHeaders = currentByKey.get(keyOf(item))?.headers;
+		let nextHeaders: Record<string, string> | undefined;
+		for (const [name, value] of Object.entries(item.headers)) {
+			if (value !== REDACTED_HEADER_VALUE) {
+				continue;
+			}
+
+			const currentName = currentHeaders
+				? Object.keys(currentHeaders).find((candidate) => candidate.toLowerCase() === name.toLowerCase())
+				: undefined;
+			const currentValue = currentName ? currentHeaders?.[currentName] : undefined;
+			nextHeaders ??= { ...item.headers };
+			if (currentValue !== undefined && currentValue !== REDACTED_HEADER_VALUE) {
+				nextHeaders[name] = currentValue;
+			} else {
+				delete nextHeaders[name];
+				omittedHeaders.add(name);
+			}
+		}
+
+		return nextHeaders ? ({ ...item, headers: nextHeaders } as T) : item;
+	});
+}
+
 function getMissingProviderUsageKeyMessage(provider: string, adapter: ProviderUsageAdapter): string {
 	if (adapter === "tokenrouter") {
 		return `No TokenRouter Management Key found for provider ${provider}. Add it in the Usage Key field first.`;
@@ -1608,9 +1646,29 @@ export class ConfigViewPanel {
 			}
 			const importData = validateImportedConfig(parsed);
 			const config = vscode.workspace.getConfiguration();
+			const currentModels = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
 			const currentProviders = this.getProviderConfigs();
-			const importedProviders = importData.providers ?? currentProviders;
-			const migratedImport = migrateProviderPlaceholderModels(importData.models, importedProviders);
+			const omittedRedactedHeaders = new Set<string>();
+			const providerKey = (provider: ProviderConfigItem) => provider.provider.trim().toLowerCase();
+			const importedProviders = restoreRedactedHeaders(
+				importData.providers ?? currentProviders,
+				currentProviders,
+				providerKey,
+				omittedRedactedHeaders
+			);
+			const importedModels = restoreRedactedHeaders(
+				importData.models,
+				currentModels,
+				getModelConfigKey,
+				omittedRedactedHeaders
+			);
+			const migratedImport = migrateProviderPlaceholderModels(importedModels, importedProviders);
+			const migratedProviders = restoreRedactedHeaders(
+				migratedImport.providers,
+				currentProviders,
+				providerKey,
+				omittedRedactedHeaders
+			);
 
 			const configUpdates: Array<{ key: string; value: unknown }> = [];
 			if (importData.baseUrl !== undefined) {
@@ -1663,7 +1721,7 @@ export class ConfigViewPanel {
 				}
 				await config.update("oaicopilot.models", migratedImport.models, vscode.ConfigurationTarget.Global);
 				if (importData.providers !== undefined || migratedImport.changed) {
-					await this.updateProviderConfigs(migratedImport.providers);
+					await this.updateProviderConfigs(migratedProviders);
 				}
 				for (const [key, value] of secretChanges) {
 					if (value) {
@@ -1677,10 +1735,14 @@ export class ConfigViewPanel {
 				throw error;
 			}
 
+			const omittedHeaderNames = Array.from(omittedRedactedHeaders).sort((a, b) => a.localeCompare(b));
+			const omittedHeaderNotice = omittedHeaderNames.length > 0
+				? ` Redacted header values without a current match were omitted: ${omittedHeaderNames.join(", ")}.`
+				: "";
 			vscode.window.showInformationMessage(
-				secretChanges.size > 0
+				(secretChanges.size > 0
 					? "Configuration imported successfully, including API keys from the file."
-					: "Configuration imported successfully. Existing API keys were preserved."
+					: "Configuration imported successfully. Existing API keys were preserved.") + omittedHeaderNotice
 			);
 			this.refreshConfiguration();
 			try {
