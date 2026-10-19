@@ -53,16 +53,44 @@ import {
 	type AnthropicCacheControl,
 } from "../promptCache";
 
-function normalizeAnthropicThinkingType(value: string | undefined): "enabled" | "adaptive" | "disabled" | undefined {
+type AnthropicThinkingType = "enabled" | "adaptive" | "disabled";
+
+function normalizeAnthropicThinkingType(value: string | undefined): AnthropicThinkingType | undefined {
 	if (value === "enabled" || value === "adaptive" || value === "disabled") {
 		return value;
 	}
 	return undefined;
 }
 
+function resolveAnthropicExtraThinkingOverride(um: HFModelItem | undefined): {
+	overridden: boolean;
+	type: AnthropicThinkingType | undefined;
+} {
+	const extra = um?.extra;
+	if (!extra || !Object.prototype.hasOwnProperty.call(extra, "thinking")) {
+		return { overridden: false, type: undefined };
+	}
+	const extraThinking = extra.thinking;
+	if (extraThinking === undefined) {
+		return { overridden: false, type: undefined };
+	}
+	if (!extraThinking || typeof extraThinking !== "object" || Array.isArray(extraThinking)) {
+		return { overridden: true, type: undefined };
+	}
+	const type = (extraThinking as { type?: unknown }).type;
+	return {
+		overridden: true,
+		type: normalizeAnthropicThinkingType(typeof type === "string" ? type : undefined),
+	};
+}
+
 export function resolveAnthropicThinkingType(
 	um: HFModelItem | undefined
-): "enabled" | "adaptive" | "disabled" | undefined {
+): AnthropicThinkingType | undefined {
+	const extraOverride = resolveAnthropicExtraThinkingOverride(um);
+	if (extraOverride.overridden) {
+		return extraOverride.type;
+	}
 	const configured = normalizeAnthropicThinkingType(um?.thinking?.type);
 	if (configured) {
 		return configured;

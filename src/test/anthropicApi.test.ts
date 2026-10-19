@@ -192,6 +192,89 @@ suite("anthropicApi", () => {
 		]);
 	});
 
+	test("replays signed thinking when extra enables manual thinking", () => {
+		const api = new AnthropicApi("claude-extra-thinking-model");
+		const extraThinkingModel = model({
+			id: "claude-extra-thinking-model",
+			apiMode: "anthropic",
+			max_tokens: 8192,
+			extra: { thinking: { type: "enabled", budget_tokens: 1024 } },
+		});
+		const messages = api.convertMessages(
+			[
+				{
+					role: vscode.LanguageModelChatMessageRole.Assistant,
+					name: undefined,
+					content: [
+						new vscode.LanguageModelThinkingPart("reasoning", "thinking-1", { signature: "sig-1" }),
+						new vscode.LanguageModelTextPart("Using a tool."),
+						new vscode.LanguageModelToolCallPart("call-1", "read_file", { path: "README.md" }),
+					],
+				} as unknown as vscode.LanguageModelChatRequestMessage,
+			],
+			{ includeReasoningInRequest: false },
+			extraThinkingModel
+		);
+		const body = api.prepareRequestBody(
+			{ model: "claude-extra-thinking-model", messages, stream: true },
+			extraThinkingModel
+		);
+
+		assert.deepStrictEqual(messages[0].content, [
+			{ type: "thinking", thinking: "reasoning", signature: "sig-1" },
+			{ type: "text", text: "Using a tool." },
+			{
+				type: "tool_use",
+				id: "call-1",
+				name: "read_file",
+				input: { path: "README.md" },
+			},
+		]);
+		assert.deepStrictEqual(body.thinking, { type: "enabled", budget_tokens: 1024 });
+	});
+
+	test("does not replay signed thinking when extra disables manual thinking", () => {
+		const api = new AnthropicApi("claude-extra-thinking-disabled-model");
+		const extraThinkingDisabledModel = model({
+			id: "claude-extra-thinking-disabled-model",
+			apiMode: "anthropic",
+			thinking: { type: "enabled" },
+			thinking_budget: 1024,
+			max_tokens: 8192,
+			extra: { thinking: { type: "disabled" } },
+		});
+		const messages = api.convertMessages(
+			[
+				{
+					role: vscode.LanguageModelChatMessageRole.Assistant,
+					name: undefined,
+					content: [
+						new vscode.LanguageModelThinkingPart("reasoning", "thinking-1", { signature: "sig-1" }),
+						new vscode.LanguageModelTextPart("Using a tool."),
+						new vscode.LanguageModelToolCallPart("call-1", "read_file", { path: "README.md" }),
+					],
+				} as unknown as vscode.LanguageModelChatRequestMessage,
+			],
+			{ includeReasoningInRequest: false },
+			extraThinkingDisabledModel
+		);
+		const body = api.prepareRequestBody(
+			{ model: "claude-extra-thinking-disabled-model", messages, stream: true },
+			extraThinkingDisabledModel
+		);
+
+		assert.deepStrictEqual(messages[0].content, [
+			{ type: "text", text: "Using a tool." },
+			{
+				type: "tool_use",
+				id: "call-1",
+				name: "read_file",
+				input: { path: "README.md" },
+			},
+		]);
+		assert.deepStrictEqual(body.thinking, { type: "disabled" });
+	});
+
 	test("prefers max_completion_tokens and rejects invalid thinking budgets", () => {
 		const api = new AnthropicApi("claude-budget-model");
 		const body = api.prepareRequestBody(
