@@ -79,6 +79,35 @@ export type ResponsesInputItem =
 	| ResponsesFunctionCallOutput
 	| ResponsesReasoning;
 
+function extractResponsesStreamErrorMessage(
+	parsed: Record<string, unknown>,
+	responseObject: Record<string, unknown> | undefined
+): string | undefined {
+	const direct = extractProviderErrorMessage(parsed);
+	if (direct) {
+		return direct;
+	}
+
+	const nested = responseObject?.error;
+	if (nested !== undefined) {
+		const message = extractProviderErrorMessage({ error: nested });
+		if (message) {
+			return message;
+		}
+	}
+
+	const source = responseObject ?? parsed;
+	if (source.code !== undefined || source.message !== undefined) {
+		return extractProviderErrorMessage({
+			error: {
+				code: source.code,
+				message: source.message,
+			},
+		});
+	}
+	return undefined;
+}
+
 export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<string, unknown>> {
 	private _responseId: string | null = null;
 	private _sawOutputTextDelta = false;
@@ -400,7 +429,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 					responseStatus === "cancelled"
 				) {
 					sawProviderError = true;
-					providerErrorMessage = extractProviderErrorMessage(parsed) ?? providerErrorMessage;
+					providerErrorMessage = extractResponsesStreamErrorMessage(parsed, responseObject) ?? providerErrorMessage;
 				}
 				logCacheUsage("openai-responses", modelId, parsed);
 				await this.processEvent(parsed, progress);

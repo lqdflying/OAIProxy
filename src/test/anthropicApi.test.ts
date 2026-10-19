@@ -156,6 +156,42 @@ suite("anthropicApi", () => {
 		assert.deepStrictEqual(plain.content, [{ type: "text", text: "plain answer" }]);
 	});
 
+	test("replays signed thinking for manual thinking tool continuations when the replay flag is off", () => {
+		const api = new AnthropicApi("claude-thinking-model");
+		const messages = api.convertMessages(
+			[
+				{
+					role: vscode.LanguageModelChatMessageRole.Assistant,
+					name: undefined,
+					content: [
+						new vscode.LanguageModelThinkingPart("reasoning", "thinking-1", { signature: "sig-1" }),
+						new vscode.LanguageModelTextPart("Using a tool."),
+						new vscode.LanguageModelToolCallPart("call-1", "read_file", { path: "README.md" }),
+					],
+				} as unknown as vscode.LanguageModelChatRequestMessage,
+			],
+			{ includeReasoningInRequest: false },
+			model({
+				id: "claude-thinking-model",
+				apiMode: "anthropic",
+				thinking: { type: "enabled" },
+				thinking_budget: 1024,
+				max_tokens: 8192,
+			})
+		);
+
+		assert.deepStrictEqual(messages[0].content, [
+			{ type: "thinking", thinking: "reasoning", signature: "sig-1" },
+			{ type: "text", text: "Using a tool." },
+			{
+				type: "tool_use",
+				id: "call-1",
+				name: "read_file",
+				input: { path: "README.md" },
+			},
+		]);
+	});
+
 	test("prefers max_completion_tokens and rejects invalid thinking budgets", () => {
 		const api = new AnthropicApi("claude-budget-model");
 		const body = api.prepareRequestBody(

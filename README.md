@@ -104,7 +104,7 @@ The standalone Provider Usage Check table lists configured supported providers d
 
 Provider usage credentials are sent only to validated HTTPS destinations. Built-in adapters use fixed official endpoints, TokenRouter wallet checks are pinned to `https://api.tokenrouter.com`, and a LiteLLM usage check against any origin other than the default Nube gateway (`https://ai.nube.sh`) requires explicit confirmation before the privileged Usage Key is sent.
 
-Configuration export omits the generic API key, provider API keys, and provider usage/admin keys by default, so exported files are safe to share. Selecting **Export API Keys** displays a modal warning and requires confirmation; the resulting file contains those keys in cleartext and should be stored securely. Import validates the file before applying configuration, providers, or secrets, and rolls back partial changes if an import step fails.
+Configuration export omits the generic API key, provider API keys, and provider usage/admin keys by default, and replaces sensitive custom header values (`auth`, `token`, `key`, `secret`, `credential`, or `signature` in the name) with `[REDACTED]`, so exported files are safe to share. Selecting **Export API Keys** displays a modal warning and requires confirmation; the resulting file contains those keys and custom header values in cleartext and should be stored securely. Import validates the file before applying configuration, providers, or secrets, and rolls back partial changes if an import step fails.
 
 → [Full Configuration Guide](doc/configuration.md)
 

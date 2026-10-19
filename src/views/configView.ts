@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { randomBytes } from "crypto";
-import { logger } from "../logger";
+import { isSensitiveHeaderName, logger } from "../logger";
 import type { HFApiMode, HFModelItem, ProviderConfigItem } from "../types";
 import { normalizeUserModels, parseModelId } from "../utils";
 import { fetchModels } from "../provideModel";
@@ -156,6 +156,42 @@ export function resolveProviderApiKeyChange(
 	}
 
 	return { kind: "preserve", secretKey, legacySecretKey };
+}
+
+function isVerifiedOAuthProvider(provider: string, baseUrl: string | undefined): boolean {
+	const normalized = provider.trim().toLowerCase();
+	return (
+		isOpenAICodexOAuthProvider(provider, "oauth", baseUrl) ||
+		(normalized === "xai" && isXaiGrokOAuthBaseUrl(baseUrl))
+	);
+}
+
+function resolveProviderAuthMode(
+	provider: string,
+	authMode: "api-key" | "oauth" | undefined,
+	baseUrl: string | undefined
+): "api-key" | "oauth" {
+	if (authMode === "api-key") {
+		return "api-key";
+	}
+	if (authMode === "oauth") {
+		return isVerifiedOAuthProvider(provider, baseUrl) ? "oauth" : "api-key";
+	}
+	return isOpenAICodexOAuthProvider(provider, undefined, baseUrl) ? "oauth" : "api-key";
+}
+
+function redactSensitiveHeaders<T extends { headers?: Record<string, string> }>(items: readonly T[]): T[] {
+	return items.map((item) => {
+		if (!item.headers) {
+			return item;
+		}
+		return {
+			...item,
+			headers: Object.fromEntries(
+				Object.entries(item.headers).map(([name, value]) => [name, isSensitiveHeaderName(name) ? "[REDACTED]" : value])
+			),
+		} as T;
+	});
 }
 
 function getMissingProviderUsageKeyMessage(provider: string, adapter: ProviderUsageAdapter): string {
@@ -1093,8 +1129,7 @@ export class ConfigViewPanel {
 			vscode.window.showErrorMessage("Provider ID is required.");
 			return;
 		}
-		const effectiveAuthMode =
-			authMode ?? (isOpenAICodexOAuthProvider(trimmedProvider, authMode, baseUrl) ? "oauth" : "api-key");
+		const effectiveAuthMode = resolveProviderAuthMode(trimmedProvider, authMode, baseUrl);
 		await this.applyProviderApiKeyChange(
 			trimmedProvider,
 			effectiveAuthMode === "oauth" ? undefined : apiKey,
@@ -1136,21 +1171,21 @@ export class ConfigViewPanel {
 			vscode.window.showErrorMessage("Provider ID is required.");
 			return;
 		}
-		const effectiveAuthMode =
-			authMode ?? (isOpenAICodexOAuthProvider(trimmedProvider, authMode, baseUrl) ? "oauth" : "api-key");
+		const config = vscode.workspace.getConfiguration();
+		const models = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+		const providers = this.getProviderConfigs();
+		const migrated = migrateProviderPlaceholderModels(models, providers);
+		const existingProviderModel = findProviderTransportModel(migrated.models, trimmedProvider, migrated.providers);
+		const effectiveBaseUrl = baseUrl || existingProviderModel?.baseUrl;
+		const effectiveAuthMode = resolveProviderAuthMode(trimmedProvider, authMode, effectiveBaseUrl);
 		await this.applyProviderApiKeyChange(
 			trimmedProvider,
 			effectiveAuthMode === "oauth" ? undefined : apiKey,
 			effectiveAuthMode === "oauth" || clearApiKey
 		);
 
-		const config = vscode.workspace.getConfiguration();
-		const models = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
-		const providers = this.getProviderConfigs();
-		const migrated = migrateProviderPlaceholderModels(models, providers);
-		const existingProviderModel = findProviderTransportModel(migrated.models, trimmedProvider, migrated.providers);
 		const updatedProviders = upsertProviderConfig(migrated.providers, trimmedProvider, {
-			baseUrl: baseUrl || existingProviderModel?.baseUrl,
+			baseUrl: effectiveBaseUrl,
 			apiMode: ((apiMode as HFApiMode) || existingProviderModel?.apiMode || "openai") as HFApiMode,
 			authMode: effectiveAuthMode,
 			headers,
@@ -1516,8 +1551,8 @@ export class ConfigViewPanel {
 				retry,
 				commitLanguage,
 				commitModel,
-				models,
-				providers: providerConfigs,
+				models: includeApiKeys ? models : redactSensitiveHeaders(models),
+				providers: includeApiKeys ? providerConfigs : redactSensitiveHeaders(providerConfigs),
 				readFileLines,
 				...secretPayload,
 			};

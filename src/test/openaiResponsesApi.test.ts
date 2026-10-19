@@ -208,36 +208,70 @@ suite("openaiResponsesApi", () => {
 		});
 	});
 
-	test("rejects a failed response stream without emitting usage", async () => {
-		const api = new OpenaiResponsesApi("failed-responses-model");
-		const parts: vscode.LanguageModelResponsePart2[] = [];
-		const stream = new ReadableStream<Uint8Array>({
-			start(controller) {
-				controller.enqueue(
-					new TextEncoder().encode(
-						[
-							"data: {\"type\":\"response.failed\",\"response\":{\"usage\":{\"input_tokens\":100,\"output_tokens\":5,\"total_tokens\":105}}}",
-							"",
-							"data: [DONE]",
-							"",
-						].join("\n")
-					)
-				);
-				controller.close();
+	test("preserves provider messages from failed response streams without emitting usage", async () => {
+		const cases = [
+			{
+				label: "top-level error event",
+				payload: { type: "error", code: "rate_limit_exceeded", message: "Too many requests" },
+				expected: "rate_limit_exceeded: Too many requests",
 			},
-		});
+			{
+				label: "response.failed event",
+				payload: {
+					type: "response.failed",
+					response: {
+						error: { code: "invalid_request_error", message: "The prompt is invalid" },
+						usage: { input_tokens: 100, output_tokens: 5, total_tokens: 105 },
+					},
+				},
+				expected: "invalid_request_error: The prompt is invalid",
+			},
+			{
+				label: "response.cancelled event",
+				payload: {
+					type: "response.cancelled",
+					response: {
+						error: { code: "cancelled", message: "The provider cancelled the response" },
+						usage: { input_tokens: 100, output_tokens: 5, total_tokens: 105 },
+					},
+				},
+				expected: "cancelled: The provider cancelled the response",
+			},
+		];
 
-		await assert.rejects(
-			api.processStreamingResponse(stream, { report: (part) => parts.push(part) }, cancellationToken()),
-			/OpenAI Responses streaming error/
-		);
+		for (const testCase of cases) {
+			const api = new OpenaiResponsesApi("failed-responses-model");
+			const parts: vscode.LanguageModelResponsePart2[] = [];
+			const stream = new ReadableStream<Uint8Array>({
+				start(controller) {
+					controller.enqueue(
+						new TextEncoder().encode(
+							[
+								`data: ${JSON.stringify(testCase.payload)}`,
+								"",
+								"data: [DONE]",
+								"",
+							].join("\n")
+						)
+					);
+					controller.close();
+				},
+			});
 
-		assert.ok(
-			!parts.some(
-				(part) => part instanceof vscode.LanguageModelDataPart && part.mimeType === COPILOT_USAGE_MIME
-			)
-		);
-		assert.strictEqual(api.responseId, null, "a failed response must not be retained as resumable state");
+			await assert.rejects(
+				api.processStreamingResponse(stream, { report: (part) => parts.push(part) }, cancellationToken()),
+				new RegExp(testCase.expected),
+				testCase.label
+			);
+
+			assert.ok(
+				!parts.some(
+					(part) => part instanceof vscode.LanguageModelDataPart && part.mimeType === COPILOT_USAGE_MIME
+				),
+				testCase.label
+			);
+			assert.strictEqual(api.responseId, null, `${testCase.label} must not be retained as resumable state`);
+		}
 	});
 
 	test("processes a final response event that has no trailing newline", async () => {

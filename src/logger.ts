@@ -19,6 +19,10 @@ const LOG_CLEANUP_INTERVAL_MS = 60 * 60 * 1000; // 1 hour
 const SENSITIVE_HEADER_KEYS = new Set(["authorization", "api-key", "x-api-key", "x-goog-api-key"]);
 const SENSITIVE_HEADER_NAME_PATTERN = /(auth|token|key|secret|credential|signature)/i;
 
+export function isSensitiveHeaderName(name: string): boolean {
+	return SENSITIVE_HEADER_KEYS.has(name.toLowerCase()) || SENSITIVE_HEADER_NAME_PATTERN.test(name);
+}
+
 class Logger {
 	private _level: LogLevel = "off";
 	private _logDir = "";
@@ -100,7 +104,7 @@ class Logger {
 	sanitizeHeaders(headers: Record<string, string>): Record<string, string> {
 		const sanitized: Record<string, string> = {};
 		for (const [key, value] of Object.entries(headers)) {
-			if (SENSITIVE_HEADER_KEYS.has(key.toLowerCase()) || SENSITIVE_HEADER_NAME_PATTERN.test(key)) {
+			if (isSensitiveHeaderName(key)) {
 				// Extract the token part after "Bearer " if present
 				const tokenPrefix = value.startsWith("Bearer ") ? "Bearer " : "";
 				const token = value.startsWith("Bearer ") ? value.slice(7) : value;

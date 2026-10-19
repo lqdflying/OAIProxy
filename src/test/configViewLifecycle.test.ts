@@ -311,6 +311,50 @@ suite("configuration panel lifecycle", () => {
 		assert.strictEqual(providerConfigs[0].authMode, "api-key");
 	});
 
+	test("recovers a stale OpenAI OAuth provider row without deleting an entered API key", async () => {
+		globalStateValues[PROVIDER_CONFIG_STORAGE_KEY] = [
+			{ provider: "openai", baseUrl: "https://api.openai.com/v1", apiMode: "openai", authMode: "oauth" },
+		];
+		const view = open();
+
+		await view.handleMessage({
+			type: "updateProvider",
+			provider: "openai",
+			apiKey: "sk-recovered",
+			apiMode: "openai",
+			authMode: "oauth",
+		});
+
+		assert.strictEqual(stored.get("oaicopilot.apiKey.openai"), "sk-recovered");
+		const providerConfigs = globalStateValues[PROVIDER_CONFIG_STORAGE_KEY] as ProviderConfigItem[];
+		assert.strictEqual(providerConfigs[0].authMode, "api-key");
+		assert.strictEqual(providerConfigs[0].baseUrl, "https://api.openai.com/v1");
+	});
+
+	test("keeps the dedicated OpenAI OAuth provider in OAuth mode", async () => {
+		globalStateValues[PROVIDER_CONFIG_STORAGE_KEY] = [
+			{
+				provider: "openai-oauth",
+				baseUrl: "https://chatgpt.com/backend-api/codex",
+				apiMode: "openai-responses",
+				authMode: "oauth",
+			},
+		];
+		const view = open();
+
+		await view.handleMessage({
+			type: "updateProvider",
+			provider: "openai-oauth",
+			apiKey: "sk-not-used",
+			apiMode: "openai-responses",
+			authMode: "oauth",
+		});
+
+		assert.strictEqual(stored.has("oaicopilot.apiKey.openai-oauth"), false);
+		const providerConfigs = globalStateValues[PROVIDER_CONFIG_STORAGE_KEY] as ProviderConfigItem[];
+		assert.strictEqual(providerConfigs[0].authMode, "oauth");
+	});
+
 	test("clears the previous commit model when None is selected", async () => {
 		configuration["oaicopilot.models"] = [
 			{ id: "gpt-test", owned_by: "openai", useForCommitGeneration: true },
@@ -358,9 +402,22 @@ suite("configuration panel lifecycle", () => {
 	});
 
 	test("exports without keys by default and requires warning confirmation to include them", async () => {
-		configuration["oaicopilot.models"] = [{ id: "gpt-test", owned_by: "openai", baseUrl: "https://api.openai.com/v1" }];
+		configuration["oaicopilot.models"] = [
+			{
+				id: "gpt-test",
+				owned_by: "openai",
+				baseUrl: "https://api.openai.com/v1",
+				headers: { "Custom-Auth-Token": "model-header-secret", "X-Trace": "model-trace" },
+			},
+		];
 		globalStateValues[PROVIDER_CONFIG_STORAGE_KEY] = [
-			{ provider: "openai", baseUrl: "https://api.openai.com/v1", apiMode: "openai", authMode: "api-key" },
+			{
+				provider: "openai",
+				baseUrl: "https://api.openai.com/v1",
+				apiMode: "openai",
+				authMode: "api-key",
+				headers: { "X-Api-Key": "provider-header-secret", "X-Request-Mode": "provider-mode" },
+			},
 		];
 		stored.set("oaicopilot.apiKey", "generic-secret");
 		stored.set("oaicopilot.apiKey.openai", "provider-secret");
@@ -373,6 +430,10 @@ suite("configuration panel lifecycle", () => {
 		assert.strictEqual("apiKey" in defaultExport, false);
 		assert.strictEqual("providerKeys" in defaultExport, false);
 		assert.strictEqual("providerUsageKeys" in defaultExport, false);
+		assert.strictEqual(defaultExport.models[0].headers["Custom-Auth-Token"], "[REDACTED]");
+		assert.strictEqual(defaultExport.models[0].headers["X-Trace"], "model-trace");
+		assert.strictEqual(defaultExport.providers[0].headers["X-Api-Key"], "[REDACTED]");
+		assert.strictEqual(defaultExport.providers[0].headers["X-Request-Mode"], "provider-mode");
 		assert.deepStrictEqual(warningMessages, []);
 
 		saveDialogUri = vscode.Uri.file("/tmp/export-cancelled.json");
@@ -388,6 +449,8 @@ suite("configuration panel lifecycle", () => {
 		assert.strictEqual(keyExport.apiKey, "generic-secret");
 		assert.strictEqual(keyExport.providerKeys.openai, "provider-secret");
 		assert.strictEqual(keyExport.providerUsageKeys.openai, "usage-secret");
+		assert.strictEqual(keyExport.models[0].headers["Custom-Auth-Token"], "model-header-secret");
+		assert.strictEqual(keyExport.providers[0].headers["X-Api-Key"], "provider-header-secret");
 	});
 
 	test("rejects a malformed import before mutating configuration or secrets", async () => {

@@ -633,7 +633,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			} else if (apiMode === "anthropic") {
 				// Anthropic API mode
 				const anthropicApi = new AnthropicApi(model.id);
-				const anthropicMessages = anthropicApi.convertMessages(workingMessages, modelConfig);
+				const anthropicMessages = anthropicApi.convertMessages(workingMessages, modelConfig, um);
 
 				// requestBody
 				let requestBody: AnthropicRequestBody = {

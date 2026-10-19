@@ -60,6 +60,27 @@ function normalizeAnthropicThinkingType(value: string | undefined): "enabled" | 
 	return undefined;
 }
 
+export function resolveAnthropicThinkingType(
+	um: HFModelItem | undefined
+): "enabled" | "adaptive" | "disabled" | undefined {
+	const configured = normalizeAnthropicThinkingType(um?.thinking?.type);
+	if (configured) {
+		return configured;
+	}
+	const effort = um ? normalizeReasoningEffortForModel(um, um.reasoning_effort) : undefined;
+	if (effort && um && isAnthropicAdaptiveThinkingModel(um) && um.enable_thinking !== false) {
+		return "adaptive";
+	}
+	if (um?.enable_thinking === true) {
+		return isAnthropicAdaptiveThinkingModel(um) && um.thinking_budget === undefined ? "adaptive" : "enabled";
+	}
+	return undefined;
+}
+
+export function isAnthropicManualThinkingEnabled(um: HFModelItem | undefined): boolean {
+	return resolveAnthropicThinkingType(um) === "enabled";
+}
+
 export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBody> {
 	private _systemBlocks: AnthropicTextBlock[] | undefined;
 	private readonly _thinkingBlocksByIndex = new Map<number, { signature?: string; redacted?: string }>();
@@ -76,9 +97,11 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 	 */
 	convertMessages(
 		messages: readonly LanguageModelChatRequestMessage[],
-		modelConfig: { includeReasoningInRequest: boolean } & ContentOptions
+		modelConfig: { includeReasoningInRequest: boolean } & ContentOptions,
+		model?: HFModelItem
 	): AnthropicMessage[] {
 		messages = prepareMessagesForApi(messages, { ...modelConfig, apiMode: "anthropic" });
+		const replayThinking = modelConfig.includeReasoningInRequest || isAnthropicManualThinkingEnabled(model);
 		const out: AnthropicMessage[] = [];
 
 		for (const m of messages) {
@@ -194,7 +217,7 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 
 			// Replay signed thinking blocks verbatim and before the rest of the
 			// assistant turn, as required by Anthropic extended thinking.
-			if (role === "assistant" && modelConfig.includeReasoningInRequest) {
+			if (role === "assistant" && replayThinking) {
 				contentBlocks.push(...thinkingBlocks);
 			}
 
@@ -299,7 +322,7 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			rb.top_k = um.top_k;
 		}
 
-		const configuredThinkingType = normalizeAnthropicThinkingType(um?.thinking?.type);
+		const configuredThinkingType = resolveAnthropicThinkingType(um);
 		if (configuredThinkingType) {
 			rb.thinking =
 				configuredThinkingType === "enabled"
