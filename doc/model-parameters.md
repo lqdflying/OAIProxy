@@ -65,6 +65,8 @@ Thinking configuration for providers that expose an explicit thinking mode:
 
 MiMo uses the same `thinking.type` request-body shape in OpenAI-compatible mode. For MiMo thinking-enabled agent/tool sessions, keep `include_reasoning_in_request: true` so historical assistant `reasoning_content` is sent back in later turns.
 
+Direct DeepSeek (`https://api.deepseek.com`) requires `reasoning_content` on every historical assistant message whenever tools are advertised, including turns that did not call a tool. OAIProxy forwards available thinking text unchanged and adds an empty field when VS Code no longer supplies a reasoning part, preventing DeepSeek's HTTP 400 validation error. It also sends empty assistant `content` for tool-call messages that have no visible text. The empty fallback preserves request validity but cannot reconstruct reasoning that VS Code has already discarded.
+
 Z.AI GLM-5.2 coding-agent sessions should use `reasoning_effort: "max"`, `thinking.type: "enabled"`, `thinking.clear_thinking: false`, and `include_reasoning_in_request: true` so preserved thinking blocks are returned to the provider unchanged. Supported GLM-5.2 effort values are `none`, `minimal`, `low`, `medium`, `high`, `xhigh`, and `max`.
 
 MiniMax M3 supports `thinking.type: "adaptive"` in both OpenAI-compatible and Anthropic-compatible modes. In OpenAI mode, add `extra.reasoning_split: true` to receive thinking separately from answer text.

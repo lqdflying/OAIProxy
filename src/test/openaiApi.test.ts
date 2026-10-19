@@ -211,6 +211,109 @@ suite("openaiApi", () => {
 		assert.strictEqual(messages[0].reasoning_content, undefined);
 	});
 
+	test("fills required direct DeepSeek reasoning and tool-call content", () => {
+		const preset = MODEL_PRESETS.find((item) => item.id === "deepseek-flash");
+		assert.ok(preset);
+		const api = new OpenaiApi(preset.model.id);
+		const messages = api.convertMessages(
+			[
+				{
+					role: vscode.LanguageModelChatMessageRole.Assistant,
+					name: undefined,
+					content: [new vscode.LanguageModelToolCallPart("call-1", "read_file", { path: "README.md" })],
+				} as unknown as vscode.LanguageModelChatRequestMessage,
+				{
+					role: vscode.LanguageModelChatMessageRole.Assistant,
+					name: undefined,
+					content: [new vscode.LanguageModelTextPart("Visible answer.")],
+				} as unknown as vscode.LanguageModelChatRequestMessage,
+			],
+			{ includeReasoningInRequest: true }
+		);
+
+		const body = api.prepareRequestBody({ model: preset.model.id, messages, stream: true }, preset.model, {
+			requestInitiator: "test",
+			toolMode: vscode.LanguageModelChatToolMode.Auto,
+			tools: [{ name: "read_file", description: "Read a file", inputSchema: { type: "object" } }],
+		});
+
+		assert.deepStrictEqual(body.messages, [
+			{
+				role: "assistant",
+				tool_calls: [
+					{
+						id: "call-1",
+						type: "function",
+						function: { name: "read_file", arguments: '{"path":"README.md"}' },
+					},
+				],
+				reasoning_content: "",
+				content: "",
+			},
+			{ role: "assistant", content: "Visible answer.", reasoning_content: "" },
+		]);
+	});
+
+	test("preserves exact direct DeepSeek reasoning text during replay", () => {
+		const preset = MODEL_PRESETS.find((item) => item.id === "deepseek-flash");
+		assert.ok(preset);
+		const reasoning = "  Keep this reasoning exactly as received.  \n";
+		const api = new OpenaiApi(preset.model.id);
+		const messages = api.convertMessages(
+			[
+				{
+					role: vscode.LanguageModelChatMessageRole.Assistant,
+					name: undefined,
+					content: [
+						new vscode.LanguageModelThinkingPart(reasoning),
+						new vscode.LanguageModelTextPart("Visible answer."),
+					],
+				} as unknown as vscode.LanguageModelChatRequestMessage,
+			],
+			{ includeReasoningInRequest: true }
+		);
+		const body = api.prepareRequestBody({ model: preset.model.id, messages, stream: true }, preset.model, {
+			requestInitiator: "test",
+			toolMode: vscode.LanguageModelChatToolMode.Auto,
+			tools: [{ name: "read_file", description: "Read a file", inputSchema: { type: "object" } }],
+		});
+
+		assert.strictEqual((body.messages as Array<Record<string, unknown>>)[0].reasoning_content, reasoning);
+	});
+
+	test("adds DeepSeek replay fields only for thinking-mode tool requests", () => {
+		const preset = MODEL_PRESETS.find((item) => item.id === "deepseek-flash");
+		assert.ok(preset);
+		const api = new OpenaiApi(preset.model.id);
+		const messages = [{ role: "assistant", tool_calls: [{ id: "call-1" }] }];
+		const toolOptions = {
+			requestInitiator: "test",
+			toolMode: vscode.LanguageModelChatToolMode.Auto,
+			tools: [{ name: "read_file", description: "Read a file", inputSchema: { type: "object" } }],
+		};
+
+		const withoutTools = api.prepareRequestBody({ model: preset.model.id, messages, stream: true }, preset.model);
+		const thinkingDisabled = api.prepareRequestBody(
+			{ model: preset.model.id, messages, stream: true },
+			{ ...preset.model, thinking: { type: "disabled" } },
+			toolOptions
+		);
+		const otherProvider = api.prepareRequestBody(
+			{ model: "glm-5.2", messages, stream: true },
+			model({
+				id: "glm-5.2",
+				owned_by: "zai",
+				baseUrl: "https://api.z.ai/api/coding/paas/v4",
+				thinking: { type: "enabled" },
+			}),
+			toolOptions
+		);
+
+		assert.deepStrictEqual(withoutTools.messages, messages);
+		assert.deepStrictEqual(thinkingDisabled.messages, messages);
+		assert.deepStrictEqual(otherProvider.messages, messages);
+	});
+
 	test("uses Kimi K3 request controls and preserves assistant reasoning", () => {
 		const preset = MODEL_PRESETS.find((item) => item.id === "kimi-k3");
 		assert.ok(preset);

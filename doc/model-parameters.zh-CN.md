@@ -65,6 +65,8 @@ OpenRouter 推理配置对象，包含以下选项：
 
 小米 MiMo 在 OpenAI 兼容模式下使用同样的 `thinking.type` 请求体结构。对开启思维链的 MiMo agent/工具调用会话，请保持 `include_reasoning_in_request: true`，以便后续轮次继续传回历史 assistant 的 `reasoning_content`。
 
+DeepSeek 官方直连（`https://api.deepseek.com`）在请求携带工具时，要求每个历史 assistant 消息都包含 `reasoning_content`，包括未调用工具的轮次。OAIProxy 会原样转发可用的思维链文本；当 VS Code 不再提供 reasoning 片段时，会补充空字段，以避免 DeepSeek 返回 HTTP 400 校验错误；对于没有可见文本的工具调用消息，也会补充空的 assistant `content`。空值回退可以保持请求有效，但无法重建 VS Code 已经丢弃的思维链内容。
+
 Z.AI GLM-5.2 编码 agent 会话建议同时使用 `reasoning_effort: "max"`、`thinking.type: "enabled"`、`thinking.clear_thinking: false` 和 `include_reasoning_in_request: true`，以便原样传回保留的思维链内容。GLM-5.2 支持的 effort 值为 `none`、`minimal`、`low`、`medium`、`high`、`xhigh` 和 `max`。
 
 MiniMax M3 在 OpenAI 兼容模式和 Anthropic 兼容模式下都支持 `thinking.type: "adaptive"`。OpenAI 模式下可添加 `extra.reasoning_split: true`，将思维链与回答正文分离接收。

@@ -104,7 +104,7 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 			}
 
 			const joinedText = textParts.join("").trim();
-			const joinedThinking = reasoningParts.join("").trim();
+			const joinedThinking = reasoningParts.join("");
 
 			// process assistant message
 			if (role === "assistant") {
@@ -116,7 +116,7 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 					assistantMessage.content = joinedText;
 				}
 
-				if (modelConfig.includeReasoningInRequest && joinedThinking) {
+				if (modelConfig.includeReasoningInRequest && joinedThinking.length > 0) {
 					assistantMessage.reasoning_content = joinedThinking;
 				}
 
@@ -299,6 +299,8 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 				}
 			}
 		}
+
+		preserveDeepSeekReasoningContent(rb, um);
 
 		if (shouldOmitOpenAIChatCompletionsReasoningEffortWithTools(um, rb)) {
 			delete rb.reasoning_effort;
@@ -823,6 +825,62 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 			reader.releaseLock();
 		}
 	}
+}
+
+function preserveDeepSeekReasoningContent(requestBody: Record<string, unknown>, model: HFModelItem | undefined): void {
+	if (!isDirectDeepSeekModel(model)) {
+		return;
+	}
+	if (!Array.isArray(requestBody.tools) || requestBody.tools.length === 0) {
+		return;
+	}
+	if (!isThinkingEnabled(requestBody, model)) {
+		return;
+	}
+	if (!Array.isArray(requestBody.messages)) {
+		return;
+	}
+
+	for (const message of requestBody.messages) {
+		if (message === null || typeof message !== "object" || Array.isArray(message)) {
+			continue;
+		}
+		const assistantMessage = message as Record<string, unknown>;
+		if (assistantMessage.role !== "assistant") {
+			continue;
+		}
+		if (assistantMessage.reasoning_content === undefined || assistantMessage.reasoning_content === null) {
+			assistantMessage.reasoning_content = "";
+		}
+		if (
+			Array.isArray(assistantMessage.tool_calls) &&
+			assistantMessage.tool_calls.length > 0 &&
+			(assistantMessage.content === undefined || assistantMessage.content === null)
+		) {
+			assistantMessage.content = "";
+		}
+	}
+}
+
+function isDirectDeepSeekModel(model: HFModelItem | undefined): boolean {
+	if (model?.owned_by?.trim().toLowerCase() === "deepseek") {
+		return true;
+	}
+	try {
+		return new URL(model?.baseUrl ?? "").hostname.toLowerCase() === "api.deepseek.com";
+	} catch {
+		return false;
+	}
+}
+
+function isThinkingEnabled(requestBody: Record<string, unknown>, model: HFModelItem | undefined): boolean {
+	const thinking = requestBody.thinking;
+	const requestThinkingEnabled =
+		thinking !== null &&
+		typeof thinking === "object" &&
+		!Array.isArray(thinking) &&
+		(thinking as Record<string, unknown>).type === "enabled";
+	return requestThinkingEnabled || model?.thinking?.type === "enabled" || model?.enable_thinking === true;
 }
 
 function shouldOmitOpenAIChatCompletionsReasoningEffortWithTools(
