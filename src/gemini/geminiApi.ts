@@ -863,7 +863,14 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 							: typeof cand?.finish_reason === "string"
 								? cand.finish_reason
 								: "";
-					if (finishReason && finishReason !== "STOP" && finishReason !== "MAX_TOKENS") {
+					const normalizedFinishReason = finishReason.toUpperCase();
+					if (
+						normalizedFinishReason &&
+						normalizedFinishReason !== "STOP" &&
+						normalizedFinishReason !== "MAX_TOKENS" &&
+						normalizedFinishReason !== "CONTINUATION" &&
+						normalizedFinishReason !== "FINISH_REASON_UNSPECIFIED"
+					) {
 						sawProviderError = true;
 						providerErrorMessage = `candidate finished with ${finishReason}`;
 					}

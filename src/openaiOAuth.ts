@@ -216,18 +216,52 @@ async function persistRefreshedCredentialIfCurrent(
 	});
 }
 
-function getOrStartRefresh(
+async function awaitRefreshWithSignal<T>(
+	promise: Promise<T>,
+	signal: AbortSignal | undefined,
+	message: string
+): Promise<T> {
+	if (!signal) {
+		return await promise;
+	}
+	if (signal.aborted) {
+		throw signal.reason instanceof Error ? signal.reason : new Error(message);
+	}
+	return await new Promise<T>((resolve, reject) => {
+		const onAbort = () => reject(signal.reason instanceof Error ? signal.reason : new Error(message));
+		signal.addEventListener("abort", onAbort, { once: true });
+		promise.then(
+			(value) => {
+				signal.removeEventListener("abort", onAbort);
+				resolve(value);
+			},
+			(error) => {
+				signal.removeEventListener("abort", onAbort);
+				reject(error);
+			}
+		);
+	});
+}
+
+async function getOrStartRefresh(
 	secrets: SecretStorageLike,
 	credential: OpenAIOAuthCredential,
+	generation: number,
 	options: { now?: number; signal?: AbortSignal; fetchImpl?: typeof fetch }
 ): Promise<OpenAIOAuthCredential> {
+	if (options.signal?.aborted) {
+		throw options.signal.reason instanceof Error
+			? options.signal.reason
+			: new Error("OpenAI OAuth refresh cancelled.");
+	}
 	const existing = refreshPromises.get(secrets);
 	if (existing) {
-		return existing;
+		return await awaitRefreshWithSignal(existing, options.signal, "OpenAI OAuth refresh cancelled.");
 	}
-	const generation = getCredentialGeneration(secrets);
-	const promise = refreshOpenAIOAuthCredential(credential, options)
-		.then((refreshed) => persistRefreshedCredentialIfCurrent(secrets, refreshed, generation));
+	const promise = refreshOpenAIOAuthCredential(credential, {
+		now: options.now,
+		fetchImpl: options.fetchImpl,
+	}).then((refreshed) => persistRefreshedCredentialIfCurrent(secrets, refreshed, generation));
 	refreshPromises.set(secrets, promise);
 	void promise
 		.finally(() => {
@@ -236,13 +270,14 @@ function getOrStartRefresh(
 			}
 		})
 		.catch(() => undefined);
-	return promise;
+	return await awaitRefreshWithSignal(promise, options.signal, "OpenAI OAuth refresh cancelled.");
 }
 
 export async function getOpenAIOAuthAccessToken(
 	secrets: SecretStorageLike,
 	options: { now?: number; signal?: AbortSignal; fetchImpl?: typeof fetch } = {}
 ): Promise<string | undefined> {
+	const generation = getCredentialGeneration(secrets);
 	const credential = await loadOpenAIOAuthCredential(secrets);
 	if (!credential) {
 		return undefined;
@@ -252,13 +287,14 @@ export async function getOpenAIOAuthAccessToken(
 		return credential.accessToken;
 	}
 
-	return (await getOrStartRefresh(secrets, credential, options)).accessToken;
+	return (await getOrStartRefresh(secrets, credential, generation, options)).accessToken;
 }
 
 export async function getOpenAIOAuthCredential(
 	secrets: SecretStorageLike,
 	options: { now?: number; signal?: AbortSignal; fetchImpl?: typeof fetch } = {}
 ): Promise<OpenAIOAuthCredential | undefined> {
+	const generation = getCredentialGeneration(secrets);
 	const credential = await loadOpenAIOAuthCredential(secrets);
 	if (!credential) {
 		return undefined;
@@ -267,7 +303,7 @@ export async function getOpenAIOAuthCredential(
 	if (credential.expiresAt > now + EXPIRY_SKEW_MS) {
 		return credential;
 	}
-	return await getOrStartRefresh(secrets, credential, options);
+	return await getOrStartRefresh(secrets, credential, generation, options);
 }
 
 export async function loginOpenAIOAuth(options: OpenAIOAuthLoginOptions = {}): Promise<OpenAIOAuthCredential> {
@@ -452,6 +488,9 @@ async function request(
 	const timer = setTimeout(() => controller.abort(new Error("OpenAI OAuth request timed out.")), REQUEST_TIMEOUT_MS);
 	const onAbort = () => controller.abort(options.signal?.reason ?? new Error("OpenAI OAuth request cancelled."));
 	options.signal?.addEventListener("abort", onAbort, { once: true });
+	if (options.signal?.aborted) {
+		onAbort();
+	}
 	try {
 		const response = await (options.fetchImpl ?? fetch)(url, { ...init, signal: controller.signal });
 		const text = (await response.text()).slice(0, 256 * 1024);

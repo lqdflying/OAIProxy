@@ -168,18 +168,52 @@ async function persistRefreshedCredentialIfCurrent(
 	});
 }
 
-function getOrStartRefresh(
+async function awaitRefreshWithSignal<T>(
+	promise: Promise<T>,
+	signal: AbortSignal | undefined,
+	message: string
+): Promise<T> {
+	if (!signal) {
+		return await promise;
+	}
+	if (signal.aborted) {
+		throw signal.reason instanceof Error ? signal.reason : new Error(message);
+	}
+	return await new Promise<T>((resolve, reject) => {
+		const onAbort = () => reject(signal.reason instanceof Error ? signal.reason : new Error(message));
+		signal.addEventListener("abort", onAbort, { once: true });
+		promise.then(
+			(value) => {
+				signal.removeEventListener("abort", onAbort);
+				resolve(value);
+			},
+			(error) => {
+				signal.removeEventListener("abort", onAbort);
+				reject(error);
+			}
+		);
+	});
+}
+
+async function getOrStartRefresh(
 	secrets: SecretStorageLike,
 	credential: XaiOAuthCredential,
+	generation: number,
 	options: { now?: number; signal?: AbortSignal; fetchImpl?: typeof fetch }
 ): Promise<XaiOAuthCredential> {
+	if (options.signal?.aborted) {
+		throw options.signal.reason instanceof Error
+			? options.signal.reason
+			: new Error("xAI OAuth refresh cancelled.");
+	}
 	const existing = refreshPromises.get(secrets);
 	if (existing) {
-		return existing;
+		return await awaitRefreshWithSignal(existing, options.signal, "xAI OAuth refresh cancelled.");
 	}
-	const generation = getCredentialGeneration(secrets);
-	const promise = refreshXaiOAuthCredential(credential, options)
-		.then((refreshed) => persistRefreshedCredentialIfCurrent(secrets, refreshed, generation));
+	const promise = refreshXaiOAuthCredential(credential, {
+		now: options.now,
+		fetchImpl: options.fetchImpl,
+	}).then((refreshed) => persistRefreshedCredentialIfCurrent(secrets, refreshed, generation));
 	refreshPromises.set(secrets, promise);
 	void promise
 		.finally(() => {
@@ -188,13 +222,14 @@ function getOrStartRefresh(
 			}
 		})
 		.catch(() => undefined);
-	return promise;
+	return await awaitRefreshWithSignal(promise, options.signal, "xAI OAuth refresh cancelled.");
 }
 
 export async function getXaiOAuthAccessToken(
 	secrets: SecretStorageLike,
 	options: { now?: number; signal?: AbortSignal; fetchImpl?: typeof fetch } = {}
 ): Promise<string | undefined> {
+	const generation = getCredentialGeneration(secrets);
 	const credential = await loadXaiOAuthCredential(secrets);
 	if (!credential) {
 		return undefined;
@@ -205,7 +240,7 @@ export async function getXaiOAuthAccessToken(
 		return credential.accessToken;
 	}
 
-	return (await getOrStartRefresh(secrets, credential, options)).accessToken;
+	return (await getOrStartRefresh(secrets, credential, generation, options)).accessToken;
 }
 
 export async function discoverXaiOAuth(
@@ -341,6 +376,9 @@ async function requestJsonResponse(
 	}, REQUEST_TIMEOUT_MS);
 	const onAbort = () => controller.abort(options.signal?.reason ?? new Error("xAI OAuth request cancelled."));
 	options.signal?.addEventListener("abort", onAbort, { once: true });
+	if (options.signal?.aborted) {
+		onAbort();
+	}
 
 	let response: Response;
 	let text: string;

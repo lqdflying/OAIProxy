@@ -67,6 +67,7 @@ export interface FireworksServerlessUsage {
 
 const DEEPSEEK_BALANCE_ENDPOINT = "https://api.deepseek.com/user/balance";
 const KIMI_BALANCE_ENDPOINT = "https://api.moonshot.ai/v1/users/me/balance";
+const KIMI_CN_BALANCE_ENDPOINT = "https://api.moonshot.cn/v1/users/me/balance";
 const MINIMAX_TOKEN_PLAN_ENDPOINT = "https://api.minimax.io/v1/token_plan/remains";
 const OPENAI_COSTS_ENDPOINT = "https://api.openai.com/v1/organization/costs";
 const ANTHROPIC_COST_REPORT_ENDPOINT = "https://api.anthropic.com/v1/organizations/cost_report";
@@ -249,7 +250,9 @@ export async function checkProviderUsage(request: ProviderUsageRequest): Promise
 	} else if (adapter === "fireworks") {
 		parsed = await checkFireworksUsage(request.apiKey);
 	} else if (adapter === "kimi") {
-		parsed = parseKimiBalance(await fetchJson(KIMI_BALANCE_ENDPOINT, "Kimi", bearerHeaders(request.apiKey)));
+		parsed = parseKimiBalance(
+			await fetchJson(buildKimiBalanceEndpoint(request.baseUrl), "Kimi", bearerHeaders(request.apiKey))
+		);
 	} else if (adapter === "minimax") {
 		parsed = parseMiniMaxTokenPlan(
 			await fetchJson(MINIMAX_TOKEN_PLAN_ENDPOINT, "MiniMax", bearerHeaders(request.apiKey))
@@ -324,6 +327,10 @@ export async function checkProviderUsage(request: ProviderUsageRequest): Promise
 
 export function buildTokenRouterWalletEndpoint(_baseUrl?: string): string {
 	return `${TOKENROUTER_MANAGEMENT_BASE_URL}/api/management/self/wallet`;
+}
+
+export function buildKimiBalanceEndpoint(baseUrl?: string): string {
+	return hasHostname(baseUrl, "api.moonshot.cn") ? KIMI_CN_BALANCE_ENDPOINT : KIMI_BALANCE_ENDPOINT;
 }
 
 export function parseDeepSeekBalance(payload: unknown): ParsedProviderUsage {

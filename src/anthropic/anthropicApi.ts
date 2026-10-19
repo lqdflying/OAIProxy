@@ -109,6 +109,29 @@ export function isAnthropicManualThinkingEnabled(um: HFModelItem | undefined): b
 	return resolveAnthropicThinkingType(um) === "enabled";
 }
 
+function hasInterleavedThinkingBeta(um: HFModelItem | undefined): boolean {
+	const headers = um?.headers;
+	if (!headers) {
+		return false;
+	}
+	return Object.entries(headers).some(
+		([name, value]) =>
+			name.toLowerCase() === "anthropic-beta" && String(value).toLowerCase().includes("interleaved-thinking")
+	);
+}
+
+function isOfficialAnthropicEndpoint(baseUrl: string | undefined): boolean {
+	if (!baseUrl) {
+		return true;
+	}
+	try {
+		const url = new URL(baseUrl);
+		return url.protocol === "https:" && url.hostname.toLowerCase() === "api.anthropic.com";
+	} catch {
+		return true;
+	}
+}
+
 export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBody> {
 	private _systemBlocks: AnthropicTextBlock[] | undefined;
 	private readonly _thinkingBlocksByIndex = new Map<number, { signature?: string; redacted?: string }>();
@@ -320,7 +343,8 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 	prepareRequestBody(
 		rb: AnthropicRequestBody,
 		um: HFModelItem | undefined,
-		options?: ProvideLanguageModelChatResponseOptions
+		options?: ProvideLanguageModelChatResponseOptions,
+		baseUrl?: string
 	): AnthropicRequestBody {
 		// max_tokens is required for Anthropic API
 		rb.max_tokens = um?.max_completion_tokens ?? um?.max_tokens ?? rb.max_tokens ?? 4096;
@@ -425,14 +449,14 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		// Anthropic requires an enabled thinking budget of at least 1024 tokens and
 		// strictly below max_tokens. Reject invalid manual configurations locally
 		// instead of relying on a remote 400.
-		if (rb.thinking?.type === "enabled") {
+		if (rb.thinking?.type === "enabled" && isOfficialAnthropicEndpoint(baseUrl)) {
 			const budget = rb.thinking.budget_tokens;
 			if (typeof budget !== "number" || !Number.isFinite(budget) || budget < 1024) {
 				throw new Error(
 					`Invalid Anthropic thinking_budget: ${String(budget)}. When thinking is enabled the budget must be at least 1024 tokens.`
 				);
 			}
-			if (typeof rb.max_tokens === "number" && budget >= rb.max_tokens) {
+			if (!hasInterleavedThinkingBeta(um) && typeof rb.max_tokens === "number" && budget >= rb.max_tokens) {
 				throw new Error(
 					`Invalid Anthropic thinking_budget: ${budget} must be smaller than max_tokens (${rb.max_tokens}).`
 				);
@@ -719,7 +743,7 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			messages: anthropicMessages,
 			stream: true,
 		};
-		requestBody = this.prepareRequestBody(requestBody, model, undefined);
+		requestBody = this.prepareRequestBody(requestBody, model, undefined, baseUrl);
 
 		const headers = CommonApi.prepareHeaders(apiKey, model.apiMode ?? "anthropic", model.headers);
 

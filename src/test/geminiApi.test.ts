@@ -86,6 +86,26 @@ suite("geminiApi", () => {
 		assert.deepStrictEqual(thinking, ["thinkthink"]);
 	});
 
+	test("accepts case-insensitive stop and continuation finish reasons", async () => {
+		const api = new GeminiApi("gemini-finish-reason-model");
+		const parts: vscode.LanguageModelResponsePart2[] = [];
+		const stream = streamFromLines([
+			`data: ${JSON.stringify({ candidates: [{ content: { role: "model", parts: [{ text: "first" }] }, finishReason: "stop" }] })}`,
+			`data: ${JSON.stringify({ candidates: [{ content: { role: "model", parts: [{ text: "second" }] }, finish_reason: "continuation" }] })}`,
+		]);
+
+		await assert.doesNotReject(
+			api.processStreamingResponse(stream, { report: (part) => parts.push(part) }, cancellationToken())
+		);
+
+		assert.deepStrictEqual(
+			parts
+				.filter((part): part is vscode.LanguageModelTextPart => part instanceof vscode.LanguageModelTextPart)
+				.map((part) => part.value),
+			["first", "second"]
+		);
+	});
+
 	test("coalesces image-bearing tool results into an alternating user turn", () => {
 		const api = new GeminiApi("gemini-tool-model");
 		const messages = [

@@ -316,6 +316,41 @@ suite("anthropicApi", () => {
 		);
 	});
 
+	test("allows interleaved thinking budgets at or above max_tokens", () => {
+		const api = new AnthropicApi("claude-interleaved-model");
+		const body = api.prepareRequestBody(
+			{ model: "claude-interleaved-model", messages: [], stream: true },
+			model({
+				id: "claude-interleaved-model",
+				max_tokens: 2048,
+				thinking: { type: "enabled" },
+				thinking_budget: 2048,
+				headers: { "anthropic-beta": "interleaved-thinking-2025-05-14" },
+			}),
+			undefined,
+			"https://api.anthropic.com"
+		);
+
+		assert.deepStrictEqual(body.thinking, { type: "enabled", budget_tokens: 2048 });
+	});
+
+	test("does not apply native Anthropic budget validation to third-party endpoints", () => {
+		const api = new AnthropicApi("minimax-anthropic-model");
+		const body = api.prepareRequestBody(
+			{ model: "minimax-anthropic-model", messages: [], stream: true },
+			model({
+				id: "minimax-anthropic-model",
+				max_tokens: 4096,
+				thinking: { type: "enabled" },
+				thinking_budget: 512,
+			}),
+			undefined,
+			"https://api.minimax.io/anthropic"
+		);
+
+		assert.deepStrictEqual(body.thinking, { type: "enabled", budget_tokens: 512 });
+	});
+
 	test("processes a final data line that has no trailing newline", async () => {
 		const api = new AnthropicApi("claude-final-line-model");
 		const parts: vscode.LanguageModelResponsePart2[] = [];

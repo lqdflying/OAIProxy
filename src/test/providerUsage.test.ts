@@ -2,6 +2,7 @@ import * as assert from "assert";
 import {
 	checkProviderUsage,
 	buildFireworksBillingUsageEndpoint,
+	buildKimiBalanceEndpoint,
 	buildLiteLLMKeyInfoEndpoint,
 	buildTokenRouterWalletEndpoint,
 	formatDuration,
@@ -131,6 +132,38 @@ suite("providerUsage", () => {
 			"Cash balance: 3.00001",
 			"Voucher balance: 46.58893",
 		]);
+	});
+
+	test("routes China Moonshot balance checks to the .cn endpoint", async () => {
+		const originalFetch = globalThis.fetch;
+		let requestUrl = "";
+		globalThis.fetch = (async (input) => {
+			requestUrl = String(input);
+			return new Response(
+				JSON.stringify({
+					code: 0,
+					data: { available_balance: 10, voucher_balance: 6, cash_balance: 4 },
+					scode: "0x0",
+					status: true,
+				}),
+				{ status: 200, headers: { "Content-Type": "application/json" } }
+			);
+		}) as typeof fetch;
+		try {
+			assert.strictEqual(
+				buildKimiBalanceEndpoint("https://api.moonshot.cn/v1"),
+				"https://api.moonshot.cn/v1/users/me/balance"
+			);
+			const result = await checkProviderUsage({
+				provider: "kimi",
+				baseUrl: "https://api.moonshot.cn/v1",
+				apiKey: "kimi-key",
+			});
+			assert.strictEqual(result.adapter, "kimi");
+			assert.strictEqual(requestUrl, "https://api.moonshot.cn/v1/users/me/balance");
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
 	});
 
 	test("parses TokenRouter management wallet response", () => {

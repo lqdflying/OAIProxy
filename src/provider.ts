@@ -641,7 +641,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					messages: anthropicMessages,
 					stream: true,
 				};
-				requestBody = anthropicApi.prepareRequestBody(requestBody, um, options);
+				requestBody = anthropicApi.prepareRequestBody(requestBody, um, options, BASE_URL);
 
 				// send Anthropic chat request with retry
 				const normalizedBaseUrl = BASE_URL.replace(/\/+$/, "");
@@ -846,6 +846,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				}
 				let finalStateSource = stateSource;
 				let previousResponseIdFallback = false;
+				let previousResponseIdNotFoundFallback = false;
 				logRequestBody(url, requestBody, isVisionBridgeRequest, {
 					...statefulMetadata,
 					canUsePreviousResponseId,
@@ -886,16 +887,20 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					// Fall back to sending full history when the previous-response attempt fails.
 					const status = (err as { status?: unknown })?.status;
 					const errorText = String((err as { errorText?: unknown })?.errorText ?? "");
-					const indicatesUnsupportedPreviousResponseId = /previous[_\s-]*response[_\s-]*id/i.test(errorText);
+					const indicatesPreviousResponseId = /previous[_\s-]*response[_\s-]*id/i.test(errorText);
 					const shouldFallback =
 						addedPreviousResponseId &&
 						(status === 400 || status === 404) &&
-						indicatesUnsupportedPreviousResponseId;
+						indicatesPreviousResponseId;
 					if (!shouldFallback) {
 						throw err;
 					}
 
-					this._openaiResponsesPreviousResponseIdUnsupportedScopes.add(responsesStateScopeKey);
+					const previousResponseErrorKind = classifyPreviousResponseIdError(errorText);
+					if (previousResponseErrorKind === "unsupported") {
+						this._openaiResponsesPreviousResponseIdUnsupportedScopes.add(responsesStateScopeKey);
+					}
+					previousResponseIdNotFoundFallback = previousResponseErrorKind === "not-found";
 
 					let fallbackBody: Record<string, unknown> = {
 						model: parsedModelId.baseId,
@@ -921,7 +926,8 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 						usedStatefulDeltaInput: false,
 						stateSource: "none",
 						attemptedStateSource: stateSource,
-						previousResponseIdUnsupported: true,
+						previousResponseIdUnsupported: previousResponseErrorKind === "unsupported",
+						previousResponseIdNotFound: previousResponseIdNotFoundFallback,
 						previousResponseIdFallback: true,
 					});
 					response = await sendRequest(fallbackBody);
@@ -942,8 +948,14 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 
 				// Append a stateful marker so future requests can reuse `previous_response_id` (Copilot Chat style).
 				const responseId = openaiResponsesApi.responseId;
-				const memoryStateStored = !executionOptions.diagnostic && !!responseId && !explicitPreviousResponseId && !previousResponseIdFallback &&
-					!this._openaiResponsesPreviousResponseIdUnsupportedScopes.has(responsesStateScopeKey) &&
+				const responsesStateScopeUnsupported =
+					this._openaiResponsesPreviousResponseIdUnsupportedScopes.has(responsesStateScopeKey);
+				const memoryStateStored =
+					!executionOptions.diagnostic &&
+					!!responseId &&
+					!explicitPreviousResponseId &&
+					(!previousResponseIdFallback || previousResponseIdNotFoundFallback) &&
+					!responsesStateScopeUnsupported &&
 					this._openaiResponsesState.update({
 						stateKey: memoryState.stateKey,
 						responseId,
@@ -1626,6 +1638,19 @@ function containsVideoPayload(value: unknown, depth = 0): boolean {
 	}
 
 	return Object.values(obj).some((item) => containsVideoPayload(item, depth + 1));
+}
+
+function classifyPreviousResponseIdError(errorText: string): "not-found" | "unsupported" | "other" {
+	const notFound =
+		/previous_response_not_found/i.test(errorText) ||
+		/previous[_\s-]*response(?:[_\s-]*id)?[\s\S]{0,120}?(?:not[_\s-]*found|does[_\s-]*not[_\s-]*exist|no[_\s-]*longer[_\s-]*exists|expired)/i.test(errorText);
+	if (notFound) {
+		return "not-found";
+	}
+	if (/(unsupported|not[\s_-]+supported|unknown|unrecognized|unexpected)/i.test(errorText)) {
+		return "unsupported";
+	}
+	return "other";
 }
 
 function createOpenAIResponsesStatefulMarkerPart(

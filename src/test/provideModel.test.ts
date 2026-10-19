@@ -84,6 +84,48 @@ suite("provideModel", () => {
 		}
 	});
 
+	test("keeps tools disabled for plain OpenAI-compatible model lists without provider metadata", async () => {
+		const originalFetch = globalThis.fetch;
+		const originalConfig = vscode.workspace.getConfiguration;
+		vscode.workspace.getConfiguration = (() => ({
+			get: (key: string, fallback: unknown) => {
+				if (key === "oaicopilot.models") {
+					return [];
+				}
+				if (key === "oaicopilot.baseUrl") {
+					return "https://plain-models.example.test/v1";
+				}
+				return fallback;
+			},
+		})) as typeof originalConfig;
+		globalThis.fetch = (async () =>
+			new Response(
+				JSON.stringify({
+					data: [{ id: "plain-model", object: "model" }],
+				}),
+				{ status: 200, headers: { "Content-Type": "application/json" } }
+			)) as typeof fetch;
+
+		try {
+			const infos = await prepareLanguageModelChatInformation(
+				{ silent: true },
+				{} as vscode.CancellationToken,
+				{
+					get: async () => "legacy-key",
+					store: async () => undefined,
+					delete: async () => undefined,
+				} as unknown as vscode.SecretStorage
+			);
+
+			assert.strictEqual(infos.length, 1);
+			assert.strictEqual(infos[0].capabilities.toolCalling, false);
+			assert.strictEqual(infos[0].capabilities.imageInput, false);
+		} finally {
+			globalThis.fetch = originalFetch;
+			vscode.workspace.getConfiguration = originalConfig;
+		}
+	});
+
 	test("uses VS Code 1.126-compatible BYOK picker metadata", () => {
 		assert.deepStrictEqual(MODEL_PICKER_METADATA, {
 			isUserSelectable: true,
