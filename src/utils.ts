@@ -300,7 +300,14 @@ export function createRetryConfig(): RetryConfig {
  * @param token Cancellation token
  * @returns Result of the function execution
  */
-export async function executeWithRetry<T>(fn: () => Promise<T>, retryConfig: RetryConfig): Promise<T> {
+export async function executeWithRetry<T>(
+	fn: () => Promise<T>,
+	retryConfig: RetryConfig,
+	token?: vscode.CancellationToken
+): Promise<T> {
+	if (token?.isCancellationRequested) {
+		throw new vscode.CancellationError();
+	}
 	if (!retryConfig.enabled) {
 		return await fn();
 	}
@@ -346,7 +353,7 @@ export async function executeWithRetry<T>(fn: () => Promise<T>, retryConfig: Ret
 			);
 
 			// Wait for the calculated interval before retrying
-			await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+			await waitForRetryDelay(delayMs, token);
 		}
 	}
 
@@ -356,4 +363,34 @@ export async function executeWithRetry<T>(fn: () => Promise<T>, retryConfig: Ret
 		lastError: lastError ? { name: lastError.name, message: lastError.message } : String(lastError),
 	});
 	throw lastError || new Error("Retry failed");
+}
+
+function waitForRetryDelay(delayMs: number, token: vscode.CancellationToken | undefined): Promise<void> {
+	if (token?.isCancellationRequested) {
+		return Promise.reject(new vscode.CancellationError());
+	}
+
+	return new Promise<void>((resolve, reject) => {
+		let settled = false;
+		const finish = (error?: Error) => {
+			if (settled) {
+				return;
+			}
+			settled = true;
+			if (timeout) {
+				clearTimeout(timeout);
+			}
+			cancellationListener?.dispose();
+			if (error) {
+				reject(error);
+			} else {
+				resolve();
+			}
+		};
+		const timeout = setTimeout(() => finish(), delayMs);
+		const cancellationListener = token?.onCancellationRequested(() => finish(new vscode.CancellationError()));
+		if (token?.isCancellationRequested) {
+			finish(new vscode.CancellationError());
+		}
+	});
 }

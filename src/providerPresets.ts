@@ -34,6 +34,7 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
 		provider: "openai",
 		baseUrl: "https://api.openai.com/v1",
 		apiMode: "openai",
+		authMode: "api-key",
 	},
 	{
 		id: "openai-oauth",

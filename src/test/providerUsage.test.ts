@@ -294,6 +294,157 @@ suite("providerUsage", () => {
 		assert.strictEqual(getProviderUsageSecretKey("OpenAI"), "oaicopilot.usageApiKey.openai");
 	});
 
+	test("requires exact HTTPS provider hosts before selecting redirectable adapters", () => {
+		for (const baseUrl of [
+			"http://api.openai.com/v1",
+			"https://api.openai.com.evil.example/v1",
+			"https://user:password@api.openai.com/v1",
+			"https://api.openai.com/v1#fragment",
+		]) {
+			assert.strictEqual(getProviderUsageAdapter("custom", baseUrl), undefined, baseUrl);
+		}
+		assert.strictEqual(getProviderUsageAdapter("custom", "https://api.deepseek.com.evil.example"), undefined);
+		assert.strictEqual(getProviderUsageAdapter("custom", "https://api.tokenrouter.com.evil.example"), undefined);
+		assert.strictEqual(getProviderUsageAdapter("custom", "https://evil.services.ai.azure.com.attacker.test"), undefined);
+		assert.strictEqual(getProviderUsageAdapter("custom", "https://api.anthropic.com.evil.example"), undefined);
+		assert.strictEqual(getProviderUsageAdapter("openai", "https://chatgpt.com.evil.example/backend-api/codex"), "openai");
+		assert.strictEqual(getProviderUsageAdapter("openai-oauth", "https://chatgpt.com.evil.example/backend-api/codex"), undefined);
+	});
+
+	test("requires confirmation before sending LiteLLM usage credentials to a custom origin", async () => {
+		const originalFetch = globalThis.fetch;
+		let fetchCalled = false;
+		globalThis.fetch = (async () => {
+			fetchCalled = true;
+			return new Response("{}", { status: 200 });
+		}) as typeof fetch;
+		try {
+			await assert.rejects(
+				checkProviderUsage({
+					provider: "litellm",
+					baseUrl: "https://proxy.example.test/api/v1",
+					apiKey: "admin-key",
+					targetApiKey: "provider-key",
+				}),
+				/require confirmation/
+			);
+
+			const confirmedOrigins: string[] = [];
+			await assert.rejects(
+				checkProviderUsage({
+					provider: "litellm",
+					baseUrl: "https://proxy.example.test/api/v1",
+					apiKey: "admin-key",
+					targetApiKey: "provider-key",
+					confirmDestination: async (origin) => {
+						confirmedOrigins.push(origin);
+						return false;
+					},
+				}),
+				/usage check cancelled for https:\/\/proxy\.example\.test/
+			);
+			assert.deepStrictEqual(confirmedOrigins, ["https://proxy.example.test"]);
+			assert.strictEqual(fetchCalled, false);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
+	test("does not request confirmation for the pinned LiteLLM gateway", async () => {
+		const originalFetch = globalThis.fetch;
+		let confirmationCount = 0;
+		globalThis.fetch = (async () => jsonResponse({ key: "sk-test" })) as typeof fetch;
+		try {
+			await checkProviderUsage({
+				provider: "litellm",
+				baseUrl: "https://ai.nube.sh/api/v1",
+				apiKey: "admin-key",
+				targetApiKey: "provider-key",
+				confirmDestination: async () => {
+					confirmationCount += 1;
+					return true;
+				},
+			});
+			assert.strictEqual(confirmationCount, 0);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
+	test("rejects non-HTTPS LiteLLM management endpoints", () => {
+		assert.throws(
+			() => buildLiteLLMKeyInfoEndpoint("http://proxy.example.test/api/v1", "provider-key"),
+			/absolute HTTPS URL/
+		);
+	});
+
+	test("accepts usage responses between 128 and 256 KiB", async () => {
+		const originalFetch = globalThis.fetch;
+		const padding = "x".repeat(180 * 1024);
+		globalThis.fetch = (async () =>
+			jsonResponse({
+				is_available: true,
+				balance_infos: [{ currency: "USD", total_balance: "1", granted_balance: "0", topped_up_balance: "1" }],
+				padding,
+			})) as typeof fetch;
+		try {
+			const result = await checkProviderUsage({
+				provider: "deepseek",
+				baseUrl: "https://api.deepseek.com",
+				apiKey: "test-key",
+			});
+			assert.strictEqual(result.adapter, "deepseek");
+			assert.match(result.summary, /USD 1 available/);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
+	test("rejects usage responses above 256 KiB", async () => {
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = (async () => new Response("x".repeat(256 * 1024 + 1), { status: 200 })) as typeof fetch;
+		try {
+			await assert.rejects(
+				checkProviderUsage({
+					provider: "deepseek",
+					baseUrl: "https://api.deepseek.com",
+					apiKey: "test-key",
+				}),
+				/usage response exceeded the 256 KiB limit/
+			);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
+	test("aborts a LiteLLM usage request after its configured timeout", async () => {
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = ((_input, init) => {
+			return new Promise<Response>((_resolve, reject) => {
+				const signal = init?.signal;
+				signal?.addEventListener(
+					"abort",
+					() => reject(signal.reason ?? new Error("usage request aborted")),
+					{ once: true }
+				);
+			});
+		}) as typeof fetch;
+		try {
+			await assert.rejects(
+				checkProviderUsage({
+					provider: "litellm",
+					baseUrl: "https://ai.nube.sh/api/v1",
+					apiKey: "admin-key",
+					targetApiKey: "provider-key",
+					timeoutMs: 5,
+				}),
+				/timed out after 1 seconds/
+			);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
 	test("parses xAI Grok weekly credit usage", () => {
 		const result = parseXaiGrokUsage({
 			subscription_tier: "SuperGrok Heavy",
@@ -618,7 +769,7 @@ suite("providerUsage", () => {
 			assert.strictEqual(getProviderUsageUnsupportedReason("tokenrouter", "https://api.tokenrouter.com/v1"), undefined);
 			const result = await checkProviderUsage({
 				provider: "tokenrouter",
-				baseUrl: "https://api.tokenrouter.com/v1",
+				baseUrl: "https://attacker.example/v1",
 				apiKey: "mgmt-test",
 			});
 			assert.strictEqual(result.adapter, "tokenrouter");
@@ -639,3 +790,10 @@ suite("providerUsage", () => {
 		assert.strictEqual(formatDuration(-1), "now");
 	});
 });
+
+function jsonResponse(value: unknown, status = 200): Response {
+	return new Response(JSON.stringify(value), {
+		status,
+		headers: { "Content-Type": "application/json" },
+	});
+}

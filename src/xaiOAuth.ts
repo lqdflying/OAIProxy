@@ -21,6 +21,8 @@ const DEFAULT_POLL_INTERVAL_MS = 5_000;
 const MIN_POLL_INTERVAL_MS = 1_000;
 const SLOW_DOWN_INCREMENT_MS = 5_000;
 const EXPIRY_SKEW_MS = 60_000;
+const REQUEST_TIMEOUT_MS = 30_000;
+const RESPONSE_MAX_BYTES = 256 * 1024;
 
 export interface XaiOAuthCredential {
 	accessToken: string;
@@ -63,7 +65,30 @@ interface OAuthTokenResponse {
 	displayName?: string;
 }
 
-let refreshPromise: Promise<XaiOAuthCredential> | undefined;
+const refreshPromises = new WeakMap<SecretStorageLike, Promise<XaiOAuthCredential>>();
+const credentialGenerations = new WeakMap<SecretStorageLike, number>();
+const credentialOperationQueues = new WeakMap<SecretStorageLike, Promise<void>>();
+
+function getCredentialGeneration(secrets: SecretStorageLike): number {
+	return credentialGenerations.get(secrets) ?? 0;
+}
+
+function advanceCredentialGeneration(secrets: SecretStorageLike): void {
+	credentialGenerations.set(secrets, getCredentialGeneration(secrets) + 1);
+}
+
+function queueCredentialOperation<T>(secrets: SecretStorageLike, operation: () => Promise<T>): Promise<T> {
+	const previous = credentialOperationQueues.get(secrets) ?? Promise.resolve();
+	const result = previous.catch(() => undefined).then(operation);
+	credentialOperationQueues.set(
+		secrets,
+		result.then(
+			() => undefined,
+			() => undefined
+		)
+	);
+	return result;
+}
 
 export function isXaiGrokOAuthBaseUrl(baseUrl: string | undefined): boolean {
 	if (!baseUrl) {
@@ -115,11 +140,55 @@ export async function saveXaiOAuthCredential(
 	secrets: SecretStorageLike,
 	credential: XaiOAuthCredential
 ): Promise<void> {
-	await secrets.store(XAI_OAUTH_SECRET_KEY, JSON.stringify(credential));
+	await queueCredentialOperation(secrets, async () => {
+		advanceCredentialGeneration(secrets);
+		await secrets.store(XAI_OAUTH_SECRET_KEY, JSON.stringify(credential));
+	});
 }
 
 export async function clearXaiOAuthCredential(secrets: SecretStorageLike): Promise<void> {
-	await secrets.delete(XAI_OAUTH_SECRET_KEY);
+	await queueCredentialOperation(secrets, async () => {
+		advanceCredentialGeneration(secrets);
+		await secrets.delete(XAI_OAUTH_SECRET_KEY);
+	});
+}
+
+async function persistRefreshedCredentialIfCurrent(
+	secrets: SecretStorageLike,
+	refreshed: XaiOAuthCredential,
+	generation: number
+): Promise<XaiOAuthCredential> {
+	return await queueCredentialOperation(secrets, async () => {
+		if (getCredentialGeneration(secrets) !== generation) {
+			return (await loadXaiOAuthCredential(secrets)) ?? refreshed;
+		}
+		advanceCredentialGeneration(secrets);
+		await secrets.store(XAI_OAUTH_SECRET_KEY, JSON.stringify(refreshed));
+		return refreshed;
+	});
+}
+
+function getOrStartRefresh(
+	secrets: SecretStorageLike,
+	credential: XaiOAuthCredential,
+	options: { now?: number; signal?: AbortSignal; fetchImpl?: typeof fetch }
+): Promise<XaiOAuthCredential> {
+	const existing = refreshPromises.get(secrets);
+	if (existing) {
+		return existing;
+	}
+	const generation = getCredentialGeneration(secrets);
+	const promise = refreshXaiOAuthCredential(credential, options)
+		.then((refreshed) => persistRefreshedCredentialIfCurrent(secrets, refreshed, generation));
+	refreshPromises.set(secrets, promise);
+	void promise
+		.finally(() => {
+			if (refreshPromises.get(secrets) === promise) {
+				refreshPromises.delete(secrets);
+			}
+		})
+		.catch(() => undefined);
+	return promise;
 }
 
 export async function getXaiOAuthAccessToken(
@@ -136,18 +205,7 @@ export async function getXaiOAuthAccessToken(
 		return credential.accessToken;
 	}
 
-	if (!refreshPromise) {
-		refreshPromise = refreshXaiOAuthCredential(credential, options)
-			.then(async (refreshed) => {
-				await saveXaiOAuthCredential(secrets, refreshed);
-				return refreshed;
-			})
-			.finally(() => {
-				refreshPromise = undefined;
-			});
-	}
-
-	return (await refreshPromise).accessToken;
+	return (await getOrStartRefresh(secrets, credential, options)).accessToken;
 }
 
 export async function discoverXaiOAuth(
@@ -275,16 +333,37 @@ async function requestJsonResponse(
 	options: { signal?: AbortSignal; fetchImpl?: typeof fetch },
 	body?: Record<string, string>
 ): Promise<{ ok: boolean; status: number; json: Record<string, unknown> }> {
-	const response = await (options.fetchImpl ?? fetch)(url, {
-		method: body ? "POST" : "GET",
-		headers: {
-			Accept: "application/json",
-			...(body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
-		},
-		...(body ? { body: new URLSearchParams(body).toString() } : {}),
-		signal: options.signal,
-	});
-	const text = await response.text();
+	const controller = new AbortController();
+	let timedOut = false;
+	const timer = setTimeout(() => {
+		timedOut = true;
+		controller.abort(new Error("xAI OAuth request timed out."));
+	}, REQUEST_TIMEOUT_MS);
+	const onAbort = () => controller.abort(options.signal?.reason ?? new Error("xAI OAuth request cancelled."));
+	options.signal?.addEventListener("abort", onAbort, { once: true });
+
+	let response: Response;
+	let text: string;
+	try {
+		response = await (options.fetchImpl ?? fetch)(url, {
+			method: body ? "POST" : "GET",
+			headers: {
+				Accept: "application/json",
+				...(body ? { "Content-Type": "application/x-www-form-urlencoded" } : {}),
+			},
+			...(body ? { body: new URLSearchParams(body).toString() } : {}),
+			signal: controller.signal,
+		});
+		text = await readResponseTextLimited(response);
+	} catch (error) {
+		if (timedOut) {
+			throw new Error(`xAI OAuth request timed out after ${Math.ceil(REQUEST_TIMEOUT_MS / 1000)} seconds.`);
+		}
+		throw error;
+	} finally {
+		clearTimeout(timer);
+		options.signal?.removeEventListener("abort", onAbort);
+	}
 	let json: Record<string, unknown> = {};
 	try {
 		const parsed = JSON.parse(text);
@@ -295,6 +374,34 @@ async function requestJsonResponse(
 		// The status and generic failure are sufficient for malformed responses.
 	}
 	return { ok: response.ok, status: response.status, json };
+}
+
+async function readResponseTextLimited(response: Response): Promise<string> {
+	if (!response.body) {
+		return "";
+	}
+	const reader = response.body.getReader();
+	const decoder = new TextDecoder();
+	let totalBytes = 0;
+	let text = "";
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) {
+				break;
+			}
+			totalBytes += value.byteLength;
+			if (totalBytes > RESPONSE_MAX_BYTES) {
+				await reader.cancel().catch(() => undefined);
+				throw new Error(`xAI OAuth response exceeded the ${Math.floor(RESPONSE_MAX_BYTES / 1024)} KiB limit.`);
+			}
+			text += decoder.decode(value, { stream: true });
+		}
+		text += decoder.decode();
+		return text;
+	} finally {
+		reader.releaseLock();
+	}
 }
 
 function parseOAuthTokenResponse(value: Record<string, unknown>): OAuthTokenResponse {

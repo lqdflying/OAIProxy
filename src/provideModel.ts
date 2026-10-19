@@ -130,8 +130,8 @@ export async function prepareLanguageModelChatInformation(
 					maxInputTokens: tokenLimits.maxInputTokens,
 					maxOutputTokens: tokenLimits.maxOutputTokens,
 					capabilities: {
-						toolCalling: true,
-						imageInput: true,
+						toolCalling: base?.supports_tools === true,
+						imageInput: vision,
 					},
 				} satisfies LanguageModelChatInformation);
 			}

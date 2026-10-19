@@ -8,9 +8,11 @@ import {
 	OPENAI_OAUTH_VERIFICATION_URL,
 	applyOpenAICodexOAuthHeaders,
 	applyOpenAICodexSessionHeaders,
+	clearOpenAIOAuthCredential,
 	getOpenAIOAuthAccessToken,
 	getOpenAIOAuthCredential,
 	isOpenAICodexOAuthBaseUrl,
+	isOpenAICodexOAuthProvider,
 	loginOpenAIOAuth,
 } from "../openaiOAuth";
 import type { SecretStorageLike } from "../xaiOAuth";
@@ -132,7 +134,61 @@ suite("openaiOAuth", () => {
 		assert.ok(refreshed);
 		assert.strictEqual(refreshed.accountId, "acct-test");
 	});
+
+	test("distinguishes the API-key provider from Codex OAuth", () => {
+		assert.strictEqual(isOpenAICodexOAuthProvider("openai"), false);
+		assert.strictEqual(
+			isOpenAICodexOAuthProvider("openai", "api-key", "https://api.openai.com/v1"),
+			false
+		);
+		assert.strictEqual(isOpenAICodexOAuthProvider("openai-oauth"), true);
+		assert.strictEqual(
+			isOpenAICodexOAuthProvider("openai", "oauth", OPENAI_CODEX_RESPONSES_BASE_URL),
+			true
+		);
+	});
+
+	test("does not restore a credential after sign-out during an in-flight refresh", async () => {
+		let stored: string | undefined = JSON.stringify({
+			accessToken: "expired-token",
+			refreshToken: "refresh-token",
+			expiresAt: 1,
+		});
+		const secrets: SecretStorageLike = {
+			get: async () => stored,
+			store: async (_key, value) => {
+				stored = value;
+			},
+			delete: async () => {
+				stored = undefined;
+			},
+		};
+		const started = deferred<void>();
+		const response = deferred<Response>();
+		const pending = getOpenAIOAuthAccessToken(secrets, {
+			now: 10_000,
+			fetchImpl: async () => {
+				started.resolve();
+				return await response.promise;
+			},
+		});
+
+		await started.promise;
+		await clearOpenAIOAuthCredential(secrets);
+		response.resolve(jsonResponse({ access_token: "fresh-token", expires_in: 3600 }));
+
+		assert.strictEqual(await pending, "fresh-token");
+		assert.strictEqual(stored, undefined);
+	});
 });
+
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	const promise = new Promise<T>((done) => {
+		resolve = done;
+	});
+	return { promise, resolve };
+}
 
 function jwt(payload: Record<string, unknown>): string {
 	return `header.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.signature`;

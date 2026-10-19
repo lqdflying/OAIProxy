@@ -5,6 +5,15 @@ import { COPILOT_USAGE_MIME } from "../responseUsage";
 import type { HFModelItem } from "../types";
 
 suite("anthropicApi", () => {
+	function streamFromLines(lines: string[]): ReadableStream<Uint8Array> {
+		return new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(new TextEncoder().encode(lines.join("\n")));
+				controller.close();
+			},
+		});
+	}
+
 	test("maps MiniMax M3 video data parts to Anthropic video blocks", () => {
 		const api = new AnthropicApi("MiniMax-M3");
 		const messages = api.convertMessages(
@@ -95,6 +104,121 @@ suite("anthropicApi", () => {
 			prompt_tokens_details: { cached_tokens: 100000 },
 			cache_creation_input_tokens: 20,
 		});
+	});
+
+	test("replays signed thinking before assistant text", () => {
+		const api = new AnthropicApi("claude-thinking-model");
+		const messages = api.convertMessages(
+			[
+				{
+					role: vscode.LanguageModelChatMessageRole.Assistant,
+					name: undefined,
+					content: [
+						new vscode.LanguageModelTextPart("answer"),
+						new vscode.LanguageModelThinkingPart("reasoning", "thinking-1", { signature: "sig-1" }),
+					],
+				} as unknown as vscode.LanguageModelChatRequestMessage,
+			],
+			{ includeReasoningInRequest: true }
+		);
+
+		assert.deepStrictEqual(messages[0].content, [
+			{ type: "thinking", thinking: "reasoning", signature: "sig-1" },
+			{ type: "text", text: "answer" },
+		]);
+	});
+
+	test("replays redacted thinking and never fabricates missing thinking", () => {
+		const api = new AnthropicApi("claude-thinking-model");
+		const [redacted, plain] = api.convertMessages(
+			[
+				{
+					role: vscode.LanguageModelChatMessageRole.Assistant,
+					name: undefined,
+					content: [
+						new vscode.LanguageModelThinkingPart("", "thinking-redacted", { redactedThinking: "opaque-data" }),
+						new vscode.LanguageModelTextPart("redacted answer"),
+					],
+				} as unknown as vscode.LanguageModelChatRequestMessage,
+				{
+					role: vscode.LanguageModelChatMessageRole.Assistant,
+					name: undefined,
+					content: [new vscode.LanguageModelTextPart("plain answer")],
+				} as unknown as vscode.LanguageModelChatRequestMessage,
+			],
+			{ includeReasoningInRequest: true }
+		);
+
+		assert.deepStrictEqual(redacted.content, [
+			{ type: "redacted_thinking", data: "opaque-data" },
+			{ type: "text", text: "redacted answer" },
+		]);
+		assert.deepStrictEqual(plain.content, [{ type: "text", text: "plain answer" }]);
+	});
+
+	test("prefers max_completion_tokens and rejects invalid thinking budgets", () => {
+		const api = new AnthropicApi("claude-budget-model");
+		const body = api.prepareRequestBody(
+			{ model: "claude-budget-model", messages: [], stream: true },
+			model({
+				id: "claude-budget-model",
+				max_tokens: 8192,
+				max_completion_tokens: 2048,
+			})
+		);
+		assert.strictEqual(body.max_tokens, 2048);
+
+		assert.throws(
+			() =>
+				api.prepareRequestBody(
+					{ model: "claude-budget-model", messages: [], stream: true },
+					model({
+						id: "claude-budget-model",
+						max_tokens: 4096,
+						thinking: { type: "enabled" },
+						thinking_budget: 512,
+					})
+				),
+			/at least 1024 tokens/
+		);
+		assert.throws(
+			() =>
+				api.prepareRequestBody(
+					{ model: "claude-budget-model", messages: [], stream: true },
+					model({
+						id: "claude-budget-model",
+						max_tokens: 8192,
+						max_completion_tokens: 2048,
+						thinking: { type: "enabled" },
+						thinking_budget: 2048,
+					})
+				),
+			/smaller than max_tokens \(2048\)/
+		);
+	});
+
+	test("processes a final data line that has no trailing newline", async () => {
+		const api = new AnthropicApi("claude-final-line-model");
+		const parts: vscode.LanguageModelResponsePart2[] = [];
+		const stream = streamFromLines([
+			`data: ${JSON.stringify({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: "final answer" } })}`,
+		]);
+
+		await api.processStreamingResponse(stream, { report: (part) => parts.push(part) }, cancellationToken());
+
+		assert.ok(parts.some((part) => part instanceof vscode.LanguageModelTextPart && part.value === "final answer"));
+	});
+
+	test("rejects an Anthropic provider error received after HTTP 200", async () => {
+		const api = new AnthropicApi("claude-error-model");
+		const stream = streamFromLines([
+			`data: ${JSON.stringify({ type: "error", error: { type: "overloaded_error", message: "overloaded" } })}`,
+		]);
+
+		await assert.rejects(
+			api.processStreamingResponse(stream, { report() {} }, cancellationToken()),
+			/Anthropic streaming error: overloaded_error: overloaded/
+		);
 	});
 });
 

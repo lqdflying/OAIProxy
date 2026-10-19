@@ -32,9 +32,16 @@ import {
 
 import { CommonApi } from "../commonApi";
 import { logger } from "../logger";
-import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "../vscodeCompat";
+import {
+	createLanguageModelThinkingPart,
+	getLanguageModelThinkingId,
+	getLanguageModelThinkingMetadata,
+	getLanguageModelThinkingText,
+	isLanguageModelThinkingPart,
+} from "../vscodeCompat";
 import { isAnthropicAdaptiveThinkingModel, normalizeReasoningEffortForModel } from "../reasoningEffort";
 import { ResponseUsageAccumulator } from "../responseUsage";
+import { createProviderStreamError } from "../streamUtils";
 import {
 	applyCacheControl,
 	createAnthropicCacheControl,
@@ -55,6 +62,7 @@ function normalizeAnthropicThinkingType(value: string | undefined): "enabled" | 
 
 export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBody> {
 	private _systemBlocks: AnthropicTextBlock[] | undefined;
+	private readonly _thinkingBlocksByIndex = new Map<number, { signature?: string; redacted?: string }>();
 
 	constructor(modelId: string) {
 		super(modelId);
@@ -80,7 +88,25 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			const videoParts: vscode.LanguageModelDataPart[] = [];
 			const toolCalls: AnthropicToolUseBlock[] = [];
 			const toolResults: AnthropicToolResultBlock[] = [];
-			const thinkingParts: string[] = [];
+			const thinkingBlocks: AnthropicContentBlock[] = [];
+			let pendingThinking: { id?: string; text: string; signature?: string } | undefined;
+			const closePendingThinking = () => {
+				if (!pendingThinking) {
+					return;
+				}
+				if (pendingThinking.signature) {
+					thinkingBlocks.push({
+						type: "thinking",
+						thinking: pendingThinking.text,
+						signature: pendingThinking.signature,
+					});
+				} else if (pendingThinking.text) {
+					// Replaying a thinking block without its provider signature is
+					// invalid, so drop it instead of fabricating one.
+					logger.debug("anthropic.thinking.replaySkipped", { reason: "missing signature" });
+				}
+				pendingThinking = undefined;
+			};
 			let cacheControl: AnthropicCacheControl | null = null;
 
 			for (const part of m.content ?? []) {
@@ -114,12 +140,31 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 						content,
 					});
 				} else if (isLanguageModelThinkingPart(part)) {
-					thinkingParts.push(getLanguageModelThinkingText(part));
+					const metadata = getLanguageModelThinkingMetadata(part);
+					const redactedThinking = metadata?.redactedThinking;
+					if (typeof redactedThinking === "string" && redactedThinking) {
+						closePendingThinking();
+						thinkingBlocks.push({ type: "redacted_thinking", data: redactedThinking });
+						continue;
+					}
+
+					const text = getLanguageModelThinkingText(part);
+					const id = getLanguageModelThinkingId(part);
+					const signature = typeof metadata?.signature === "string" ? metadata.signature : undefined;
+					const sameBlock = pendingThinking && ((id && pendingThinking.id === id) || (!id && !pendingThinking.id));
+					if (!sameBlock) {
+						closePendingThinking();
+						pendingThinking = { id, text, signature };
+					} else if (pendingThinking) {
+						pendingThinking.text += text;
+						pendingThinking.signature = signature ?? pendingThinking.signature;
+					}
 				}
 			}
 
+			closePendingThinking();
+
 			const joinedText = textParts.join("").trim();
-			const joinedThinking = thinkingParts.join("").trim();
 
 			// Handle system messages separately (Anthropic uses top-level system field)
 			if (role === "system") {
@@ -146,6 +191,12 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 
 			// Build content blocks for user/assistant messages
 			const contentBlocks: AnthropicContentBlock[] = [];
+
+			// Replay signed thinking blocks verbatim and before the rest of the
+			// assistant turn, as required by Anthropic extended thinking.
+			if (role === "assistant" && modelConfig.includeReasoningInRequest) {
+				contentBlocks.push(...thinkingBlocks);
+			}
 
 			// Add text content
 			if (joinedText) {
@@ -178,14 +229,6 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 						media_type: videoPart.mimeType,
 						data: base64Data,
 					},
-				});
-			}
-
-			// Add thinking content for assistant messages
-			if (role === "assistant" && modelConfig.includeReasoningInRequest) {
-				contentBlocks.push({
-					type: "thinking",
-					thinking: joinedThinking || "Next step.",
 				});
 			}
 
@@ -229,7 +272,7 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		options?: ProvideLanguageModelChatResponseOptions
 	): AnthropicRequestBody {
 		// max_tokens is required for Anthropic API
-		rb.max_tokens = um?.max_tokens ?? rb.max_tokens ?? 4096;
+		rb.max_tokens = um?.max_completion_tokens ?? um?.max_tokens ?? rb.max_tokens ?? 4096;
 
 		// Add system content if we extracted it
 		if (this._systemBlocks) {
@@ -328,6 +371,23 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			);
 		}
 
+		// Anthropic requires an enabled thinking budget of at least 1024 tokens and
+		// strictly below max_tokens. Reject invalid manual configurations locally
+		// instead of relying on a remote 400.
+		if (rb.thinking?.type === "enabled") {
+			const budget = rb.thinking.budget_tokens;
+			if (typeof budget !== "number" || !Number.isFinite(budget) || budget < 1024) {
+				throw new Error(
+					`Invalid Anthropic thinking_budget: ${String(budget)}. When thinking is enabled the budget must be at least 1024 tokens.`
+				);
+			}
+			if (typeof rb.max_tokens === "number" && budget >= rb.max_tokens) {
+				throw new Error(
+					`Invalid Anthropic thinking_budget: ${budget} must be smaller than max_tokens (${rb.max_tokens}).`
+				);
+			}
+		}
+
 		return rb;
 	}
 
@@ -376,6 +436,44 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		const responseUsage = new ResponseUsageAccumulator("anthropic");
 		let completed = false;
 		let sawProviderError = false;
+		let providerErrorMessage: string | undefined;
+
+		const handleLine = async (line: string): Promise<void> => {
+			if (line.trim() === "") {
+				return;
+			}
+			if (!line.startsWith("data:")) {
+				return;
+			}
+
+			const data = line.slice(5).trim();
+			logger.debug("anthropic.stream.chunk", { modelId, data });
+			if (data === "[DONE]") {
+				// Do not throw on [DONE]; any incomplete/empty buffers are ignored.
+				await this.flushToolCallBuffers(progress, /*throwOnInvalid*/ false);
+				return;
+			}
+
+			try {
+				const chunk: AnthropicStreamChunk = JSON.parse(data);
+				responseUsage.record(chunk);
+				this.observeResponseCompletion(chunk);
+				if (chunk.type === "error") {
+					sawProviderError = true;
+					providerErrorMessage = [chunk.error?.type, chunk.error?.message]
+						.filter((value): value is string => !!value)
+						.join(": ") || providerErrorMessage;
+				}
+				await this.processAnthropicChunk(chunk, progress);
+			} catch (e) {
+				console.error("[Anthropic Provider] Failed to parse SSE chunk:", e, "data:", data);
+				logger.error("anthropic.stream.chunk.error", {
+					modelId,
+					error: e instanceof Error ? e.message : String(e),
+					data,
+				});
+			}
+		};
 
 		try {
 			while (true) {
@@ -394,38 +492,18 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 				buffer = lines.pop() || "";
 
 				for (const line of lines) {
-					if (line.trim() === "") {
-						continue;
-					}
-					if (!line.startsWith("data:")) {
-						continue;
-					}
-
-					const data = line.slice(5).trim();
-					logger.debug("anthropic.stream.chunk", { modelId, data });
-					if (data === "[DONE]") {
-						// Do not throw on [DONE]; any incomplete/empty buffers are ignored.
-						await this.flushToolCallBuffers(progress, /*throwOnInvalid*/ false);
-						continue;
-					}
-
-					try {
-						const chunk: AnthropicStreamChunk = JSON.parse(data);
-						responseUsage.record(chunk);
-						this.observeResponseCompletion(chunk);
-						if (chunk.type === "error") {
-							sawProviderError = true;
-						}
-						await this.processAnthropicChunk(chunk, progress);
-					} catch (e) {
-						console.error("[Anthropic Provider] Failed to parse SSE chunk:", e, "data:", data);
-						logger.error("anthropic.stream.chunk.error", {
-							modelId,
-							error: e instanceof Error ? e.message : String(e),
-							data,
-						});
-					}
+					await handleLine(line);
 				}
+			}
+			buffer += decoder.decode();
+			if (buffer.length > 0) {
+				for (const line of buffer.split("\n")) {
+					await handleLine(line);
+				}
+				buffer = "";
+			}
+			if (sawProviderError && !token.isCancellationRequested) {
+				throw createProviderStreamError("Anthropic", providerErrorMessage);
 			}
 			completed = !token.isCancellationRequested && !sawProviderError;
 			logger.debug("anthropic.stream.done", { modelId });
@@ -485,10 +563,18 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		if (chunk.type === "content_block_start" && chunk.content_block) {
 			// Start of a content block
 			if (chunk.content_block.type === "thinking") {
+				const idx = (chunk.index as number) ?? 0;
+				this._thinkingBlocksByIndex.set(idx, {});
+				// Each thinking block gets its own part id so the signature can be
+				// associated with exactly this block after it closes.
+				this._currentThinkingId = this.generateThinkingId();
 				// Start thinking block
 				if (chunk.content_block.thinking) {
 					this.bufferThinkingContent(chunk.content_block.thinking, progress);
 				}
+			} else if (chunk.content_block.type === "redacted_thinking") {
+				const idx = (chunk.index as number) ?? 0;
+				this._thinkingBlocksByIndex.set(idx, { redacted: chunk.content_block.data ?? "" });
 			} else if (chunk.content_block.type === "tool_use") {
 				// Start tool call block
 				// SSEProcessor-like: if first tool call appears after text, emit a whitespace
@@ -527,10 +613,34 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 					await this.tryEmitBufferedToolCall(idx, progress);
 				}
 			} else if (chunk.delta.type === "signature_delta" && chunk.delta.signature) {
-				// Signature for thinking block - ignore for now
-				// Could store for verification if needed later
+				const idx = (chunk.index as number) ?? 0;
+				const block = this._thinkingBlocksByIndex.get(idx);
+				if (block) {
+					block.signature = chunk.delta.signature;
+				}
 			}
 		} else if (chunk.type === "content_block_stop" || chunk.type === "message_stop") {
+			const idx = (chunk.index as number) ?? 0;
+			const thinkingBlock = this._thinkingBlocksByIndex.get(idx);
+			if (thinkingBlock) {
+				if (thinkingBlock.redacted) {
+					progress.report(
+						createLanguageModelThinkingPart("", this._currentThinkingId ?? this.generateThinkingId(), {
+							redactedThinking: thinkingBlock.redacted,
+						})
+					);
+				} else {
+					this.flushThinkingBuffer(progress);
+					if (thinkingBlock.signature && this._currentThinkingId) {
+						progress.report(
+							createLanguageModelThinkingPart("", this._currentThinkingId, {
+								signature: thinkingBlock.signature,
+							})
+						);
+					}
+				}
+				this._thinkingBlocksByIndex.delete(idx);
+			}
 			// End of message - ensure thinking is ended and flush all tool calls
 			await this.flushToolCallBuffers(progress, false);
 			this.reportEndThinking(progress);
@@ -542,7 +652,8 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		systemPrompt: string,
 		messages: { role: string; content: string }[],
 		baseUrl: string,
-		apiKey: string
+		apiKey: string,
+		signal?: AbortSignal
 	): AsyncGenerator<{ type: "text"; text: string }> {
 		// For Anthropic, we need to separate system prompt from messages
 		const anthropicMessages: AnthropicMessage[] = messages.map((m) => ({
@@ -573,6 +684,7 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 			method: "POST",
 			headers,
 			body: JSON.stringify(requestBody),
+			signal,
 		});
 
 		if (!response.ok) {
@@ -589,6 +701,38 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 		const decoder = new TextDecoder();
 		let buffer = "";
 
+		const handleLine = async function* (line: string): AsyncGenerator<{ type: "text"; text: string }> {
+			if (line.trim() === "") {
+				return;
+			}
+			if (!line.startsWith("data:")) {
+				return;
+			}
+
+			const data = line.slice(5).trim();
+			if (data === "[DONE]") {
+				return;
+			}
+
+			try {
+				const chunk: AnthropicStreamChunk = JSON.parse(data);
+
+				// Anthropic streaming response
+				if (chunk.type === "content_block_delta" && chunk.delta?.type === "text_delta" && chunk.delta?.text) {
+					yield { type: "text", text: chunk.delta.text };
+				}
+
+				// Handle error responses
+				if (chunk.type === "error") {
+					const errorType = chunk.error?.type || "unknown_error";
+					const errorMessage = chunk.error?.message || "Anthropic API streaming error";
+					console.error(`[Anthropic Provider] Streaming error: ${errorType} - ${errorMessage}`);
+				}
+			} catch (e) {
+				console.error("[Anthropic Provider] Failed to parse SSE chunk:", e, "data:", data);
+			}
+		};
+
 		try {
 			while (true) {
 				const { done, value } = await reader.read();
@@ -601,43 +745,18 @@ export class AnthropicApi extends CommonApi<AnthropicMessage, AnthropicRequestBo
 				buffer = lines.pop() || "";
 
 				for (const line of lines) {
-					if (line.trim() === "") {
-						continue;
-					}
-					if (!line.startsWith("data:")) {
-						continue;
-					}
-
-					const data = line.slice(5).trim();
-					if (data === "[DONE]") {
-						continue;
-					}
-
-					try {
-						const chunk: AnthropicStreamChunk = JSON.parse(data);
-
-						// Anthropic streaming response
-						if (chunk.type === "content_block_delta" && chunk.delta?.type === "text_delta" && chunk.delta?.text) {
-							yield { type: "text", text: chunk.delta.text };
-						}
-
-						// Handle message stop
-						if (chunk.type === "message_stop") {
-							break;
-						}
-
-						// Handle error responses
-						if (chunk.type === "error") {
-							const errorType = chunk.error?.type || "unknown_error";
-							const errorMessage = chunk.error?.message || "Anthropic API streaming error";
-							console.error(`[Anthropic Provider] Streaming error: ${errorType} - ${errorMessage}`);
-						}
-					} catch (e) {
-						console.error("[Anthropic Provider] Failed to parse SSE chunk:", e, "data:", data);
-					}
+					yield* handleLine(line);
 				}
 			}
+			buffer += decoder.decode();
+			if (buffer.length > 0) {
+				for (const line of buffer.split("\n")) {
+					yield* handleLine(line);
+				}
+				buffer = "";
+			}
 		} finally {
+			await reader.cancel().catch(() => undefined);
 			reader.releaseLock();
 		}
 	}

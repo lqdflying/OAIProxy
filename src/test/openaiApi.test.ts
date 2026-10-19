@@ -658,6 +658,61 @@ suite("openaiApi", () => {
 			!parts.some((part) => part instanceof vscode.LanguageModelDataPart && part.mimeType === COPILOT_USAGE_MIME)
 		);
 	});
+
+	test("processes a final data line that has no trailing newline", async () => {
+		const api = new OpenaiApi("buffered-model");
+		const parts: vscode.LanguageModelResponsePart2[] = [];
+		const stream = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(
+					new TextEncoder().encode(
+						'data: {"choices":[{"delta":{"content":"final answer"},"finish_reason":"stop"}]}'
+					)
+				);
+				controller.close();
+			},
+		});
+
+		await api.processStreamingResponse(stream, { report: (part) => parts.push(part) }, cancellationToken());
+
+		assert.ok(parts.some((part) => part instanceof vscode.LanguageModelTextPart && part.value === "final answer"));
+	});
+
+	test("rejects when the stream reports a provider error after returning 200", async () => {
+		const api = new OpenaiApi("error-model");
+		const stream = new ReadableStream<Uint8Array>({
+			start(controller) {
+				controller.enqueue(
+					new TextEncoder().encode(
+						'data: {"error":{"type":"server_error","message":"upstream overloaded"}}\n'
+					)
+				);
+				controller.close();
+			},
+		});
+
+		await assert.rejects(
+			api.processStreamingResponse(stream, { report() {} }, cancellationToken()),
+			/OpenAI streaming error: server_error: upstream overloaded/
+		);
+	});
+
+	test("does not emit both reasoning_effort and nested reasoning.effort", () => {
+		const api = new OpenaiApi("reasoning-model");
+		const body = api.prepareRequestBody(
+			{ model: "reasoning-model", messages: [], stream: true },
+			model({
+				id: "reasoning-model",
+				owned_by: "openai",
+				apiMode: "openai",
+				reasoning_effort: "high",
+				reasoning: { effort: "low", exclude: true },
+			})
+		);
+
+		assert.strictEqual(body.reasoning_effort, "high");
+		assert.deepStrictEqual(body.reasoning, { exclude: true });
+	});
 });
 
 function model(overrides: Partial<HFModelItem>): HFModelItem {
@@ -666,4 +721,11 @@ function model(overrides: Partial<HFModelItem>): HFModelItem {
 		owned_by: "provider",
 		...overrides,
 	};
+}
+
+function cancellationToken(): vscode.CancellationToken {
+	return {
+		isCancellationRequested: false,
+		onCancellationRequested: () => ({ dispose() {} }),
+	} as unknown as vscode.CancellationToken;
 }

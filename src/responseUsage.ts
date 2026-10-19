@@ -30,6 +30,7 @@ interface AccumulatedUsage {
 	cacheReadInputTokens?: number;
 	cacheCreationInputTokens?: number;
 	reasoningTokens?: number;
+	thoughtsTokens?: number;
 }
 
 export class ResponseUsageAccumulator {
@@ -76,7 +77,9 @@ export class ResponseUsageAccumulator {
 			return null;
 		}
 
-		const completionTokens = this._usage.outputTokens ?? 0;
+		const completionTokens =
+			(this._usage.outputTokens ?? 0) +
+			(this._source === "gemini" ? (this._usage.thoughtsTokens ?? 0) : 0);
 		const totalTokens = this._source === "anthropic"
 			? promptTokens + completionTokens
 			: this._usage.totalTokens ?? promptTokens + completionTokens;
@@ -128,6 +131,19 @@ export class ResponseUsageAccumulator {
 		}
 		assignCount(this._usage, "cachedTokens", usage.cached_tokens);
 
+		// DeepSeek reports prompt-cache usage through dedicated fields instead of
+		// `prompt_tokens_details.cached_tokens`, and its documented example leaves
+		// the generic field present as zero.
+		const cacheHit = readCount(usage.prompt_cache_hit_tokens);
+		if (cacheHit !== undefined && (this._usage.cachedTokens === undefined || this._usage.cachedTokens === 0)) {
+			this._usage.cachedTokens = cacheHit;
+		} else if (this._usage.cachedTokens === undefined) {
+			const cacheMiss = readCount(usage.prompt_cache_miss_tokens);
+			if (cacheMiss !== undefined && this._usage.inputTokens !== undefined && cacheMiss <= this._usage.inputTokens) {
+				this._usage.cachedTokens = this._usage.inputTokens - cacheMiss;
+			}
+		}
+
 		const completionDetails =
 			asObject(usage.completion_tokens_details) ?? asObject(usage.output_tokens_details);
 		if (completionDetails) {
@@ -158,6 +174,16 @@ export class ResponseUsageAccumulator {
 			usage.cachedContentTokenCount,
 			usage.cached_content_token_count
 		);
+		// Gemini's `candidatesTokenCount` excludes thinking tokens while
+		// `totalTokenCount` includes them. Report thinking as part of completion so
+		// prompt + completion stays consistent with the reported total.
+		const thoughtsTokens = readCount(usage.thoughtsTokenCount) ?? readCount(usage.thoughts_token_count);
+		if (thoughtsTokens !== undefined) {
+			assignCount(this._usage, "thoughtsTokens", thoughtsTokens);
+			if (this._usage.reasoningTokens === undefined) {
+				this._usage.reasoningTokens = thoughtsTokens;
+			}
+		}
 	}
 
 	private getPromptTokens(): number | undefined {
@@ -199,6 +225,10 @@ function assignCount<K extends keyof AccumulatedUsage>(
 	}
 	target[key] = Math.trunc(value);
 	return true;
+}
+
+function readCount(value: unknown): number | undefined {
+	return typeof value === "number" && Number.isFinite(value) && value >= 0 ? Math.trunc(value) : undefined;
 }
 
 function asObject(value: unknown): Record<string, unknown> | null {

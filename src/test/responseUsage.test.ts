@@ -112,6 +112,66 @@ suite("responseUsage", () => {
 		});
 	});
 
+	test("includes repeated Gemini thought counts in completion usage without double counting", () => {
+		const accumulator = new ResponseUsageAccumulator("gemini");
+		const metadata = {
+			promptTokenCount: 1000,
+			candidatesTokenCount: 50,
+			thoughtsTokenCount: 500,
+			totalTokenCount: 1550,
+		};
+		accumulator.record({ usageMetadata: metadata });
+		accumulator.record({ usageMetadata: metadata });
+
+		assert.deepStrictEqual(accumulator.toUsage(), {
+			prompt_tokens: 1000,
+			completion_tokens: 550,
+			total_tokens: 1550,
+			prompt_tokens_details: { cached_tokens: 0 },
+			completion_tokens_details: { reasoning_tokens: 500 },
+		});
+	});
+
+	test("uses DeepSeek prompt cache hit counts when the generic cache field is zero", () => {
+		const accumulator = new ResponseUsageAccumulator("openai");
+		accumulator.record({
+			usage: {
+				prompt_tokens: 1000,
+				completion_tokens: 25,
+				total_tokens: 1025,
+				prompt_tokens_details: { cached_tokens: 0 },
+				prompt_cache_hit_tokens: 800,
+				prompt_cache_miss_tokens: 200,
+			},
+		});
+
+		assert.deepStrictEqual(accumulator.toUsage(), {
+			prompt_tokens: 1000,
+			completion_tokens: 25,
+			total_tokens: 1025,
+			prompt_tokens_details: { cached_tokens: 800 },
+		});
+	});
+
+	test("derives DeepSeek cached tokens from the miss count when no hit field is present", () => {
+		const accumulator = new ResponseUsageAccumulator("openai");
+		accumulator.record({
+			usage: {
+				prompt_tokens: 1000,
+				completion_tokens: 25,
+				total_tokens: 1025,
+				prompt_cache_miss_tokens: 250,
+			},
+		});
+
+		assert.deepStrictEqual(accumulator.toUsage(), {
+			prompt_tokens: 1000,
+			completion_tokens: 25,
+			total_tokens: 1025,
+			prompt_tokens_details: { cached_tokens: 750 },
+		});
+	});
+
 	test("normalizes Ollama final counters and computes total", () => {
 		const accumulator = new ResponseUsageAccumulator("ollama");
 		accumulator.record({ prompt_eval_count: 90, eval_count: 10 });

@@ -18,6 +18,7 @@ import { CommonApi } from "../commonApi";
 import { logger } from "../logger";
 import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "../vscodeCompat";
 import { ResponseUsageAccumulator } from "../responseUsage";
+import { createProviderStreamError } from "../streamUtils";
 
 export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 	constructor(modelId: string) {
@@ -115,25 +116,41 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 		options?: ProvideLanguageModelChatResponseOptions
 	): OllamaRequestBody {
 		// Add model options if configured
+		const maxOutputTokens = um?.max_completion_tokens ?? um?.max_tokens;
 		if (
 			um?.temperature !== undefined ||
 			um?.top_p !== undefined ||
 			um?.top_k !== undefined ||
-			um?.max_tokens !== undefined
+			maxOutputTokens !== undefined
 		) {
 			rb.options = {};
-			if (um.temperature !== undefined && um.temperature !== null) {
+			if (um?.temperature !== undefined && um.temperature !== null) {
 				rb.options.temperature = um.temperature;
 			}
-			if (um.top_p !== undefined && um.top_p !== null) {
+			if (um?.top_p !== undefined && um.top_p !== null) {
 				rb.options.top_p = um.top_p;
 			}
-			if (um.top_k !== undefined) {
+			if (um?.top_k !== undefined) {
 				rb.options.top_k = um.top_k;
 			}
-			if (um.max_tokens !== undefined) {
-				rb.options.num_predict = um.max_tokens;
+			if (maxOutputTokens !== undefined) {
+				rb.options.num_predict = maxOutputTokens;
 			}
+		}
+
+		// Map explicit thinking controls to Ollama's `think` field. Leave the field
+		// unset when the configuration does not express an intent so the model/server
+		// default is preserved. `extra.think` is applied below and takes precedence.
+		const configuredThink =
+			um?.enable_thinking !== undefined
+				? um.enable_thinking
+				: um?.thinking?.type === "enabled"
+					? true
+					: um?.thinking?.type === "disabled"
+						? false
+						: undefined;
+		if (configuredThink !== undefined) {
+			rb.think = configuredThink;
 		}
 
 		// Add tools if provided
@@ -179,6 +196,38 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 		const responseUsage = new ResponseUsageAccumulator("ollama");
 		let completed = false;
 		let sawProviderError = false;
+		let providerErrorMessage: string | undefined;
+
+		const handleLine = async (line: string): Promise<void> => {
+			if (!line.trim()) {
+				return;
+			}
+
+			try {
+				const chunk: OllamaStreamChunk = JSON.parse(line);
+				logger.debug("ollama.stream.chunk", { modelId, data: chunk });
+				responseUsage.record(chunk);
+				this.observeResponseCompletion(chunk);
+				if (chunk.error) {
+					sawProviderError = true;
+					providerErrorMessage = chunk.error.trim() || providerErrorMessage;
+				}
+				await this.processOllamaDelta(chunk, progress);
+
+				// Check if this is the final chunk
+				if (chunk.done) {
+					// End any active thinking sequence
+					this.reportEndThinking(progress);
+				}
+			} catch (e) {
+				console.error("[Ollama Provider] Failed to parse streaming chunk:", e, "data:", line);
+				logger.error("ollama.stream.chunk.error", {
+					modelId,
+					error: e instanceof Error ? e.message : String(e),
+					data: line,
+				});
+			}
+		};
 
 		try {
 			while (true) {
@@ -197,34 +246,18 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 				buffer = lines.pop() || "";
 
 				for (const line of lines) {
-					if (!line.trim()) {
-						continue;
-					}
-
-					try {
-						const chunk: OllamaStreamChunk = JSON.parse(line);
-						logger.debug("ollama.stream.chunk", { modelId, data: chunk });
-						responseUsage.record(chunk);
-						this.observeResponseCompletion(chunk);
-						if (chunk.error) {
-							sawProviderError = true;
-						}
-						await this.processOllamaDelta(chunk, progress);
-
-						// Check if this is the final chunk
-						if (chunk.done) {
-							// End any active thinking sequence
-							this.reportEndThinking(progress);
-						}
-					} catch (e) {
-						console.error("[Ollama Provider] Failed to parse streaming chunk:", e, "data:", line);
-						logger.error("ollama.stream.chunk.error", {
-							modelId,
-							error: e instanceof Error ? e.message : String(e),
-							data: line,
-						});
-					}
+					await handleLine(line);
 				}
+			}
+			buffer += decoder.decode();
+			if (buffer.length > 0) {
+				for (const line of buffer.split("\n")) {
+					await handleLine(line);
+				}
+				buffer = "";
+			}
+			if (sawProviderError && !token.isCancellationRequested) {
+				throw createProviderStreamError("Ollama", providerErrorMessage);
 			}
 			completed = !token.isCancellationRequested && !sawProviderError;
 			logger.debug("ollama.stream.done", { modelId });
@@ -291,7 +324,8 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 		systemPrompt: string,
 		messages: { role: string; content: string }[],
 		baseUrl: string,
-		apiKey: string
+		apiKey: string,
+		signal?: AbortSignal
 	): AsyncGenerator<{ type: "text"; text: string }> {
 		// Convert to Ollama message format
 		const ollamaMessages: OllamaMessage[] = [];
@@ -325,6 +359,7 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 			method: "POST",
 			headers,
 			body: JSON.stringify(requestBody),
+			signal,
 		});
 
 		if (!response.ok) {
@@ -341,6 +376,21 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 		const decoder = new TextDecoder();
 		let buffer = "";
 
+		const handleLine = async function* (line: string): AsyncGenerator<{ type: "text"; text: string }> {
+			if (!line.trim()) {
+				return;
+			}
+
+			try {
+				const chunk: OllamaStreamChunk = JSON.parse(line);
+				if (chunk.message?.content) {
+					yield { type: "text", text: chunk.message.content };
+				}
+			} catch (e) {
+				console.error("[Ollama Provider] Failed to parse streaming chunk:", e, "data:", line);
+			}
+		};
+
 		try {
 			while (true) {
 				const { done, value } = await reader.read();
@@ -353,25 +403,18 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
 				buffer = lines.pop() || "";
 
 				for (const line of lines) {
-					if (!line.trim()) {
-						continue;
-					}
-
-					try {
-						const chunk: OllamaStreamChunk = JSON.parse(line);
-						if (chunk.message?.content) {
-							yield { type: "text", text: chunk.message.content };
-						}
-
-						if (chunk.done) {
-							break;
-						}
-					} catch (e) {
-						console.error("[Ollama Provider] Failed to parse streaming chunk:", e, "data:", line);
-					}
+					yield* handleLine(line);
 				}
 			}
+			buffer += decoder.decode();
+			if (buffer.length > 0) {
+				for (const line of buffer.split("\n")) {
+					yield* handleLine(line);
+				}
+				buffer = "";
+			}
 		} finally {
+			await reader.cancel().catch(() => undefined);
 			reader.releaseLock();
 		}
 	}
@@ -381,19 +424,22 @@ export class OllamaApi extends CommonApi<OllamaMessage, OllamaRequestBody> {
  * Fetch available models from Ollama API endpoint.
  * Uses /api/tags endpoint to list local models.
  * @param baseUrl The Ollama API base URL.
- * @param _apiKey Ollama doesn't require authentication (ignored).
+ * @param apiKey Bearer token sent to the server; the literal value `ollama` omits the header.
  * @param customHeaders Optional custom headers to merge with defaults.
  * @returns A promise that resolves to an array of model items.
  */
 export async function fetchOllamaModels(
 	baseUrl: string,
-	_apiKey: string,
+	apiKey: string,
 	customHeaders?: Record<string, string>
 ): Promise<HFModelItem[]> {
 	const trimmed = baseUrl.replace(/\/+$/, "");
 	const url = `${trimmed}/api/tags`;
 
 	const baseHeaders: Record<string, string> = { Accept: "application/json" };
+	if (apiKey && apiKey !== "ollama") {
+		baseHeaders.Authorization = `Bearer ${apiKey}`;
+	}
 	const headers = customHeaders ? { ...baseHeaders, ...customHeaders } : baseHeaders;
 	const resp = await fetch(url, {
 		method: "GET",

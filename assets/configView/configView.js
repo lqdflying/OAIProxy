@@ -161,7 +161,12 @@ const handleRefresh = () => {
 
 // Export and Import buttons event listeners
 document.getElementById("exportConfig").addEventListener("click", () => {
-	vscode.postMessage({ type: "exportConfig" });
+	const includeApiKeysInput = document.getElementById("includeApiKeysOnExport");
+	const includeApiKeys = Boolean(includeApiKeysInput?.checked);
+	if (includeApiKeysInput) {
+		includeApiKeysInput.checked = false;
+	}
+	vscode.postMessage({ type: "exportConfig", includeApiKeys });
 });
 
 document.getElementById("importConfig").addEventListener("click", () => {
@@ -222,13 +227,13 @@ function applyProviderPreset(row, presetId) {
 	providerInput.value = preset.provider;
 	baseUrlInput.value = preset.baseUrl;
 	apiModeInput.value = preset.apiMode;
-	if (preset.authMode) {
-		row.dataset.authMode = preset.authMode;
-		if (preset.authMode === "oauth" && keyCell) {
+	const authMode = preset.authMode || "api-key";
+	row.dataset.authMode = authMode;
+	if (authMode === "oauth") {
+		if (keyCell) {
 			keyCell.innerHTML = '<span class="status-pill idle">OAuth · Sign in required</span>';
 		}
 	} else {
-		delete row.dataset.authMode;
 		if (keyCell) {
 			keyCell.innerHTML = '<input type="password" class="provider-input" data-field="apiKey" placeholder="API Key" />';
 		}
@@ -2408,7 +2413,8 @@ function populateCommitModelDropdown() {
 	const commitCompatibleModels = state.models
 		.filter((model) => {
 			const apiMode = model.apiMode || state.providerInfo[model.owned_by]?.apiMode || "openai";
-			return apiMode !== "gemini" && !isProviderPlaceholderModel(model);
+			const authMode = model.authMode || state.providerInfo[model.owned_by]?.authMode;
+			return apiMode !== "gemini" && authMode !== "oauth" && !isProviderPlaceholderModel(model);
 		})
 		.sort((a, b) => a.id.localeCompare(b.id));
 
@@ -2420,6 +2426,11 @@ function populateCommitModelDropdown() {
 		option.textContent = model.displayName || fullModelId;
 		commitModelInput.appendChild(option);
 	});
+
+	const availableValues = new Set(Array.from(commitModelInput.options).map((option) => option.value));
+	if (!availableValues.has(commitModelInput.value)) {
+		commitModelInput.value = "";
+	}
 }
 
 // Dropdown visibility functions

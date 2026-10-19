@@ -42,6 +42,13 @@
 					<input id="apiKey" type="password" placeholder="sk-..." />
 				</div>
 				<div class="field">
+					<label for="includeApiKeysOnExport">Export API Keys</label>
+					<div class="field-description">
+						Include generic, provider, and usage/admin API keys in configuration exports. Off by default.
+					</div>
+					<input id="includeApiKeysOnExport" type="checkbox" class="checkbox" />
+				</div>
+				<div class="field">
 					<label for="delay">Delay (ms)</label>
 					<div class="field-description">Fixed delay in milliseconds between consecutive requests.</div>
 					<input id="delay" type="number" min="0" placeholder="0" />

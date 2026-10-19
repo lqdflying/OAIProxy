@@ -99,7 +99,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 	readonly onDidChangeLanguageModelChatInformation = this._onDidChangeLanguageModelChatInformation.event;
 
 	private readonly _geminiToolCallMetaByCallId = new Map<string, GeminiToolCallMeta>();
-	private readonly _openaiResponsesPreviousResponseIdUnsupportedBaseUrls = new Set<string>();
+	private readonly _openaiResponsesPreviousResponseIdUnsupportedScopes = new Set<string>();
 	private readonly _openaiResponsesState = new OpenAIResponsesStateStore();
 
 	static readonly OPENAI_RESPONSES_STATEFUL_MARKER_MIME = "application/vnd.oaiproxy.stateful-marker";
@@ -472,7 +472,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				um?.authMode === "oauth" && provider?.trim().toLowerCase() === "xai" && isXaiGrokOAuthBaseUrl(baseUrl);
 			const isOpenAICodexOAuth =
 				um?.authMode === "oauth" &&
-				isOpenAICodexOAuthProvider(provider) &&
+				isOpenAICodexOAuthProvider(provider, um.authMode, baseUrl) &&
 				isOpenAICodexOAuthBaseUrl(baseUrl);
 			const openAIOAuthCredential = isOpenAICodexOAuth
 				? await getOpenAIOAuthCredential(this.secrets)
@@ -524,7 +524,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 			// prepare headers with custom headers if specified
 			const requestHeaders = CommonApi.prepareHeaders(modelApiKey, apiMode, um?.headers);
 			if (isXaiOAuth) {
-				applyXaiGrokOAuthHeaders(requestHeaders, model.id);
+				applyXaiGrokOAuthHeaders(requestHeaders, parsedModelId.baseId);
 			}
 			if (isOpenAICodexOAuth) {
 				applyOpenAICodexOAuthHeaders(requestHeaders, openAIOAuthCredential);
@@ -623,7 +623,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					}
 
 					return res;
-				}, retryConfig);
+				}, retryConfig, token);
 
 				if (!response.body) {
 					throw new Error("No response body from Ollama API");
@@ -669,7 +669,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					}
 
 					return res;
-				}, retryConfig);
+				}, retryConfig, token);
 
 				if (!response.body) {
 					throw new Error("No response body from Anthropic API");
@@ -681,6 +681,22 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				const openaiResponsesApi = new OpenaiResponsesApi(model.id);
 				const normalizedBaseUrl = BASE_URL.replace(/\/+$/, "");
 				const statefulModelId = parsedModelId.baseId;
+				const responsesStateIdentity: OpenAIResponsesStatefulMarkerIdentity = {
+					modelId: statefulModelId,
+					normalizedBaseUrl,
+					configId: parsedModelId.configId,
+					modelInfoId: model.id,
+					accountId: openAIOAuthCredential?.accountId,
+				};
+				// Unsupported-state detection is scoped to the endpoint, config and
+				// credential identity so one bad request cannot disable state for
+				// unrelated configurations sharing a base URL.
+				const responsesStateScopeKey = [
+					normalizedBaseUrl,
+					parsedModelId.configId ?? "",
+					um?.authMode ?? "",
+					openAIOAuthCredential?.accountId ?? "",
+				].join("\n");
 				const codexResponsesConversionOptions = isOpenAICodexOAuth
 					? { replayResponsesItemIds: false, codexEasyInput: true }
 					: undefined;
@@ -694,7 +710,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 
 				const marker = executionOptions.diagnostic
 					? undefined
-					: findLastOpenAIResponsesStatefulMarker(statefulModelId, workingMessages);
+					: findLastOpenAIResponsesStatefulMarker(responsesStateIdentity, workingMessages);
 				let markerDeltaInput: unknown[] | null = null;
 				if (marker && marker.index >= 0 && marker.index < workingMessages.length - 1) {
 					const deltaMessages = workingMessages.slice(marker.index + 1);
@@ -713,9 +729,15 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					input: fullInput,
 					stream: true,
 				};
-				preparedFullRequestBody = openaiResponsesApi.prepareRequestBody(preparedFullRequestBody, um, options);
+				preparedFullRequestBody = openaiResponsesApi.prepareRequestBody(
+					preparedFullRequestBody,
+					um,
+					options,
+					BASE_URL
+				);
 
-				const previousResponseIdUnsupported = this._openaiResponsesPreviousResponseIdUnsupportedBaseUrls.has(normalizedBaseUrl);
+				const previousResponseIdUnsupported =
+					this._openaiResponsesPreviousResponseIdUnsupportedScopes.has(responsesStateScopeKey);
 				const explicitPreviousResponseId = preparedFullRequestBody.previous_response_id !== undefined;
 				const memoryState = executionOptions.diagnostic
 					? {
@@ -853,7 +875,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 						}
 
 						return res;
-					}, retryConfig);
+					}, retryConfig, token);
 				};
 
 				let response: Response;
@@ -863,20 +885,24 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					// Some Responses-compatible gateways don't support `previous_response_id`.
 					// Fall back to sending full history when the previous-response attempt fails.
 					const status = (err as { status?: unknown })?.status;
+					const errorText = String((err as { errorText?: unknown })?.errorText ?? "");
+					const indicatesUnsupportedPreviousResponseId = /previous[_\s-]*response[_\s-]*id/i.test(errorText);
 					const shouldFallback =
-						addedPreviousResponseId && typeof status === "number" && status >= 400 && status < 500 && status !== 429;
+						addedPreviousResponseId &&
+						(status === 400 || status === 404) &&
+						indicatesUnsupportedPreviousResponseId;
 					if (!shouldFallback) {
 						throw err;
 					}
 
-					this._openaiResponsesPreviousResponseIdUnsupportedBaseUrls.add(normalizedBaseUrl);
+					this._openaiResponsesPreviousResponseIdUnsupportedScopes.add(responsesStateScopeKey);
 
 					let fallbackBody: Record<string, unknown> = {
 						model: parsedModelId.baseId,
 						input: fullInput,
 						stream: true,
 					};
-					fallbackBody = openaiResponsesApi.prepareRequestBody(fallbackBody, um, options);
+					fallbackBody = openaiResponsesApi.prepareRequestBody(fallbackBody, um, options, BASE_URL);
 					applyOpenAIPromptCache(fallbackBody, {
 						model: um,
 						baseUrl: BASE_URL,
@@ -917,7 +943,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				// Append a stateful marker so future requests can reuse `previous_response_id` (Copilot Chat style).
 				const responseId = openaiResponsesApi.responseId;
 				const memoryStateStored = !executionOptions.diagnostic && !!responseId && !explicitPreviousResponseId && !previousResponseIdFallback &&
-					!this._openaiResponsesPreviousResponseIdUnsupportedBaseUrls.has(normalizedBaseUrl) &&
+					!this._openaiResponsesPreviousResponseIdUnsupportedScopes.has(responsesStateScopeKey) &&
 					this._openaiResponsesState.update({
 						stateKey: memoryState.stateKey,
 						responseId,
@@ -938,7 +964,9 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					requestInputCount: getArrayLength(requestBody.input),
 				});
 				if (responseId && !executionOptions.diagnostic) {
-					trackingProgress.report(createOpenAIResponsesStatefulMarkerPart(statefulModelId, responseId));
+					trackingProgress.report(
+						createOpenAIResponsesStatefulMarkerPart(responsesStateIdentity, responseId)
+					);
 				}
 			} else if (apiMode === "gemini") {
 				// Gemini native API mode
@@ -997,7 +1025,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					}
 
 					return res;
-				}, retryConfig);
+				}, retryConfig, token);
 
 				if (!response.body) {
 					throw new Error("No response body from Gemini API");
@@ -1046,7 +1074,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					}
 
 					return res;
-				}, retryConfig);
+				}, retryConfig, token);
 
 				if (!response.body) {
 					throw new Error("No response body from OAIProxy API");
@@ -1230,6 +1258,16 @@ interface OpenAIResponsesStatefulMarkerLocation {
 	index: number;
 }
 
+interface OpenAIResponsesStatefulMarkerIdentity {
+	readonly modelId: string;
+	readonly normalizedBaseUrl: string;
+	readonly configId?: string;
+	readonly modelInfoId: string;
+	readonly accountId?: string;
+}
+
+const OPENAI_RESPONSES_STATEFUL_MARKER_VERSION = 2;
+
 function applyModelConfiguration(
 	model: HFModelItem | undefined,
 	configuration: ProvideLanguageModelChatResponseOptions["modelConfiguration"] | undefined,
@@ -1248,9 +1286,10 @@ function applyModelConfiguration(
 	}
 
 	const next: HFModelItem = { ...model };
-	if (model.reasoning !== undefined && model.reasoning_effort === undefined) {
+	if (model.reasoning !== undefined) {
 		next.reasoning = { ...model.reasoning, effort: reasoningEffort };
-	} else {
+	}
+	if (model.reasoning === undefined || model.reasoning_effort !== undefined) {
 		next.reasoning_effort = reasoningEffort;
 	}
 
@@ -1589,8 +1628,19 @@ function containsVideoPayload(value: unknown, depth = 0): boolean {
 	return Object.values(obj).some((item) => containsVideoPayload(item, depth + 1));
 }
 
-function createOpenAIResponsesStatefulMarkerPart(modelId: string, marker: string): vscode.LanguageModelDataPart {
-	const payload = `${modelId}\\${marker}`;
+function createOpenAIResponsesStatefulMarkerPart(
+	identity: OpenAIResponsesStatefulMarkerIdentity,
+	responseId: string
+): vscode.LanguageModelDataPart {
+	const payload = JSON.stringify({
+		v: OPENAI_RESPONSES_STATEFUL_MARKER_VERSION,
+		modelId: identity.modelId,
+		normalizedBaseUrl: identity.normalizedBaseUrl,
+		configId: identity.configId ?? "",
+		modelInfoId: identity.modelInfoId,
+		accountId: identity.accountId ?? "",
+		responseId,
+	});
 	const bytes = new TextEncoder().encode(payload);
 	return new vscode.LanguageModelDataPart(bytes, HuggingFaceChatModelProvider.OPENAI_RESPONSES_STATEFUL_MARKER_MIME);
 }
@@ -1603,7 +1653,9 @@ function createCodexPromptCacheKey(stateKey: string): string | undefined {
 	return `oaiproxy-openai-oauth-${normalized.slice(0, 42)}`;
 }
 
-function parseOpenAIResponsesStatefulMarkerPart(part: unknown): { modelId: string; marker: string } | null {
+function parseOpenAIResponsesStatefulMarkerPart(
+	part: unknown
+): { identity: OpenAIResponsesStatefulMarkerIdentity; marker: string } | null {
 	const maybe = part as { mimeType?: unknown; data?: unknown };
 	if (!maybe || typeof maybe !== "object") {
 		return null;
@@ -1620,23 +1672,34 @@ function parseOpenAIResponsesStatefulMarkerPart(part: unknown): { modelId: strin
 
 	try {
 		const decoded = new TextDecoder().decode(maybe.data);
-		const sep = decoded.indexOf("\\");
-		if (sep <= 0) {
+		const parsed = JSON.parse(decoded) as Record<string, unknown>;
+		if (parsed.v !== OPENAI_RESPONSES_STATEFUL_MARKER_VERSION) {
 			return null;
 		}
-		const modelId = decoded.slice(0, sep).trim();
-		const marker = decoded.slice(sep + 1).trim();
-		if (!modelId || !marker) {
+		const modelId = typeof parsed.modelId === "string" ? parsed.modelId : "";
+		const normalizedBaseUrl = typeof parsed.normalizedBaseUrl === "string" ? parsed.normalizedBaseUrl : "";
+		const modelInfoId = typeof parsed.modelInfoId === "string" ? parsed.modelInfoId : "";
+		const marker = typeof parsed.responseId === "string" ? parsed.responseId.trim() : "";
+		if (!modelId || !normalizedBaseUrl || !modelInfoId || !marker) {
 			return null;
 		}
-		return { modelId, marker };
+		return {
+			identity: {
+				modelId,
+				normalizedBaseUrl,
+				configId: typeof parsed.configId === "string" && parsed.configId ? parsed.configId : undefined,
+				modelInfoId,
+				accountId: typeof parsed.accountId === "string" && parsed.accountId ? parsed.accountId : undefined,
+			},
+			marker,
+		};
 	} catch {
 		return null;
 	}
 }
 
 function findLastOpenAIResponsesStatefulMarker(
-	modelId: string,
+	identity: OpenAIResponsesStatefulMarkerIdentity,
 	messages: readonly LanguageModelChatRequestMessage[]
 ): OpenAIResponsesStatefulMarkerLocation | null {
 	for (let i = messages.length - 1; i >= 0; i--) {
@@ -1645,10 +1708,23 @@ function findLastOpenAIResponsesStatefulMarker(
 		}
 		for (const part of messages[i].content ?? []) {
 			const parsed = parseOpenAIResponsesStatefulMarkerPart(part);
-			if (parsed && parsed.modelId === modelId) {
+			if (parsed && matchesOpenAIResponsesStatefulMarkerIdentity(parsed.identity, identity)) {
 				return { marker: parsed.marker, index: i };
 			}
 		}
 	}
 	return null;
+}
+
+function matchesOpenAIResponsesStatefulMarkerIdentity(
+	candidate: OpenAIResponsesStatefulMarkerIdentity,
+	expected: OpenAIResponsesStatefulMarkerIdentity
+): boolean {
+	return (
+		candidate.modelId === expected.modelId &&
+		candidate.normalizedBaseUrl === expected.normalizedBaseUrl &&
+		(candidate.configId ?? "") === (expected.configId ?? "") &&
+		candidate.modelInfoId === expected.modelInfoId &&
+		(candidate.accountId ?? "") === (expected.accountId ?? "")
+	);
 }

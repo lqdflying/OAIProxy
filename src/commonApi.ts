@@ -128,6 +128,7 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 	 * @param messages The messages to send.
 	 * @param baseUrl The base URL for the API.
 	 * @param apiKey The API key to use.
+	 * @param signal Optional abort signal for cancelling the request.
 	 * @returns An async iterable of text chunks.
 	 */
 	abstract createMessage(
@@ -135,7 +136,8 @@ export abstract class CommonApi<TMessage, TRequestBody> {
 		systemPrompt: string,
 		messages: { role: string; content: string }[],
 		baseUrl: string,
-		apiKey: string
+		apiKey: string,
+		signal?: AbortSignal
 	): AsyncGenerator<{ type: "text"; text: string }>;
 
 	/**

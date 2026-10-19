@@ -102,11 +102,17 @@ Model Management provides a per-model `Test` action and a parallel `Test all` ac
 
 The standalone Provider Usage Check table lists configured supported providers dynamically and reports xAI/Grok weekly credit remaining, Codex OAuth quota windows, credit, token, token-plan, or cost usage. Codex quota uses the saved OAuth credential and OpenClaw-compatible `https://chatgpt.com/backend-api/wham/usage` bearer endpoint; it is best-effort compatibility support and may become unavailable if OpenAI changes that undocumented route. Fireworks account discovery and month-to-date serverless token checks reuse the normal Fireworks provider key. OpenAI and Anthropic usage/admin keys are stored separately from chat API keys. TokenRouter uses a separate Management Key and reports account credits from its Management API self-wallet endpoint. Azure Foundry inference keys cannot call an official usage/cost endpoint; use Azure Monitor or Cost Management with Azure RBAC. Z.AI and MiMo entries are likewise shown with unavailable reasons when their public docs do not expose API-key usage or balance endpoints.
 
+Provider usage credentials are sent only to validated HTTPS destinations. Built-in adapters use fixed official endpoints, TokenRouter wallet checks are pinned to `https://api.tokenrouter.com`, and a LiteLLM usage check against any origin other than the default Nube gateway (`https://ai.nube.sh`) requires explicit confirmation before the privileged Usage Key is sent.
+
+Configuration export omits the generic API key, provider API keys, and provider usage/admin keys by default, so exported files are safe to share. Selecting **Export API Keys** displays a modal warning and requires confirmation; the resulting file contains those keys in cleartext and should be stored securely. Import validates the file before applying configuration, providers, or secrets, and rolls back partial changes if an import step fails.
+
 → [Full Configuration Guide](doc/configuration.md)
 
 ## Multi-API Mode
 
 Supports seven API protocols: `azure-foundry` (direct Azure Foundry Chat Completions with `api-key` authentication), `openai` (Chat Completions), `litellm` (LiteLLM Proxy Chat Completions), `openai-responses` (Responses), `ollama`, `anthropic`, and `gemini`. Specify per-model via the `apiMode` parameter.
+
+Ollama model discovery sends the provider's configured key as a bearer token; the literal placeholder key `ollama` suppresses the header for unauthenticated local servers. When `enable_thinking` or `thinking.type` expresses an explicit intent, OAIProxy sends Ollama's native `think` field as `true` or `false`; leaving both unset preserves the server default.
 
 TokenRouter, Fireworks, Kimi, DeepSeek, Z.AI GLM, and Xiaomi MiMo use the existing `openai` mode because their hosted APIs are OpenAI-compatible. MiniMax supports both `openai` and `anthropic` modes; MiniMax recommends the Anthropic-compatible M3 endpoint for thinking and interleaved-thinking workflows.
 

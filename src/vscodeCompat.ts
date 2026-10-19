@@ -17,10 +17,14 @@ export function isLanguageModelThinkingPart(part: unknown): part is { value: str
 	return ThinkingPart !== undefined && part instanceof ThinkingPart;
 }
 
-export function createLanguageModelThinkingPart(value: string | string[], id?: string): LanguageModelResponsePart2 {
+export function createLanguageModelThinkingPart(
+	value: string | string[],
+	id?: string,
+	metadata?: Readonly<Record<string, unknown>>
+): LanguageModelResponsePart2 {
 	const ThinkingPart = getLanguageModelThinkingPartCtor();
 	if (ThinkingPart) {
-		return new ThinkingPart(value, id) as LanguageModelResponsePart2;
+		return new ThinkingPart(value, id, metadata) as LanguageModelResponsePart2;
 	}
 
 	const text = Array.isArray(value) ? value.join("") : value;
@@ -29,4 +33,18 @@ export function createLanguageModelThinkingPart(value: string | string[], id?: s
 
 export function getLanguageModelThinkingText(part: { value: string | string[] }): string {
 	return Array.isArray(part.value) ? part.value.join("") : part.value;
+}
+
+export function getLanguageModelThinkingMetadata(
+	part: unknown
+): Readonly<Record<string, unknown>> | undefined {
+	const metadata = (part as { metadata?: unknown } | null)?.metadata;
+	return metadata && typeof metadata === "object" && !Array.isArray(metadata)
+		? (metadata as Readonly<Record<string, unknown>>)
+		: undefined;
+}
+
+export function getLanguageModelThinkingId(part: unknown): string | undefined {
+	const id = (part as { id?: unknown } | null)?.id;
+	return typeof id === "string" && id ? id : undefined;
 }
