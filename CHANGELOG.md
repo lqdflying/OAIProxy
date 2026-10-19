@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.1.50 (2026-10-19)
+
+- Fix direct DeepSeek thinking-mode agent requests rejected with HTTP 400 by replaying `reasoning_content` for every historical assistant turn when tools are advertised, including turns without a tool call.
+- Backfill an empty `reasoning_content` only when VS Code no longer supplies a reasoning part, and send empty assistant `content` for tool-call messages without visible text.
+- Preserve available thinking text exactly, including surrounding whitespace, even when `include_reasoning_in_request` is false or omitted on direct DeepSeek thinking-plus-tools requests; keep the fallback scoped to the official DeepSeek endpoint.
+- Document the replay requirement in English and Chinese, and add regression coverage for missing and exact reasoning, tool-call content, replay-flag handling, provider scoping, and non-tool paths.
+
 ## 0.1.49 (2026-10-18)
 
 - Add live estimated tokens per second beside the status-bar context percentage, refreshed every 500 ms while receiving answer or thinking text.
