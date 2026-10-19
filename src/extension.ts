@@ -92,7 +92,7 @@ export function activate(context: vscode.ExtensionContext) {
 			}
 
 			const providerTargets = getProviderKeyTargets(userModels, providerConfigs).filter(
-				(target) => !isOpenAICodexOAuthProvider(target.provider)
+				(target) => !isOpenAICodexOAuthProvider(target.provider, target.authMode, target.baseUrl)
 			);
 			if (providerTargets.length > 0) {
 				const selectedTarget = await vscode.window.showQuickPick(
@@ -132,7 +132,7 @@ export function activate(context: vscode.ExtensionContext) {
 			const userModels = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
 			const providerConfigs = normalizeProviderConfigs(context.globalState.get<unknown>(PROVIDER_CONFIG_STORAGE_KEY, []));
 			const providers = getProviderKeyTargets(userModels, providerConfigs).filter(
-				(target) => !isOpenAICodexOAuthProvider(target.provider)
+				(target) => !isOpenAICodexOAuthProvider(target.provider, target.authMode, target.baseUrl)
 			);
 
 			if (providers.length === 0) {
@@ -326,6 +326,7 @@ interface ProviderKeyTarget {
 	provider: string;
 	label: string;
 	baseUrl?: string;
+	authMode?: "api-key" | "oauth";
 }
 
 interface ProviderUsageTarget extends ProviderKeyTarget {
@@ -387,6 +388,7 @@ function getProviderKeyTargets(
 				provider: normalizedProvider,
 				label: provider,
 				baseUrl: providerConfig.baseUrl,
+				authMode: providerConfig.authMode,
 			});
 		}
 	}
@@ -407,6 +409,7 @@ function getProviderKeyTargets(
 				provider: normalizedProvider,
 				label: provider,
 				baseUrl: model.baseUrl,
+				authMode: model.authMode,
 			});
 		}
 	}
@@ -421,10 +424,10 @@ function getProviderUsageTargets(
 	return getProviderKeyTargets(userModels, providerConfigs)
 		.map((target) => {
 			const codexOAuthModel =
-				isOpenAICodexOAuthProvider(target.provider)
+				isOpenAICodexOAuthProvider(target.provider, target.authMode, target.baseUrl)
 					? userModels.find(
 							(model) =>
-								isOpenAICodexOAuthProvider(model.owned_by) &&
+								isOpenAICodexOAuthProvider(model.owned_by, model.authMode, model.baseUrl) &&
 								model.authMode === "oauth" &&
 								isOpenAICodexOAuthBaseUrl(model.baseUrl)
 						)
@@ -483,8 +486,19 @@ async function runProviderUsageCheck(
 			);
 			return;
 		}
+		const targetApiKey = adapter === "litellm" ? await context.secrets.get(getProviderSecretKey(provider)) : undefined;
+		if (adapter === "litellm" && !targetApiKey) {
+			throw new Error(`No LiteLLM provider API key found for ${provider}. Save the provider API key first.`);
+		}
 
-		const result = await checkProviderUsage({ provider, baseUrl, apiKey, accountId: openAIOAuthCredential?.accountId });
+		const result = await checkProviderUsage({
+			provider,
+			baseUrl,
+			apiKey,
+			targetApiKey,
+			accountId: openAIOAuthCredential?.accountId,
+			confirmDestination: confirmProviderUsageDestination,
+		});
 		outputChannel.appendLine(`\n[${new Date().toISOString()}] ${provider}`);
 		outputChannel.appendLine(formatProviderUsageResult(result));
 		outputChannel.show(true);
@@ -496,6 +510,16 @@ async function runProviderUsageCheck(
 		outputChannel.show(true);
 		vscode.window.showErrorMessage(errorMessage);
 	}
+}
+
+async function confirmProviderUsageDestination(origin: string): Promise<boolean> {
+	const action = "Send Credentials";
+	const selected = await vscode.window.showWarningMessage(
+		`Send privileged usage credentials to ${origin}? Only confirm if you configured this LiteLLM host intentionally.`,
+		{ modal: true },
+		action
+	);
+	return selected === action;
 }
 
 async function promptForUsageApiKey(

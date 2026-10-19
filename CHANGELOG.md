@@ -1,5 +1,16 @@
 # Change Log
 
+## 0.1.51 (2026-10-20)
+
+- Harden configuration import and export: omit API keys by default, redact credential-bearing custom headers, restore matching redacted headers safely on import, validate the full payload before applying it, and roll back configuration, provider, and secret changes on failure.
+- Fix Responses state handling by retaining replacement state only for missing stored responses, scoping state by provider identity, and disabling `previous_response_id` after unsupported or unrecognized fallback errors so they do not fail on every turn.
+- Preserve Anthropic signed and redacted thinking blocks in their original order, honor `extra.thinking` overrides, and validate manual thinking budgets for tool continuations.
+- Correct streaming edge cases across OpenAI, Responses, Anthropic, Gemini, and Ollama, including failed-stream errors and usage reporting, final unterminated SSE lines, Gemini delta/thinking accounting, and provider-specific thinking payloads.
+- Add bounded destination validation, HTTPS enforcement, timeouts, response-size limits, and clearer key handling for provider usage checks; reject unsafe TokenRouter, LiteLLM, and xAI request targets.
+- Fix OAuth refresh and sign-out races for OpenAI and xAI, bound xAI requests, align the Grok model-override header with the request body, and filter unsupported commit-generation models.
+- Improve Ollama discovery authentication and model limits, Anthropic output-token precedence, retry cancellation, Git commit cancellation, and legacy model capability reporting.
+- Expand regression coverage for adapter streams, configuration lifecycle and rollback, Responses fallback, OAuth, usage checks, token accounting, and release-adjacent request shaping.
+
 ## 0.1.50 (2026-10-19)
 
 - Fix direct DeepSeek thinking-mode agent requests rejected with HTTP 400 by replaying `reasoning_content` for every historical assistant turn when tools are advertised, including turns without a tool call.

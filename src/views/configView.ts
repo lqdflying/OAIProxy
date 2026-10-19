@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { randomBytes } from "crypto";
-import { logger } from "../logger";
+import { isSensitiveHeaderName, logger } from "../logger";
 import type { HFApiMode, HFModelItem, ProviderConfigItem } from "../types";
 import { normalizeUserModels, parseModelId } from "../utils";
 import { fetchModels } from "../provideModel";
@@ -11,6 +11,8 @@ import {
 	deleteProviderConfig,
 	findProviderPlaceholderModel,
 	findProviderTransportModel,
+	getProviderConfig,
+	isCommitGenerationCompatibleModel,
 	isProviderPlaceholderModel,
 	normalizeProviderConfigs,
 	PROVIDER_CONFIG_STORAGE_KEY,
@@ -156,6 +158,80 @@ export function resolveProviderApiKeyChange(
 	return { kind: "preserve", secretKey, legacySecretKey };
 }
 
+function isVerifiedOAuthProvider(provider: string, baseUrl: string | undefined): boolean {
+	const normalized = provider.trim().toLowerCase();
+	return (
+		isOpenAICodexOAuthProvider(provider, "oauth", baseUrl) ||
+		(normalized === "xai" && isXaiGrokOAuthBaseUrl(baseUrl))
+	);
+}
+
+function resolveProviderAuthMode(
+	provider: string,
+	authMode: "api-key" | "oauth" | undefined,
+	baseUrl: string | undefined
+): "api-key" | "oauth" {
+	if (authMode === "api-key") {
+		return "api-key";
+	}
+	if (authMode === "oauth") {
+		return isVerifiedOAuthProvider(provider, baseUrl) ? "oauth" : "api-key";
+	}
+	return isOpenAICodexOAuthProvider(provider, undefined, baseUrl) ? "oauth" : "api-key";
+}
+
+function redactSensitiveHeaders<T extends { headers?: Record<string, string> }>(items: readonly T[]): T[] {
+	return items.map((item) => {
+		if (!item.headers) {
+			return item;
+		}
+		return {
+			...item,
+			headers: Object.fromEntries(
+				Object.entries(item.headers).map(([name, value]) => [name, isSensitiveHeaderName(name) ? "[REDACTED]" : value])
+			),
+		} as T;
+	});
+}
+
+const REDACTED_HEADER_VALUE = "[REDACTED]";
+
+function restoreRedactedHeaders<T extends { headers?: Record<string, string> }>(
+	items: readonly T[],
+	currentItems: readonly T[],
+	keyOf: (item: T) => string,
+	omittedHeaders: Set<string>
+): T[] {
+	const currentByKey = new Map(currentItems.map((item): [string, T] => [keyOf(item), item]));
+	return items.map((item) => {
+		if (!item.headers) {
+			return item;
+		}
+
+		const currentHeaders = currentByKey.get(keyOf(item))?.headers;
+		let nextHeaders: Record<string, string> | undefined;
+		for (const [name, value] of Object.entries(item.headers)) {
+			if (value !== REDACTED_HEADER_VALUE) {
+				continue;
+			}
+
+			const currentName = currentHeaders
+				? Object.keys(currentHeaders).find((candidate) => candidate.toLowerCase() === name.toLowerCase())
+				: undefined;
+			const currentValue = currentName ? currentHeaders?.[currentName] : undefined;
+			nextHeaders ??= { ...item.headers };
+			if (currentValue !== undefined && currentValue !== REDACTED_HEADER_VALUE) {
+				nextHeaders[name] = currentValue;
+			} else {
+				delete nextHeaders[name];
+				omittedHeaders.add(name);
+			}
+		}
+
+		return nextHeaders ? ({ ...item, headers: nextHeaders } as T) : item;
+	});
+}
+
 function getMissingProviderUsageKeyMessage(provider: string, adapter: ProviderUsageAdapter): string {
 	if (adapter === "tokenrouter") {
 		return `No TokenRouter Management Key found for provider ${provider}. Add it in the Usage Key field first.`;
@@ -260,24 +336,185 @@ function migrateProviderPlaceholderModels(
 }
 
 interface ExportConfig {
-	version: string;
-	exportDate: string;
-	baseUrl: string;
-	apiKey: string;
-	delay: number;
-	retry: {
+	version?: string;
+	exportDate?: string;
+	baseUrl?: string;
+	apiKey?: string;
+	delay?: number;
+	retry?: {
 		enabled?: boolean;
 		max_attempts?: number;
 		interval_ms?: number;
 		status_codes?: number[];
 	};
-	commitLanguage: string;
-	commitModel: string;
+	commitLanguage?: string;
+	commitModel?: string;
 	models: HFModelItem[];
 	providers?: ProviderConfigItem[];
-	providerKeys: Record<string, string>;
+	providerKeys?: Record<string, string>;
 	providerUsageKeys?: Record<string, string>;
-	readFileLines: number;
+	readFileLines?: number;
+}
+
+function optionalString(value: unknown, field: string): string | undefined {
+	if (value === undefined) {
+		return undefined;
+	}
+	if (typeof value !== "string") {
+		throw new Error(`Invalid configuration file: ${field} must be a string`);
+	}
+	return value;
+}
+
+function optionalNumber(value: unknown, field: string): number | undefined {
+	if (value === undefined) {
+		return undefined;
+	}
+	if (typeof value !== "number" || !Number.isFinite(value)) {
+		throw new Error(`Invalid configuration file: ${field} must be a finite number`);
+	}
+	return value;
+}
+
+function optionalStringMap(value: unknown, field: string): Record<string, string> | undefined {
+	if (value === undefined) {
+		return undefined;
+	}
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		throw new Error(`Invalid configuration file: ${field} must be an object`);
+	}
+	const result: Record<string, string> = {};
+	for (const [key, entry] of Object.entries(value)) {
+		if (typeof entry !== "string") {
+			throw new Error(`Invalid configuration file: ${field}.${key} must be a string`);
+		}
+		result[key] = entry;
+	}
+	return result;
+}
+
+function isApiMode(value: unknown): value is HFApiMode {
+	return (
+		value === "openai" ||
+		value === "azure-foundry" ||
+		value === "litellm" ||
+		value === "openai-responses" ||
+		value === "ollama" ||
+		value === "anthropic" ||
+		value === "gemini"
+	);
+}
+
+function validateImportedProviders(value: unknown): ProviderConfigItem[] | undefined {
+	if (value === undefined) {
+		return undefined;
+	}
+	if (!Array.isArray(value)) {
+		throw new Error("Invalid configuration file: providers must be an array");
+	}
+	return value.map((item, index) => {
+		if (!item || typeof item !== "object" || Array.isArray(item)) {
+			throw new Error(`Invalid configuration file: providers[${index}] must be an object`);
+		}
+		const provider = item as Record<string, unknown>;
+		const providerId = optionalString(provider.provider, `providers[${index}].provider`);
+		if (!providerId?.trim()) {
+			throw new Error(`Invalid configuration file: providers[${index}].provider must be a non-empty string`);
+		}
+		const baseUrl = optionalString(provider.baseUrl, `providers[${index}].baseUrl`);
+		if (provider.apiMode !== undefined && !isApiMode(provider.apiMode)) {
+			throw new Error(`Invalid configuration file: providers[${index}].apiMode is not supported`);
+		}
+		if (
+			provider.authMode !== undefined &&
+			provider.authMode !== "api-key" &&
+			provider.authMode !== "oauth"
+		) {
+			throw new Error(`Invalid configuration file: providers[${index}].authMode must be api-key or oauth`);
+		}
+		let headers: Record<string, string> | undefined;
+		if (provider.headers !== undefined) {
+			if (!provider.headers || typeof provider.headers !== "object" || Array.isArray(provider.headers)) {
+				throw new Error(`Invalid configuration file: providers[${index}].headers must be an object`);
+			}
+			headers = {};
+			for (const [name, value] of Object.entries(provider.headers)) {
+				if (typeof value !== "string") {
+					throw new Error(`Invalid configuration file: providers[${index}].headers.${name} must be a string`);
+				}
+				headers[name] = value;
+			}
+		}
+		return {
+			provider: providerId.trim(),
+			...(baseUrl !== undefined ? { baseUrl } : {}),
+			...(isApiMode(provider.apiMode) ? { apiMode: provider.apiMode } : {}),
+			...(provider.authMode === "api-key" || provider.authMode === "oauth"
+				? { authMode: provider.authMode }
+				: {}),
+			...(headers !== undefined ? { headers } : {}),
+		};
+	});
+}
+
+function optionalRetryConfig(value: unknown): ExportConfig["retry"] {
+	if (value === undefined) {
+		return undefined;
+	}
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		throw new Error("Invalid configuration file: retry must be an object");
+	}
+	const retry = value as Record<string, unknown>;
+	if (retry.enabled !== undefined && typeof retry.enabled !== "boolean") {
+		throw new Error("Invalid configuration file: retry.enabled must be a boolean");
+	}
+	const maxAttempts = optionalNumber(retry.max_attempts, "retry.max_attempts");
+	const intervalMs = optionalNumber(retry.interval_ms, "retry.interval_ms");
+	let statusCodes: number[] | undefined;
+	if (retry.status_codes !== undefined) {
+		if (!Array.isArray(retry.status_codes) || retry.status_codes.some((code) => typeof code !== "number")) {
+			throw new Error("Invalid configuration file: retry.status_codes must be an array of numbers");
+		}
+		statusCodes = retry.status_codes;
+	}
+	return {
+		...(retry.enabled !== undefined ? { enabled: retry.enabled } : {}),
+		...(maxAttempts !== undefined ? { max_attempts: maxAttempts } : {}),
+		...(intervalMs !== undefined ? { interval_ms: intervalMs } : {}),
+		...(statusCodes !== undefined ? { status_codes: statusCodes } : {}),
+	};
+}
+
+export function validateImportedConfig(value: unknown): ExportConfig {
+	if (!value || typeof value !== "object" || Array.isArray(value)) {
+		throw new Error("Invalid configuration file: root must be an object");
+	}
+	const obj = value as Record<string, unknown>;
+	if (!Array.isArray(obj.models)) {
+		throw new Error("Invalid configuration file: models must be an array");
+	}
+	const models = normalizeUserModels(obj.models);
+	if (models.length !== obj.models.length) {
+		throw new Error("Invalid configuration file: every model must be an object with a non-empty id");
+	}
+
+	const providers = validateImportedProviders(obj.providers);
+
+	return {
+		version: optionalString(obj.version, "version"),
+		exportDate: optionalString(obj.exportDate, "exportDate"),
+		baseUrl: optionalString(obj.baseUrl, "baseUrl"),
+		apiKey: optionalString(obj.apiKey, "apiKey"),
+		delay: optionalNumber(obj.delay, "delay"),
+		retry: optionalRetryConfig(obj.retry),
+		commitLanguage: optionalString(obj.commitLanguage, "commitLanguage"),
+		commitModel: optionalString(obj.commitModel, "commitModel"),
+		models,
+		...(providers !== undefined ? { providers } : {}),
+		providerKeys: optionalStringMap(obj.providerKeys, "providerKeys"),
+		providerUsageKeys: optionalStringMap(obj.providerUsageKeys, "providerUsageKeys"),
+		readFileLines: optionalNumber(obj.readFileLines, "readFileLines"),
+	};
 }
 
 type IncomingMessage =
@@ -340,7 +577,7 @@ type IncomingMessage =
 	| { type: "testModel"; requestId: string; modelId: string }
 	| { type: "testAllModels"; requestId: string }
 	| { type: "requestConfirm"; id: string; message: string; action: string }
-	| { type: "exportConfig" }
+	| { type: "exportConfig"; includeApiKeys?: boolean }
 	| { type: "importConfig" };
 
 type OutgoingMessage =
@@ -586,7 +823,7 @@ export class ConfigViewPanel {
 				await this.startModelTests(message.requestId, this.getConfiguredModelIds());
 				break;
 			case "exportConfig":
-				await this.exportConfig();
+				await this.exportConfig(message.includeApiKeys === true);
 				break;
 			case "importConfig":
 				await this.importConfig();
@@ -782,7 +1019,11 @@ export class ConfigViewPanel {
 			interval_ms: 1000,
 		});
 
-		const foundModel = models.find((model) => model.useForCommitGeneration === true);
+		const foundModel = models.find(
+			(model) =>
+				model.useForCommitGeneration === true &&
+				isCommitGenerationCompatibleModel(model, providerConfigs)
+		);
 		const commitModel = foundModel ? `${foundModel.id}${foundModel.configId ? "::" + foundModel.configId : ""}` : "";
 		const commitLanguage = config.get<string>("oaicopilot.commitLanguage", "English");
 		const readFileLines = config.get<number>("oaicopilot.readFileLines", 0);
@@ -829,9 +1070,10 @@ export class ConfigViewPanel {
 			await this.secrets.delete("oaicopilot.apiKey");
 		}
 
-		// Update models to set useForCommitGeneration based on selected commitModel
-		if (commitModel) {
-			const models = config.get<HFModelItem[]>("oaicopilot.models", []);
+		// Update models to set useForCommitGeneration based on selected commitModel.
+		// An empty selection must clear every existing flag.
+		const models = config.get<HFModelItem[]>("oaicopilot.models", []);
+		if (commitModel || models.some((model) => model.useForCommitGeneration === true)) {
 			const updatedModels = models.map((model) => {
 				const fullModelId = `${model.id}${model.configId ? "::" + model.configId : ""}`;
 				if (fullModelId === commitModel) {
@@ -925,7 +1167,7 @@ export class ConfigViewPanel {
 			vscode.window.showErrorMessage("Provider ID is required.");
 			return;
 		}
-		const effectiveAuthMode = authMode ?? (isOpenAICodexOAuthProvider(trimmedProvider) ? "oauth" : undefined);
+		const effectiveAuthMode = resolveProviderAuthMode(trimmedProvider, authMode, baseUrl);
 		await this.applyProviderApiKeyChange(
 			trimmedProvider,
 			effectiveAuthMode === "oauth" ? undefined : apiKey,
@@ -967,20 +1209,21 @@ export class ConfigViewPanel {
 			vscode.window.showErrorMessage("Provider ID is required.");
 			return;
 		}
-		const effectiveAuthMode = authMode ?? (isOpenAICodexOAuthProvider(trimmedProvider) ? "oauth" : undefined);
+		const config = vscode.workspace.getConfiguration();
+		const models = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+		const providers = this.getProviderConfigs();
+		const migrated = migrateProviderPlaceholderModels(models, providers);
+		const existingProviderModel = findProviderTransportModel(migrated.models, trimmedProvider, migrated.providers);
+		const effectiveBaseUrl = baseUrl || existingProviderModel?.baseUrl;
+		const effectiveAuthMode = resolveProviderAuthMode(trimmedProvider, authMode, effectiveBaseUrl);
 		await this.applyProviderApiKeyChange(
 			trimmedProvider,
 			effectiveAuthMode === "oauth" ? undefined : apiKey,
 			effectiveAuthMode === "oauth" || clearApiKey
 		);
 
-		const config = vscode.workspace.getConfiguration();
-		const models = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
-		const providers = this.getProviderConfigs();
-		const migrated = migrateProviderPlaceholderModels(models, providers);
-		const existingProviderModel = findProviderTransportModel(migrated.models, trimmedProvider, migrated.providers);
 		const updatedProviders = upsertProviderConfig(migrated.providers, trimmedProvider, {
-			baseUrl: baseUrl || existingProviderModel?.baseUrl,
+			baseUrl: effectiveBaseUrl,
 			apiMode: ((apiMode as HFApiMode) || existingProviderModel?.apiMode || "openai") as HFApiMode,
 			authMode: effectiveAuthMode,
 			headers,
@@ -1033,15 +1276,18 @@ export class ConfigViewPanel {
 			const providers = this.getProviderConfigs();
 			const openAICodexOAuthModel = models.find(
 				(item) =>
-					isOpenAICodexOAuthProvider(item.owned_by) &&
+					isOpenAICodexOAuthProvider(item.owned_by, item.authMode, item.baseUrl) &&
 					item.authMode === "oauth" &&
 					isOpenAICodexOAuthBaseUrl(item.baseUrl)
 			);
 			const model =
-				(isOpenAICodexOAuthProvider(trimmedProvider) ? openAICodexOAuthModel : undefined) ??
 				findProviderTransportModel(models, trimmedProvider, providers) ??
 				models.find((item) => item.owned_by?.trim().toLowerCase() === normalizedProvider && item.baseUrl);
-			const baseUrl = model?.baseUrl;
+			const providerConfig = getProviderConfig(providers, trimmedProvider);
+			const authMode = providerConfig?.authMode ?? model?.authMode;
+			const baseUrl = isOpenAICodexOAuthProvider(trimmedProvider, authMode, model?.baseUrl)
+				? openAICodexOAuthModel?.baseUrl
+				: model?.baseUrl;
 			const adapter = getProviderUsageAdapter(trimmedProvider, baseUrl);
 			if (!adapter) {
 				throw new Error(
@@ -1090,6 +1336,7 @@ export class ConfigViewPanel {
 				apiKey: effectiveUsageApiKey,
 				targetApiKey: adapter === "litellm" ? providerApiKey : undefined,
 				accountId: openAIOAuthCredential?.accountId,
+				confirmDestination: (origin) => this.confirmProviderUsageDestination(origin),
 			});
 			this.postMessage({
 				type: "providerUsageResult",
@@ -1103,6 +1350,16 @@ export class ConfigViewPanel {
 				error: error instanceof Error ? error.message : String(error),
 			} as OutgoingMessage);
 		}
+	}
+
+	private async confirmProviderUsageDestination(origin: string): Promise<boolean> {
+		const action = "Send Credentials";
+		const selected = await vscode.window.showWarningMessage(
+			`Send privileged usage credentials to ${origin}? Only confirm if you configured this LiteLLM host intentionally.`,
+			{ modal: true },
+			action
+		);
+		return selected === action;
 	}
 
 	private async applyModelApiKey(model: HFModelItem, providerApiKey?: string, inheritProvider = false) {
@@ -1258,11 +1515,23 @@ export class ConfigViewPanel {
 		await this.sendInit();
 	}
 
-	private async exportConfig() {
+	private async exportConfig(includeApiKeys = false) {
 		try {
+			if (includeApiKeys) {
+				const confirmed = await vscode.window.showWarningMessage(
+					"The exported file will contain generic, provider, and usage/admin API keys in cleartext. Store it securely and do not share it.",
+					{ modal: true },
+					"Export with API keys",
+					"Cancel"
+				);
+				if (confirmed !== "Export with API keys") {
+					vscode.window.showInformationMessage("Export configuration cancelled.");
+					return;
+				}
+			}
+
 			const config = vscode.workspace.getConfiguration();
 			const baseUrl = config.get<string>("oaicopilot.baseUrl", "https://api.openai.com/v1");
-			const apiKey = (await this.secrets.get("oaicopilot.apiKey")) ?? "";
 			const delay = config.get<number>("oaicopilot.delay", 0);
 			const retry = config.get<{
 				enabled?: boolean;
@@ -1279,40 +1548,51 @@ export class ConfigViewPanel {
 			const models = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
 			const providerConfigs = this.getProviderConfigs();
 
-			const foundModel = models.find((model) => model.useForCommitGeneration === true);
+			const foundModel = models.find(
+				(model) =>
+					model.useForCommitGeneration === true &&
+					isCommitGenerationCompatibleModel(model, providerConfigs)
+			);
 			const commitModel = foundModel ? `${foundModel.id}${foundModel.configId ? "::" + foundModel.configId : ""}` : "";
 
-			const providerKeys: Record<string, string> = {};
-			const providerUsageKeys: Record<string, string> = {};
-			const providerIds = Array.from(
-				new Set([...models.map((m) => m.owned_by).filter(Boolean), ...providerConfigs.map((item) => item.provider)])
-			);
-			for (const provider of providerIds) {
-				const normalized = provider.toLowerCase();
-				const key = await this.secrets.get(`oaicopilot.apiKey.${normalized}`);
-				if (key) {
-					providerKeys[provider] = key;
+			const secretPayload: Pick<ExportConfig, "apiKey" | "providerKeys" | "providerUsageKeys"> = {};
+			if (includeApiKeys) {
+				secretPayload.apiKey = (await this.secrets.get("oaicopilot.apiKey")) ?? "";
+				const providerKeys: Record<string, string> = {};
+				const providerUsageKeys: Record<string, string> = {};
+				const providerIds = Array.from(
+					new Set([
+						...models.map((model) => model.owned_by).filter(Boolean),
+						...providerConfigs.map((item) => item.provider),
+					])
+				);
+				for (const provider of providerIds) {
+					const normalized = provider.toLowerCase();
+					const key = await this.secrets.get(`oaicopilot.apiKey.${normalized}`);
+					if (key) {
+						providerKeys[provider] = key;
+					}
+					const usageKey = await this.secrets.get(getProviderUsageSecretKey(provider));
+					if (usageKey) {
+						providerUsageKeys[provider] = usageKey;
+					}
 				}
-				const usageKey = await this.secrets.get(getProviderUsageSecretKey(provider));
-				if (usageKey) {
-					providerUsageKeys[provider] = usageKey;
-				}
+				secretPayload.providerKeys = providerKeys;
+				secretPayload.providerUsageKeys = providerUsageKeys;
 			}
 
 			const exportData: ExportConfig = {
 				version: VersionManager.getVersion(),
 				exportDate: new Date().toISOString(),
 				baseUrl,
-				apiKey,
 				delay,
 				retry,
 				commitLanguage,
 				commitModel,
-				models,
-				providers: providerConfigs,
+				models: includeApiKeys ? models : redactSensitiveHeaders(models),
+				providers: includeApiKeys ? providerConfigs : redactSensitiveHeaders(providerConfigs),
 				readFileLines,
-				providerKeys,
-				providerUsageKeys,
+				...secretPayload,
 			};
 
 			const uri = await vscode.window.showSaveDialog({
@@ -1329,7 +1609,11 @@ export class ConfigViewPanel {
 			const encoder = new TextEncoder();
 			await vscode.workspace.fs.writeFile(uri, encoder.encode(JSON.stringify(exportData, null, 2)));
 
-			vscode.window.showInformationMessage(`Configuration exported to ${uri.fsPath}`);
+			vscode.window.showInformationMessage(
+				includeApiKeys
+					? `Configuration with API keys exported to ${uri.fsPath}`
+					: `Configuration exported without API keys to ${uri.fsPath}`
+			);
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : "Unknown error";
 			vscode.window.showErrorMessage(`Failed to export configuration: ${errorMessage}`);
@@ -1354,54 +1638,162 @@ export class ConfigViewPanel {
 			const content = await vscode.workspace.fs.readFile(uri[0]);
 			const decoder = new TextDecoder();
 			const jsonContent = decoder.decode(content);
-			const importData = JSON.parse(jsonContent) as ExportConfig;
-
-			if (!Array.isArray(importData.models)) {
-				throw new Error("Invalid configuration file: models must be an array");
+			let parsed: unknown;
+			try {
+				parsed = JSON.parse(jsonContent);
+			} catch {
+				throw new Error("Invalid configuration file: content is not valid JSON");
 			}
-			const importedProviders = normalizeProviderConfigs(importData.providers ?? []);
-			const migratedImport = migrateProviderPlaceholderModels(normalizeUserModels(importData.models), importedProviders);
-
+			const importData = validateImportedConfig(parsed);
 			const config = vscode.workspace.getConfiguration();
+			const currentModels = normalizeUserModels(config.get<unknown>("oaicopilot.models", []));
+			const currentProviders = this.getProviderConfigs();
+			const omittedRedactedHeaders = new Set<string>();
+			const providerKey = (provider: ProviderConfigItem) => provider.provider.trim().toLowerCase();
+			const importedProviders = restoreRedactedHeaders(
+				importData.providers ?? currentProviders,
+				currentProviders,
+				providerKey,
+				omittedRedactedHeaders
+			);
+			const importedModels = restoreRedactedHeaders(
+				importData.models,
+				currentModels,
+				getModelConfigKey,
+				omittedRedactedHeaders
+			);
+			const migratedImport = migrateProviderPlaceholderModels(importedModels, importedProviders);
+			const migratedProviders = restoreRedactedHeaders(
+				migratedImport.providers,
+				currentProviders,
+				providerKey,
+				omittedRedactedHeaders
+			);
 
-			await config.update("oaicopilot.baseUrl", importData.baseUrl, vscode.ConfigurationTarget.Global);
-			await config.update("oaicopilot.delay", importData.delay, vscode.ConfigurationTarget.Global);
-			await config.update("oaicopilot.retry", importData.retry, vscode.ConfigurationTarget.Global);
-			await config.update("oaicopilot.readFileLines", importData.readFileLines, vscode.ConfigurationTarget.Global);
-			await config.update("oaicopilot.commitLanguage", importData.commitLanguage, vscode.ConfigurationTarget.Global);
-
-			if (importData.apiKey) {
-				await this.secrets.store("oaicopilot.apiKey", importData.apiKey);
-			} else {
-				await this.secrets.delete("oaicopilot.apiKey");
+			const configUpdates: Array<{ key: string; value: unknown }> = [];
+			if (importData.baseUrl !== undefined) {
+				configUpdates.push({ key: "oaicopilot.baseUrl", value: importData.baseUrl });
+			}
+			if (importData.delay !== undefined) {
+				configUpdates.push({ key: "oaicopilot.delay", value: importData.delay });
+			}
+			if (importData.retry !== undefined) {
+				configUpdates.push({ key: "oaicopilot.retry", value: importData.retry });
+			}
+			if (importData.readFileLines !== undefined) {
+				configUpdates.push({ key: "oaicopilot.readFileLines", value: importData.readFileLines });
+			}
+			if (importData.commitLanguage !== undefined) {
+				configUpdates.push({ key: "oaicopilot.commitLanguage", value: importData.commitLanguage });
 			}
 
-			await config.update("oaicopilot.models", migratedImport.models, vscode.ConfigurationTarget.Global);
-			await this.updateProviderConfigs(migratedImport.providers);
-
-			for (const [provider, key] of Object.entries(importData.providerKeys)) {
-				const normalized = provider.toLowerCase();
-				if (key) {
-					await this.secrets.store(`oaicopilot.apiKey.${normalized}`, key);
-				} else {
-					await this.secrets.delete(`oaicopilot.apiKey.${normalized}`);
+			const secretChanges = new Map<string, string | undefined>();
+			if (importData.apiKey !== undefined) {
+				secretChanges.set("oaicopilot.apiKey", importData.apiKey);
+			}
+			for (const [provider, key] of Object.entries(importData.providerKeys ?? {})) {
+				const normalized = provider.trim().toLowerCase();
+				if (normalized) {
+					secretChanges.set(`oaicopilot.apiKey.${normalized}`, key);
 				}
 			}
 			for (const [provider, key] of Object.entries(importData.providerUsageKeys ?? {})) {
-				const normalized = provider.toLowerCase();
-				if (key) {
-					await this.secrets.store(getProviderUsageSecretKey(normalized), key);
-				} else {
-					await this.secrets.delete(getProviderUsageSecretKey(normalized));
+				const normalized = provider.trim().toLowerCase();
+				if (normalized) {
+					secretChanges.set(getProviderUsageSecretKey(normalized), key);
 				}
 			}
 
-			vscode.window.showInformationMessage("Configuration imported successfully.");
+			const previousConfig = new Map<string, unknown>();
+			for (const update of configUpdates) {
+				previousConfig.set(update.key, config.inspect<unknown>(update.key)?.globalValue);
+			}
+			previousConfig.set("oaicopilot.models", config.inspect<unknown>("oaicopilot.models")?.globalValue);
+			const previousProviders = currentProviders;
+			const previousSecrets = new Map<string, string | undefined>();
+			for (const key of secretChanges.keys()) {
+				previousSecrets.set(key, await this.secrets.get(key));
+			}
+
+			try {
+				for (const update of configUpdates) {
+					await config.update(update.key, update.value, vscode.ConfigurationTarget.Global);
+				}
+				await config.update("oaicopilot.models", migratedImport.models, vscode.ConfigurationTarget.Global);
+				if (importData.providers !== undefined || migratedImport.changed) {
+					await this.updateProviderConfigs(migratedProviders);
+				}
+				for (const [key, value] of secretChanges) {
+					if (value) {
+						await this.secrets.store(key, value);
+					} else {
+						await this.secrets.delete(key);
+					}
+				}
+			} catch (error) {
+				await this.rollbackImportedConfig(config, previousConfig, previousProviders, previousSecrets);
+				throw error;
+			}
+
+			const omittedHeaderNames = Array.from(omittedRedactedHeaders).sort((a, b) => a.localeCompare(b));
+			const omittedHeaderNotice = omittedHeaderNames.length > 0
+				? ` Redacted header values without a current match were omitted: ${omittedHeaderNames.join(", ")}.`
+				: "";
+			vscode.window.showInformationMessage(
+				(secretChanges.size > 0
+					? "Configuration imported successfully, including API keys from the file."
+					: "Configuration imported successfully. Existing API keys were preserved.") + omittedHeaderNotice
+			);
 			this.refreshConfiguration();
-			await this.sendInit();
+			try {
+				await this.sendInit();
+			} catch (error) {
+				logger.warn("config.import.refreshFailed", {
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
 		} catch (error) {
 			const errorMessage = error instanceof Error ? error.message : "Unknown error";
 			vscode.window.showErrorMessage(`Failed to import configuration: ${errorMessage}`);
+		}
+	}
+
+	private async rollbackImportedConfig(
+		config: vscode.WorkspaceConfiguration,
+		previousConfig: ReadonlyMap<string, unknown>,
+		previousProviders: readonly ProviderConfigItem[],
+		previousSecrets: ReadonlyMap<string, string | undefined>
+	): Promise<void> {
+		for (const [key, value] of previousConfig) {
+			try {
+				await config.update(key, value, vscode.ConfigurationTarget.Global);
+			} catch (error) {
+				logger.warn("config.import.rollbackConfigFailed", {
+					key,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
+		}
+		try {
+			await this.updateProviderConfigs(previousProviders);
+		} catch (error) {
+			logger.warn("config.import.rollbackProvidersFailed", {
+				error: error instanceof Error ? error.message : String(error),
+			});
+		}
+		for (const [key, value] of previousSecrets) {
+			try {
+				if (value === undefined) {
+					await this.secrets.delete(key);
+				} else {
+					await this.secrets.store(key, value);
+				}
+			} catch (error) {
+				logger.warn("config.import.rollbackSecretFailed", {
+					key,
+					error: error instanceof Error ? error.message : String(error),
+				});
+			}
 		}
 	}
 }

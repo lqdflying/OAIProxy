@@ -40,6 +40,12 @@ export interface AnthropicThinkingBlock {
 	cache_control?: AnthropicCacheControl;
 }
 
+export interface AnthropicRedactedThinkingBlock {
+	type: "redacted_thinking";
+	data: string;
+	cache_control?: AnthropicCacheControl;
+}
+
 export interface AnthropicToolUseBlock {
 	type: "tool_use";
 	id: string;
@@ -61,6 +67,7 @@ export type AnthropicContentBlock =
 	| AnthropicImageBlock
 	| AnthropicVideoBlock
 	| AnthropicThinkingBlock
+	| AnthropicRedactedThinkingBlock
 	| AnthropicToolUseBlock
 	| AnthropicToolResultBlock;
 
@@ -137,9 +144,10 @@ export interface AnthropicStreamChunk {
 		usage?: AnthropicUsage;
 	};
 	content_block?: {
-		type: "text" | "thinking" | "tool_use" | "video";
+		type: "text" | "thinking" | "redacted_thinking" | "tool_use" | "video";
 		text?: string;
 		thinking?: string;
+		data?: string;
 		id?: string;
 		name?: string;
 		input?: Record<string, unknown>;

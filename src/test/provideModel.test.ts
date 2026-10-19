@@ -4,7 +4,8 @@ import {
 	resolveModelTokenLimits,
 } from "../modelTokenLimits";
 import { MODEL_PICKER_METADATA } from "../modelPickerMetadata";
-import { fetchModels } from "../provideModel";
+import { fetchModels, prepareLanguageModelChatInformation } from "../provideModel";
+import * as vscode from "vscode";
 
 suite("provideModel", () => {
 	test("fetches Azure Foundry models with api-key authentication", async () => {
@@ -32,6 +33,96 @@ suite("provideModel", () => {
 			assert.strictEqual(result.models[0].id, "Kimi-K2.6");
 		} finally {
 			globalThis.fetch = originalFetch;
+		}
+	});
+
+	test("derives legacy model-list capabilities instead of advertising tools and vision", async () => {
+		const originalFetch = globalThis.fetch;
+		const originalConfig = vscode.workspace.getConfiguration;
+		vscode.workspace.getConfiguration = (() => ({
+			get: (key: string, fallback: unknown) => {
+				if (key === "oaicopilot.models") {
+					return [];
+				}
+				if (key === "oaicopilot.baseUrl") {
+					return "https://legacy.example.test/v1";
+				}
+				return fallback;
+			},
+		})) as typeof originalConfig;
+		globalThis.fetch = (async () =>
+			new Response(
+				JSON.stringify({
+					data: [
+						{
+							id: "text-only-model",
+							providers: [{ provider: "legacy", supports_tools: false }],
+							architecture: { input_modalities: ["text"] },
+						},
+					],
+				}),
+				{ status: 200, headers: { "Content-Type": "application/json" } }
+			)) as typeof fetch;
+
+		try {
+			const infos = await prepareLanguageModelChatInformation(
+				{ silent: true },
+				{} as vscode.CancellationToken,
+				{
+					get: async () => "legacy-key",
+					store: async () => undefined,
+					delete: async () => undefined,
+				} as unknown as vscode.SecretStorage
+			);
+
+			assert.strictEqual(infos.length, 1);
+			assert.strictEqual(infos[0].capabilities.toolCalling, false);
+			assert.strictEqual(infos[0].capabilities.imageInput, false);
+		} finally {
+			globalThis.fetch = originalFetch;
+			vscode.workspace.getConfiguration = originalConfig;
+		}
+	});
+
+	test("keeps tools disabled for plain OpenAI-compatible model lists without provider metadata", async () => {
+		const originalFetch = globalThis.fetch;
+		const originalConfig = vscode.workspace.getConfiguration;
+		vscode.workspace.getConfiguration = (() => ({
+			get: (key: string, fallback: unknown) => {
+				if (key === "oaicopilot.models") {
+					return [];
+				}
+				if (key === "oaicopilot.baseUrl") {
+					return "https://plain-models.example.test/v1";
+				}
+				return fallback;
+			},
+		})) as typeof originalConfig;
+		globalThis.fetch = (async () =>
+			new Response(
+				JSON.stringify({
+					data: [{ id: "plain-model", object: "model" }],
+				}),
+				{ status: 200, headers: { "Content-Type": "application/json" } }
+			)) as typeof fetch;
+
+		try {
+			const infos = await prepareLanguageModelChatInformation(
+				{ silent: true },
+				{} as vscode.CancellationToken,
+				{
+					get: async () => "legacy-key",
+					store: async () => undefined,
+					delete: async () => undefined,
+				} as unknown as vscode.SecretStorage
+			);
+
+			assert.strictEqual(infos.length, 1);
+			assert.strictEqual(infos[0].capabilities.toolCalling, false);
+			assert.strictEqual(infos[0].capabilities.imageInput, false);
+		} finally {
+			globalThis.fetch = originalFetch;
+			vscode.workspace.getConfiguration = originalConfig;
 		}
 	});
 

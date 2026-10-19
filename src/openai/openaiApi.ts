@@ -34,6 +34,7 @@ import { logger } from "../logger";
 import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "../vscodeCompat";
 import { logCacheUsage } from "../promptCache";
 import { ResponseUsageAccumulator } from "../responseUsage";
+import { createProviderStreamError, extractProviderErrorMessage } from "../streamUtils";
 
 interface OpenAIStreamStats {
 	chunkCount: number;
@@ -245,16 +246,20 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 				const reasoningObj: Record<string, unknown> = {};
 				const effort = reasoningConfig.effort;
 				const maxTokensReasoning = reasoningConfig.max_tokens || 2000; // Default 2000 as per docs
-				if (effort && effort !== "auto") {
+				if (effort && effort !== "auto" && rb.reasoning_effort === undefined) {
 					reasoningObj.effort = effort;
-				} else {
+				} else if (rb.reasoning_effort === undefined) {
 					// If auto or unspecified, use max_tokens (Anthropic-style fallback)
 					reasoningObj.max_tokens = maxTokensReasoning;
 				}
 				if (reasoningConfig.exclude !== undefined) {
 					reasoningObj.exclude = reasoningConfig.exclude;
 				}
-				rb.reasoning = reasoningObj;
+				if (Object.keys(reasoningObj).length > 0) {
+					rb.reasoning = reasoningObj;
+				} else {
+					delete rb.reasoning;
+				}
 			}
 		}
 
@@ -315,6 +320,7 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 				reason: "official OpenAI Chat Completions rejects reasoning_effort when function tools are present",
 			});
 		}
+		removeConflictingNestedReasoningEffort(rb);
 
 		return rb;
 	}
@@ -339,6 +345,7 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 		const responseUsage = new ResponseUsageAccumulator("openai");
 		let completed = false;
 		let sawProviderError = false;
+		let providerErrorMessage: string | undefined;
 		const stats: OpenAIStreamStats = {
 			chunkCount: 0,
 			contentChunks: 0,
@@ -349,6 +356,40 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 			toolCallDeltaCount: 0,
 			messageChunks: 0,
 			done: false,
+		};
+
+		const handleLine = async (line: string): Promise<void> => {
+			if (!line.startsWith("data:")) {
+				return;
+			}
+			const data = line.slice(5).trim();
+			logger.debug("openai.stream.chunk", { modelId, data });
+			if (data === "[DONE]") {
+				stats.done = true;
+				// Do not throw on [DONE]; any incomplete/empty buffers are ignored.
+				await this.flushToolCallBuffers(progress, /*throwOnInvalid*/ false);
+				return;
+			}
+
+			try {
+				const parsed = JSON.parse(data) as Record<string, unknown>;
+				responseUsage.record(parsed);
+				this.observeResponseCompletion(parsed);
+				if (hasErrorPayload(parsed)) {
+					sawProviderError = true;
+					providerErrorMessage = extractProviderErrorMessage(parsed) ?? providerErrorMessage;
+				}
+				this.updateOpenAIStreamStats(parsed, stats);
+				logCacheUsage(this._cacheUsageApiMode, modelId, parsed);
+				await this.processDelta(parsed, progress);
+			} catch (e) {
+				console.error("[OpenAI Provider] Failed to parse SSE chunk:", e, "data:", data);
+				logger.error("openai.stream.chunk.error", {
+					modelId,
+					error: e instanceof Error ? e.message : String(e),
+					data,
+				});
+			}
 		};
 
 		try {
@@ -368,37 +409,18 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 				buffer = lines.pop() || "";
 
 				for (const line of lines) {
-					if (!line.startsWith("data:")) {
-						continue;
-					}
-					const data = line.slice(5).trim();
-					logger.debug("openai.stream.chunk", { modelId, data });
-					if (data === "[DONE]") {
-						stats.done = true;
-						// Do not throw on [DONE]; any incomplete/empty buffers are ignored.
-						await this.flushToolCallBuffers(progress, /*throwOnInvalid*/ false);
-						continue;
-					}
-
-					try {
-						const parsed = JSON.parse(data) as Record<string, unknown>;
-						responseUsage.record(parsed);
-						this.observeResponseCompletion(parsed);
-						if (hasErrorPayload(parsed)) {
-							sawProviderError = true;
-						}
-						this.updateOpenAIStreamStats(parsed, stats);
-						logCacheUsage(this._cacheUsageApiMode, modelId, parsed);
-						await this.processDelta(parsed, progress);
-					} catch (e) {
-						console.error("[OpenAI Provider] Failed to parse SSE chunk:", e, "data:", data);
-						logger.error("openai.stream.chunk.error", {
-							modelId,
-							error: e instanceof Error ? e.message : String(e),
-							data,
-						});
-					}
+					await handleLine(line);
 				}
+			}
+			buffer += decoder.decode();
+			if (buffer.length > 0) {
+				for (const line of buffer.split("\n")) {
+					await handleLine(line);
+				}
+				buffer = "";
+			}
+			if (sawProviderError && !token.isCancellationRequested) {
+				throw createProviderStreamError("OpenAI", providerErrorMessage);
 			}
 			completed = !token.isCancellationRequested && !sawProviderError;
 			logger.debug("openai.stream.summary", { modelId, ...stats });
@@ -744,7 +766,8 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 		systemPrompt: string,
 		messages: { role: string; content: string }[],
 		baseUrl: string,
-		apiKey: string
+		apiKey: string,
+		signal?: AbortSignal
 	): AsyncGenerator<{ type: "text"; text: string }> {
 		// Combine system prompt with first user message or as separate system message
 		const openaiMessages = [...messages];
@@ -768,6 +791,7 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 			method: "POST",
 			headers,
 			body: JSON.stringify(requestBody),
+			signal,
 		});
 
 		if (!response.ok) {
@@ -784,6 +808,34 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 		const decoder = new TextDecoder();
 		let buffer = "";
 
+		const handleLine = async function* (line: string): AsyncGenerator<{ type: "text"; text: string }> {
+			if (!line.startsWith("data:")) {
+				return;
+			}
+			const data = line.slice(5).trim();
+			if (data === "[DONE]") {
+				return;
+			}
+
+			try {
+				const parsed = JSON.parse(data);
+
+				// OpenAI-compatible streaming response
+				const choice = (parsed.choices as Record<string, unknown>[] | undefined)?.[0];
+				if (!choice) {
+					return;
+				}
+
+				const deltaObj = choice.delta as Record<string, unknown> | undefined;
+				if (deltaObj?.content) {
+					const content = String(deltaObj.content);
+					yield { type: "text", text: content };
+				}
+			} catch (e) {
+				console.error("[OpenAI Provider] Failed to parse SSE chunk:", e, "data:", data);
+			}
+		};
+
 		try {
 			while (true) {
 				const { done, value } = await reader.read();
@@ -796,38 +848,18 @@ export class OpenaiApi extends CommonApi<OpenAIChatMessage, Record<string, unkno
 				buffer = lines.pop() || "";
 
 				for (const line of lines) {
-					if (!line.startsWith("data:")) {
-						continue;
-					}
-					const data = line.slice(5).trim();
-					if (data === "[DONE]") {
-						continue;
-					}
-
-					try {
-						const parsed = JSON.parse(data);
-
-						// OpenAI-compatible streaming response
-						const choice = (parsed.choices as Record<string, unknown>[] | undefined)?.[0];
-						if (!choice) {
-							continue;
-						}
-
-						const deltaObj = choice.delta as Record<string, unknown> | undefined;
-						if (deltaObj?.content) {
-							const content = String(deltaObj.content);
-							yield { type: "text", text: content };
-						}
-						// Handle finish reason
-						if (choice.finish_reason) {
-							break;
-						}
-					} catch (e) {
-						console.error("[OpenAI Provider] Failed to parse SSE chunk:", e, "data:", data);
-					}
+					yield* handleLine(line);
 				}
 			}
+			buffer += decoder.decode();
+			if (buffer.length > 0) {
+				for (const line of buffer.split("\n")) {
+					yield* handleLine(line);
+				}
+				buffer = "";
+			}
 		} finally {
+			await reader.cancel().catch(() => undefined);
 			reader.releaseLock();
 		}
 	}
@@ -931,6 +963,27 @@ function shouldOmitOpenAIChatCompletionsReasoningEffortWithTools(
 		return new URL(model?.baseUrl ?? "").hostname.toLowerCase() === "api.openai.com";
 	} catch {
 		return false;
+	}
+}
+
+function removeConflictingNestedReasoningEffort(requestBody: Record<string, unknown>): void {
+	const reasoning = requestBody.reasoning;
+	if (
+		requestBody.reasoning_effort === undefined ||
+		!reasoning ||
+		typeof reasoning !== "object" ||
+		Array.isArray(reasoning) ||
+		!("effort" in reasoning)
+	) {
+		return;
+	}
+
+	const nextReasoning = { ...(reasoning as Record<string, unknown>) };
+	delete nextReasoning.effort;
+	if (Object.keys(nextReasoning).length > 0) {
+		requestBody.reasoning = nextReasoning;
+	} else {
+		delete requestBody.reasoning;
 	}
 }
 

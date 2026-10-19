@@ -74,7 +74,30 @@ interface JsonResponse {
 	json: Record<string, unknown>;
 }
 
-let refreshPromise: Promise<OpenAIOAuthCredential> | undefined;
+const refreshPromises = new WeakMap<SecretStorageLike, Promise<OpenAIOAuthCredential>>();
+const credentialGenerations = new WeakMap<SecretStorageLike, number>();
+const credentialOperationQueues = new WeakMap<SecretStorageLike, Promise<void>>();
+
+function getCredentialGeneration(secrets: SecretStorageLike): number {
+	return credentialGenerations.get(secrets) ?? 0;
+}
+
+function advanceCredentialGeneration(secrets: SecretStorageLike): void {
+	credentialGenerations.set(secrets, getCredentialGeneration(secrets) + 1);
+}
+
+function queueCredentialOperation<T>(secrets: SecretStorageLike, operation: () => Promise<T>): Promise<T> {
+	const previous = credentialOperationQueues.get(secrets) ?? Promise.resolve();
+	const result = previous.catch(() => undefined).then(operation);
+	credentialOperationQueues.set(
+		secrets,
+		result.then(
+			() => undefined,
+			() => undefined
+		)
+	);
+	return result;
+}
 
 export function isOpenAICodexOAuthBaseUrl(baseUrl: string | undefined): boolean {
 	if (!baseUrl) {
@@ -93,12 +116,20 @@ export function isOpenAICodexOAuthBaseUrl(baseUrl: string | undefined): boolean 
 }
 
 /**
- * Returns true for the dedicated OAuth provider and the legacy OpenAI provider
- * used by pre-separation model settings.
+ * Returns true for the dedicated OAuth provider, or for the legacy `openai`
+ * provider only when it explicitly uses OAuth with the Codex base URL. The
+ * regular OpenAI API-key provider must remain eligible for SecretStorage keys.
  */
-export function isOpenAICodexOAuthProvider(provider: string | undefined): boolean {
+export function isOpenAICodexOAuthProvider(
+	provider: string | undefined,
+	authMode?: "api-key" | "oauth",
+	baseUrl?: string
+): boolean {
 	const normalized = provider?.trim().toLowerCase();
-	return normalized === OPENAI_OAUTH_PROVIDER || normalized === "openai";
+	if (normalized === OPENAI_OAUTH_PROVIDER) {
+		return true;
+	}
+	return normalized === "openai" && authMode === "oauth" && isOpenAICodexOAuthBaseUrl(baseUrl);
 }
 
 export function applyOpenAICodexOAuthHeaders(
@@ -157,17 +188,96 @@ export async function saveOpenAIOAuthCredential(
 	secrets: SecretStorageLike,
 	credential: OpenAIOAuthCredential
 ): Promise<void> {
-	await secrets.store(OPENAI_OAUTH_SECRET_KEY, JSON.stringify(credential));
+	await queueCredentialOperation(secrets, async () => {
+		advanceCredentialGeneration(secrets);
+		await secrets.store(OPENAI_OAUTH_SECRET_KEY, JSON.stringify(credential));
+	});
 }
 
 export async function clearOpenAIOAuthCredential(secrets: SecretStorageLike): Promise<void> {
-	await secrets.delete(OPENAI_OAUTH_SECRET_KEY);
+	await queueCredentialOperation(secrets, async () => {
+		advanceCredentialGeneration(secrets);
+		await secrets.delete(OPENAI_OAUTH_SECRET_KEY);
+	});
+}
+
+async function persistRefreshedCredentialIfCurrent(
+	secrets: SecretStorageLike,
+	refreshed: OpenAIOAuthCredential,
+	generation: number
+): Promise<OpenAIOAuthCredential> {
+	return await queueCredentialOperation(secrets, async () => {
+		if (getCredentialGeneration(secrets) !== generation) {
+			return (await loadOpenAIOAuthCredential(secrets)) ?? refreshed;
+		}
+		advanceCredentialGeneration(secrets);
+		await secrets.store(OPENAI_OAUTH_SECRET_KEY, JSON.stringify(refreshed));
+		return refreshed;
+	});
+}
+
+async function awaitRefreshWithSignal<T>(
+	promise: Promise<T>,
+	signal: AbortSignal | undefined,
+	message: string
+): Promise<T> {
+	if (!signal) {
+		return await promise;
+	}
+	if (signal.aborted) {
+		throw signal.reason instanceof Error ? signal.reason : new Error(message);
+	}
+	return await new Promise<T>((resolve, reject) => {
+		const onAbort = () => reject(signal.reason instanceof Error ? signal.reason : new Error(message));
+		signal.addEventListener("abort", onAbort, { once: true });
+		promise.then(
+			(value) => {
+				signal.removeEventListener("abort", onAbort);
+				resolve(value);
+			},
+			(error) => {
+				signal.removeEventListener("abort", onAbort);
+				reject(error);
+			}
+		);
+	});
+}
+
+async function getOrStartRefresh(
+	secrets: SecretStorageLike,
+	credential: OpenAIOAuthCredential,
+	generation: number,
+	options: { now?: number; signal?: AbortSignal; fetchImpl?: typeof fetch }
+): Promise<OpenAIOAuthCredential> {
+	if (options.signal?.aborted) {
+		throw options.signal.reason instanceof Error
+			? options.signal.reason
+			: new Error("OpenAI OAuth refresh cancelled.");
+	}
+	const existing = refreshPromises.get(secrets);
+	if (existing) {
+		return await awaitRefreshWithSignal(existing, options.signal, "OpenAI OAuth refresh cancelled.");
+	}
+	const promise = refreshOpenAIOAuthCredential(credential, {
+		now: options.now,
+		fetchImpl: options.fetchImpl,
+	}).then((refreshed) => persistRefreshedCredentialIfCurrent(secrets, refreshed, generation));
+	refreshPromises.set(secrets, promise);
+	void promise
+		.finally(() => {
+			if (refreshPromises.get(secrets) === promise) {
+				refreshPromises.delete(secrets);
+			}
+		})
+		.catch(() => undefined);
+	return await awaitRefreshWithSignal(promise, options.signal, "OpenAI OAuth refresh cancelled.");
 }
 
 export async function getOpenAIOAuthAccessToken(
 	secrets: SecretStorageLike,
 	options: { now?: number; signal?: AbortSignal; fetchImpl?: typeof fetch } = {}
 ): Promise<string | undefined> {
+	const generation = getCredentialGeneration(secrets);
 	const credential = await loadOpenAIOAuthCredential(secrets);
 	if (!credential) {
 		return undefined;
@@ -177,23 +287,14 @@ export async function getOpenAIOAuthAccessToken(
 		return credential.accessToken;
 	}
 
-	if (!refreshPromise) {
-		refreshPromise = refreshOpenAIOAuthCredential(credential, options)
-			.then(async (refreshed) => {
-				await saveOpenAIOAuthCredential(secrets, refreshed);
-				return refreshed;
-			})
-			.finally(() => {
-				refreshPromise = undefined;
-			});
-	}
-	return (await refreshPromise).accessToken;
+	return (await getOrStartRefresh(secrets, credential, generation, options)).accessToken;
 }
 
 export async function getOpenAIOAuthCredential(
 	secrets: SecretStorageLike,
 	options: { now?: number; signal?: AbortSignal; fetchImpl?: typeof fetch } = {}
 ): Promise<OpenAIOAuthCredential | undefined> {
+	const generation = getCredentialGeneration(secrets);
 	const credential = await loadOpenAIOAuthCredential(secrets);
 	if (!credential) {
 		return undefined;
@@ -202,17 +303,7 @@ export async function getOpenAIOAuthCredential(
 	if (credential.expiresAt > now + EXPIRY_SKEW_MS) {
 		return credential;
 	}
-	if (!refreshPromise) {
-		refreshPromise = refreshOpenAIOAuthCredential(credential, options)
-			.then(async (refreshed) => {
-				await saveOpenAIOAuthCredential(secrets, refreshed);
-				return refreshed;
-			})
-			.finally(() => {
-				refreshPromise = undefined;
-			});
-	}
-	return await refreshPromise;
+	return await getOrStartRefresh(secrets, credential, generation, options);
 }
 
 export async function loginOpenAIOAuth(options: OpenAIOAuthLoginOptions = {}): Promise<OpenAIOAuthCredential> {
@@ -397,6 +488,9 @@ async function request(
 	const timer = setTimeout(() => controller.abort(new Error("OpenAI OAuth request timed out.")), REQUEST_TIMEOUT_MS);
 	const onAbort = () => controller.abort(options.signal?.reason ?? new Error("OpenAI OAuth request cancelled."));
 	options.signal?.addEventListener("abort", onAbort, { once: true });
+	if (options.signal?.aborted) {
+		onAbort();
+	}
 	try {
 		const response = await (options.fetchImpl ?? fetch)(url, { ...init, signal: controller.signal });
 		const text = (await response.text()).slice(0, 256 * 1024);

@@ -50,6 +50,8 @@ export interface ProviderUsageRequest {
 	apiKey: string;
 	targetApiKey?: string;
 	accountId?: string;
+	confirmDestination?: (origin: string) => Promise<boolean>;
+	timeoutMs?: number;
 }
 
 export interface FireworksAccount {
@@ -65,11 +67,15 @@ export interface FireworksServerlessUsage {
 
 const DEEPSEEK_BALANCE_ENDPOINT = "https://api.deepseek.com/user/balance";
 const KIMI_BALANCE_ENDPOINT = "https://api.moonshot.ai/v1/users/me/balance";
+const KIMI_CN_BALANCE_ENDPOINT = "https://api.moonshot.cn/v1/users/me/balance";
 const MINIMAX_TOKEN_PLAN_ENDPOINT = "https://api.minimax.io/v1/token_plan/remains";
 const OPENAI_COSTS_ENDPOINT = "https://api.openai.com/v1/organization/costs";
 const ANTHROPIC_COST_REPORT_ENDPOINT = "https://api.anthropic.com/v1/organizations/cost_report";
 const FIREWORKS_ACCOUNTS_ENDPOINT = "https://api.fireworks.ai/v1/accounts";
 const TOKENROUTER_MANAGEMENT_BASE_URL = "https://api.tokenrouter.com";
+const DEFAULT_LITELLM_ORIGIN = "https://ai.nube.sh";
+const USAGE_REQUEST_TIMEOUT_MS = 30_000;
+const USAGE_RESPONSE_MAX_BYTES = 256 * 1024;
 const MIMO_USAGE_UNSUPPORTED_REASON =
 	"Xiaomi MiMo usage checks are unavailable because Xiaomi only exposes balance/usage through web Console endpoints; no public API-key usage endpoint is documented.";
 const ZAI_USAGE_UNSUPPORTED_REASON =
@@ -77,6 +83,43 @@ const ZAI_USAGE_UNSUPPORTED_REASON =
 const AZURE_FOUNDRY_USAGE_UNSUPPORTED_REASON =
 	"Azure Foundry usage checks are unavailable with an inference API key; use Azure Monitor or Cost Management with Azure RBAC.";
 export const TOKENROUTER_DASHBOARD_URL = "https://www.tokenrouter.com/console";
+
+function parseHttpsUrl(value: string | undefined): URL | undefined {
+	if (!value) {
+		return undefined;
+	}
+	try {
+		const url = new URL(value);
+		if (url.protocol !== "https:" || url.username || url.password || url.hash) {
+			return undefined;
+		}
+		return url;
+	} catch {
+		return undefined;
+	}
+}
+
+function requireHttpsUrl(value: string, label: string): URL {
+	const url = parseHttpsUrl(value);
+	if (!url) {
+		throw new Error(`${label} must be an absolute HTTPS URL without embedded credentials or fragments.`);
+	}
+	return url;
+}
+
+function hasHostname(value: string | undefined, hostname: string): boolean {
+	return parseHttpsUrl(value)?.hostname.toLowerCase() === hostname;
+}
+
+function hasHostnameSuffix(value: string | undefined, suffix: string): boolean {
+	const hostname = parseHttpsUrl(value)?.hostname.toLowerCase();
+	return hostname !== undefined && hostname.endsWith(suffix) && hostname.length > suffix.length;
+}
+
+function isOpenAICodexBaseUrl(value: string | undefined): boolean {
+	const url = parseHttpsUrl(value);
+	return url?.hostname.toLowerCase() === "chatgpt.com" && /^\/backend-api\/codex(?:\/v1)?\/?$/u.test(url.pathname);
+}
 
 export function getProviderSecretKey(provider: string): string {
 	return `oaicopilot.apiKey.${provider.trim().toLowerCase()}`;
@@ -118,14 +161,12 @@ export function isZaiProvider(provider: string, baseUrl?: string): boolean {
 
 export function isTokenRouterProvider(provider: string, baseUrl?: string): boolean {
 	const normalizedProvider = provider.trim().toLowerCase();
-	const normalizedBaseUrl = (baseUrl ?? "").trim().toLowerCase();
-	return normalizedProvider === "tokenrouter" || normalizedBaseUrl.includes("api.tokenrouter.com");
+	return normalizedProvider === "tokenrouter" || hasHostname(baseUrl, "api.tokenrouter.com");
 }
 
 export function isAzureFoundryProvider(provider: string, baseUrl?: string): boolean {
 	const normalizedProvider = provider.trim().toLowerCase();
-	const normalizedBaseUrl = (baseUrl ?? "").trim().toLowerCase();
-	return normalizedProvider === "azure-foundry" || normalizedBaseUrl.includes(".services.ai.azure.com");
+	return normalizedProvider === "azure-foundry" || hasHostnameSuffix(baseUrl, ".services.ai.azure.com");
 }
 
 export function getProviderUsageUnsupportedReason(provider: string, baseUrl?: string): string | undefined {
@@ -143,56 +184,49 @@ export function getProviderUsageUnsupportedReason(provider: string, baseUrl?: st
 
 export function getProviderUsageAdapter(provider: string, baseUrl?: string): ProviderUsageAdapter | undefined {
 	const normalizedProvider = provider.trim().toLowerCase();
-	const normalizedBaseUrl = (baseUrl ?? "").trim().toLowerCase();
 	if (normalizedProvider === "xai" && isXaiGrokOAuthBaseUrl(baseUrl)) {
 		return "xai";
 	}
-	if (
-		(normalizedProvider === "openai-oauth" || normalizedProvider === "openai") &&
-		normalizedBaseUrl.includes("chatgpt.com/backend-api/codex")
-	) {
+	if ((normalizedProvider === "openai-oauth" || normalizedProvider === "openai") && isOpenAICodexBaseUrl(baseUrl)) {
 		return "openai-codex";
 	}
 
 	if (isTokenRouterProvider(provider, baseUrl)) {
 		return "tokenrouter";
 	}
-	if (normalizedProvider === "openai" || normalizedBaseUrl.includes("api.openai.com")) {
+	if (normalizedProvider === "openai" || hasHostname(baseUrl, "api.openai.com")) {
 		return "openai";
 	}
-	if (normalizedProvider === "deepseek" || normalizedBaseUrl.includes("deepseek.com")) {
+	if (normalizedProvider === "deepseek" || hasHostname(baseUrl, "api.deepseek.com")) {
 		return "deepseek";
 	}
-	if (normalizedProvider === "fireworks" || normalizedBaseUrl.includes("api.fireworks.ai")) {
+	if (normalizedProvider === "fireworks" || hasHostname(baseUrl, "api.fireworks.ai")) {
 		return "fireworks";
 	}
 	if (
 		normalizedProvider === "kimi" ||
 		normalizedProvider === "moonshot" ||
-		normalizedBaseUrl.includes("moonshot.ai") ||
-		normalizedBaseUrl.includes("kimi.ai")
+		hasHostname(baseUrl, "api.moonshot.ai") ||
+		hasHostname(baseUrl, "api.moonshot.cn") ||
+		hasHostname(baseUrl, "api.kimi.ai")
 	) {
 		return "kimi";
 	}
 	if (
 		normalizedProvider === "minimax" ||
 		normalizedProvider === "minimax-anthropic" ||
-		normalizedBaseUrl.includes("minimax.io")
+		hasHostname(baseUrl, "api.minimax.io")
 	) {
 		return "minimax";
 	}
 	if (
 		normalizedProvider === "anthropic" ||
 		normalizedProvider === "claude" ||
-		normalizedBaseUrl.includes("api.anthropic.com")
+		hasHostname(baseUrl, "api.anthropic.com")
 	) {
 		return "anthropic";
 	}
-	if (
-		normalizedProvider === "litellm" ||
-		normalizedBaseUrl.includes("ai.nube.sh") ||
-		normalizedBaseUrl.includes("litellm")
-	) {
+	if (normalizedProvider === "litellm" || hasHostname(baseUrl, "ai.nube.sh")) {
 		return "litellm";
 	}
 
@@ -216,7 +250,9 @@ export async function checkProviderUsage(request: ProviderUsageRequest): Promise
 	} else if (adapter === "fireworks") {
 		parsed = await checkFireworksUsage(request.apiKey);
 	} else if (adapter === "kimi") {
-		parsed = parseKimiBalance(await fetchJson(KIMI_BALANCE_ENDPOINT, "Kimi", bearerHeaders(request.apiKey)));
+		parsed = parseKimiBalance(
+			await fetchJson(buildKimiBalanceEndpoint(request.baseUrl), "Kimi", bearerHeaders(request.apiKey))
+		);
 	} else if (adapter === "minimax") {
 		parsed = parseMiniMaxTokenPlan(
 			await fetchJson(MINIMAX_TOKEN_PLAN_ENDPOINT, "MiniMax", bearerHeaders(request.apiKey))
@@ -258,11 +294,24 @@ export async function checkProviderUsage(request: ProviderUsageRequest): Promise
 				"LiteLLM usage checks require the provider API key to inspect plus a separate master/admin Usage Key."
 			);
 		}
+		const endpoint = buildLiteLLMKeyInfoEndpoint(request.baseUrl, request.targetApiKey);
+		const endpointUrl = new URL(endpoint);
+		if (endpointUrl.origin !== DEFAULT_LITELLM_ORIGIN) {
+			if (!request.confirmDestination) {
+				throw new Error(
+					`LiteLLM usage checks require confirmation before sending usage credentials to ${endpointUrl.origin}.`
+				);
+			}
+			if (!(await request.confirmDestination(endpointUrl.origin))) {
+				throw new Error(`LiteLLM usage check cancelled for ${endpointUrl.origin}.`);
+			}
+		}
 		parsed = parseLiteLLMKeyInfo(
 			await fetchJson(
-				buildLiteLLMKeyInfoEndpoint(request.baseUrl, request.targetApiKey),
+				endpoint,
 				"LiteLLM",
-				bearerHeaders(request.apiKey)
+				bearerHeaders(request.apiKey),
+				{ timeoutMs: request.timeoutMs }
 			)
 		);
 	}
@@ -276,13 +325,12 @@ export async function checkProviderUsage(request: ProviderUsageRequest): Promise
 	};
 }
 
-export function buildTokenRouterWalletEndpoint(baseUrl?: string): string {
-	const trimmed = (baseUrl ?? TOKENROUTER_MANAGEMENT_BASE_URL).trim() || TOKENROUTER_MANAGEMENT_BASE_URL;
-	const withoutTrailingSlash = trimmed.replace(/\/+$/, "");
-	const managementBaseUrl = withoutTrailingSlash.endsWith("/v1")
-		? withoutTrailingSlash.slice(0, -"/v1".length)
-		: withoutTrailingSlash;
-	return `${managementBaseUrl}/api/management/self/wallet`;
+export function buildTokenRouterWalletEndpoint(_baseUrl?: string): string {
+	return `${TOKENROUTER_MANAGEMENT_BASE_URL}/api/management/self/wallet`;
+}
+
+export function buildKimiBalanceEndpoint(baseUrl?: string): string {
+	return hasHostname(baseUrl, "api.moonshot.cn") ? KIMI_CN_BALANCE_ENDPOINT : KIMI_BALANCE_ENDPOINT;
 }
 
 export function parseDeepSeekBalance(payload: unknown): ParsedProviderUsage {
@@ -930,14 +978,16 @@ export function buildLiteLLMKeyInfoEndpoint(baseUrl: string | undefined, targetA
 	if (!trimmed) {
 		throw new Error("LiteLLM usage checks require a configured provider Base URL.");
 	}
-	const normalized = trimmed.replace(/\/+$/, "");
-	const managementBaseUrl = normalized.endsWith("/api/v1")
-		? normalized.slice(0, -"/api/v1".length)
-		: normalized.endsWith("/v1")
-			? normalized.slice(0, -"/v1".length)
-			: normalized;
-	const params = new URLSearchParams({ key: targetApiKey });
-	return `${managementBaseUrl}/key/info?${params.toString()}`;
+	const url = requireHttpsUrl(trimmed, "LiteLLM Base URL");
+	const path = url.pathname.replace(/\/+$/u, "");
+	const managementPath = path.endsWith("/api/v1")
+		? path.slice(0, -"/api/v1".length)
+		: path.endsWith("/v1")
+			? path.slice(0, -"/v1".length)
+			: path;
+	const endpoint = new URL(`${managementPath}/key/info`, url.origin);
+	endpoint.searchParams.set("key", targetApiKey);
+	return endpoint.toString();
 }
 
 function getMonthToDateRange(now = new Date()): { start: Date; end: Date } {
@@ -951,12 +1001,39 @@ function toRfc3339(date: Date): string {
 	return date.toISOString().replace(".000Z", "Z");
 }
 
-async function fetchJson(endpoint: string, providerLabel: string, headers: Record<string, string>): Promise<unknown> {
-	const response = await fetch(endpoint, {
-		method: "GET",
-		headers,
-	});
-	const text = await response.text();
+async function fetchJson(
+	endpoint: string,
+	providerLabel: string,
+	headers: Record<string, string>,
+	options: { timeoutMs?: number } = {}
+): Promise<unknown> {
+	const url = requireHttpsUrl(endpoint, `${providerLabel} usage endpoint`);
+	const timeoutMs = options.timeoutMs ?? USAGE_REQUEST_TIMEOUT_MS;
+	const controller = new AbortController();
+	let timedOut = false;
+	const timer = setTimeout(() => {
+		timedOut = true;
+		controller.abort();
+	}, timeoutMs);
+
+	let response: Response;
+	let text: string;
+	try {
+		response = await fetch(url.toString(), {
+			method: "GET",
+			headers,
+			redirect: "error",
+			signal: controller.signal,
+		});
+		text = await readResponseTextLimited(response, providerLabel);
+	} catch (error) {
+		if (timedOut) {
+			throw new Error(`${providerLabel} usage check timed out after ${Math.ceil(timeoutMs / 1000)} seconds.`);
+		}
+		throw error;
+	} finally {
+		clearTimeout(timer);
+	}
 
 	if (!response.ok) {
 		throw new Error(
@@ -970,6 +1047,36 @@ async function fetchJson(endpoint: string, providerLabel: string, headers: Recor
 		throw new Error(
 			`${providerLabel} usage check returned invalid JSON: ${error instanceof Error ? error.message : String(error)}`
 		);
+	}
+}
+
+async function readResponseTextLimited(response: Response, providerLabel: string): Promise<string> {
+	if (!response.body) {
+		return "";
+	}
+	const reader = response.body.getReader();
+	const decoder = new TextDecoder();
+	let totalBytes = 0;
+	let text = "";
+	try {
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) {
+				break;
+			}
+			totalBytes += value.byteLength;
+			if (totalBytes > USAGE_RESPONSE_MAX_BYTES) {
+				await reader.cancel();
+				throw new Error(
+					`${providerLabel} usage response exceeded the ${Math.floor(USAGE_RESPONSE_MAX_BYTES / 1024)} KiB limit.`
+				);
+			}
+			text += decoder.decode(value, { stream: true });
+		}
+		text += decoder.decode();
+		return text;
+	} finally {
+		reader.releaseLock();
 	}
 }
 

@@ -106,6 +106,16 @@ export function isProviderPlaceholderModel(model: Pick<HFModelItem, "id"> | unde
 	return Boolean(model?.id?.startsWith("__provider__"));
 }
 
+export function isCommitGenerationCompatibleModel(
+	model: HFModelItem,
+	providers: readonly ProviderConfigItem[] = []
+): boolean {
+	const providerConfig = getProviderConfig(providers, model.owned_by);
+	const authMode = model.authMode ?? providerConfig?.authMode;
+	const apiMode = model.apiMode ?? providerConfig?.apiMode ?? "openai";
+	return authMode !== "oauth" && apiMode !== "gemini" && !isProviderPlaceholderModel(model);
+}
+
 export function getProviderPlaceholderId(provider: string): string {
 	return `__provider__${provider.trim()}`;
 }

@@ -8,9 +8,11 @@ import {
 	OPENAI_OAUTH_VERIFICATION_URL,
 	applyOpenAICodexOAuthHeaders,
 	applyOpenAICodexSessionHeaders,
+	clearOpenAIOAuthCredential,
 	getOpenAIOAuthAccessToken,
 	getOpenAIOAuthCredential,
 	isOpenAICodexOAuthBaseUrl,
+	isOpenAICodexOAuthProvider,
 	loginOpenAIOAuth,
 } from "../openaiOAuth";
 import type { SecretStorageLike } from "../xaiOAuth";
@@ -132,7 +134,150 @@ suite("openaiOAuth", () => {
 		assert.ok(refreshed);
 		assert.strictEqual(refreshed.accountId, "acct-test");
 	});
+
+	test("distinguishes the API-key provider from Codex OAuth", () => {
+		assert.strictEqual(isOpenAICodexOAuthProvider("openai"), false);
+		assert.strictEqual(
+			isOpenAICodexOAuthProvider("openai", "api-key", "https://api.openai.com/v1"),
+			false
+		);
+		assert.strictEqual(isOpenAICodexOAuthProvider("openai-oauth"), true);
+		assert.strictEqual(
+			isOpenAICodexOAuthProvider("openai", "oauth", OPENAI_CODEX_RESPONSES_BASE_URL),
+			true
+		);
+	});
+
+	test("does not restore a credential after sign-out during an in-flight refresh", async () => {
+		let stored: string | undefined = JSON.stringify({
+			accessToken: "expired-token",
+			refreshToken: "refresh-token",
+			expiresAt: 1,
+		});
+		const secrets: SecretStorageLike = {
+			get: async () => stored,
+			store: async (_key, value) => {
+				stored = value;
+			},
+			delete: async () => {
+				stored = undefined;
+			},
+		};
+		const started = deferred<void>();
+		const response = deferred<Response>();
+		const pending = getOpenAIOAuthAccessToken(secrets, {
+			now: 10_000,
+			fetchImpl: async () => {
+				started.resolve();
+				return await response.promise;
+			},
+		});
+
+		await started.promise;
+		await clearOpenAIOAuthCredential(secrets);
+		response.resolve(jsonResponse({ access_token: "fresh-token", expires_in: 3600 }));
+
+		assert.strictEqual(await pending, "fresh-token");
+		assert.strictEqual(stored, undefined);
+	});
+
+	test("does not persist a refresh when sign-out completes during the credential load", async () => {
+		let stored: string | undefined = JSON.stringify({
+			accessToken: "expired-token",
+			refreshToken: "refresh-token",
+			expiresAt: 1,
+		});
+		let getCalls = 0;
+		const loadStarted = deferred<void>();
+		const loadResult = deferred<string | undefined>();
+		const secrets: SecretStorageLike = {
+			get: async () => {
+				getCalls += 1;
+				if (getCalls === 1) {
+					loadStarted.resolve();
+					return await loadResult.promise;
+				}
+				return stored;
+			},
+			store: async (_key, value) => {
+				stored = value;
+			},
+			delete: async () => {
+				stored = undefined;
+			},
+		};
+		let refreshCount = 0;
+		const pending = getOpenAIOAuthAccessToken(secrets, {
+			now: 10_000,
+			fetchImpl: async () => {
+				refreshCount += 1;
+				return jsonResponse({ access_token: "fresh-token", expires_in: 3600 });
+			},
+		});
+
+		await loadStarted.promise;
+		await clearOpenAIOAuthCredential(secrets);
+		loadResult.resolve(
+			JSON.stringify({ accessToken: "expired-token", refreshToken: "refresh-token", expiresAt: 1 })
+		);
+
+		assert.strictEqual(await pending, "fresh-token");
+		assert.strictEqual(refreshCount, 1);
+		assert.strictEqual(stored, undefined);
+	});
+
+	test("a cancelled caller does not abort a shared refresh used by another caller", async () => {
+		let stored: string | undefined = JSON.stringify({
+			accessToken: "expired-token",
+			refreshToken: "refresh-token",
+			expiresAt: 1,
+		});
+		const secrets: SecretStorageLike = {
+			get: async () => stored,
+			store: async (_key, value) => {
+				stored = value;
+			},
+			delete: async () => {
+				stored = undefined;
+			},
+		};
+		const started = deferred<void>();
+		const response = deferred<Response>();
+		let refreshCount = 0;
+		const controller = new AbortController();
+		const cancelled = getOpenAIOAuthAccessToken(secrets, {
+			now: 10_000,
+			signal: controller.signal,
+			fetchImpl: async () => {
+				refreshCount += 1;
+				started.resolve();
+				return await response.promise;
+			},
+		});
+
+		await started.promise;
+		const survivor = getOpenAIOAuthAccessToken(secrets, {
+			now: 10_000,
+			fetchImpl: async () => {
+				throw new Error("the in-flight refresh should be reused");
+			},
+		});
+		controller.abort(new Error("first caller cancelled"));
+		response.resolve(jsonResponse({ access_token: "fresh-token", expires_in: 3600 }));
+
+		await assert.rejects(cancelled, /first caller cancelled/u);
+		assert.strictEqual(await survivor, "fresh-token");
+		assert.strictEqual(refreshCount, 1);
+	});
 });
+
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	const promise = new Promise<T>((done) => {
+		resolve = done;
+	});
+	return { promise, resolve };
+}
 
 function jwt(payload: Record<string, unknown>): string {
 	return `header.${Buffer.from(JSON.stringify(payload)).toString("base64url")}.signature`;

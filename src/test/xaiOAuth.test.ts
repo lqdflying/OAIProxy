@@ -5,8 +5,10 @@ import {
 	XAI_OAUTH_SCOPE,
 	XAI_GROK_OAUTH_BASE_URL,
 	applyXaiGrokOAuthHeaders,
+	clearXaiOAuthCredential,
 	getXaiOAuthAccessToken,
 	loginXaiOAuth,
+	refreshXaiOAuthCredential,
 	type SecretStorageLike,
 } from "../xaiOAuth";
 
@@ -101,7 +103,217 @@ suite("xaiOAuth", () => {
 		assert.strictEqual(refreshCount, 1);
 		assert.strictEqual(JSON.parse(stored).refreshToken, "rotated-refresh");
 	});
+
+	test("does not restore a credential after sign-out during an in-flight refresh", async () => {
+		let stored: string | undefined = JSON.stringify({
+			accessToken: "expired-token",
+			refreshToken: "refresh-token",
+			tokenEndpoint: "https://auth.x.ai/oauth2/token",
+			expiresAt: 1,
+		});
+		const secrets: SecretStorageLike = {
+			get: async () => stored,
+			store: async (_key, value) => {
+				stored = value;
+			},
+			delete: async () => {
+				stored = undefined;
+			},
+		};
+		const started = deferred<void>();
+		const response = deferred<Response>();
+		const pending = getXaiOAuthAccessToken(secrets, {
+			now: 10_000,
+			fetchImpl: async () => {
+				started.resolve();
+				return await response.promise;
+			},
+		});
+
+		await started.promise;
+		await clearXaiOAuthCredential(secrets);
+		response.resolve(jsonResponse({ access_token: "fresh-token", refresh_token: "rotated-token", expires_in: 3600 }));
+
+		assert.strictEqual(await pending, "fresh-token");
+		assert.strictEqual(stored, undefined);
+	});
+
+	test("forwards caller cancellation to an in-flight refresh request", async () => {
+		const started = deferred<void>();
+		const controller = new AbortController();
+		const pending = refreshXaiOAuthCredential(
+			{
+				accessToken: "expired-token",
+				refreshToken: "refresh-token",
+				tokenEndpoint: "https://auth.x.ai/oauth2/token",
+				expiresAt: 1,
+			},
+			{
+				signal: controller.signal,
+				fetchImpl: async (_input, init) => {
+					started.resolve();
+					return await new Promise<Response>((_resolve, reject) => {
+						init?.signal?.addEventListener("abort", () => reject(init.signal?.reason), { once: true });
+					});
+				},
+			}
+		);
+
+		await started.promise;
+		controller.abort(new Error("caller stopped the request"));
+		await assert.rejects(pending, /caller stopped the request/u);
+	});
+
+	test("rejects an OAuth response body above the 256 KiB limit", async () => {
+		await assert.rejects(
+			refreshXaiOAuthCredential(
+				{
+					accessToken: "expired-token",
+					refreshToken: "refresh-token",
+					tokenEndpoint: "https://auth.x.ai/oauth2/token",
+					expiresAt: 1,
+				},
+				{
+					fetchImpl: async () => new Response(new Uint8Array(256 * 1024 + 1)),
+				}
+			),
+			/exceeded the 256 KiB limit/u
+		);
+	});
+
+	test("does not persist a refresh when sign-out completes during the credential load", async () => {
+		let stored: string | undefined = JSON.stringify({
+			accessToken: "expired-token",
+			refreshToken: "refresh-token",
+			tokenEndpoint: "https://auth.x.ai/oauth2/token",
+			expiresAt: 1,
+		});
+		let getCalls = 0;
+		const loadStarted = deferred<void>();
+		const loadResult = deferred<string | undefined>();
+		const secrets: SecretStorageLike = {
+			get: async () => {
+				getCalls += 1;
+				if (getCalls === 1) {
+					loadStarted.resolve();
+					return await loadResult.promise;
+				}
+				return stored;
+			},
+			store: async (_key, value) => {
+				stored = value;
+			},
+			delete: async () => {
+				stored = undefined;
+			},
+		};
+		let refreshCount = 0;
+		const pending = getXaiOAuthAccessToken(secrets, {
+			now: 10_000,
+			fetchImpl: async () => {
+				refreshCount += 1;
+				return jsonResponse({ access_token: "fresh-token", refresh_token: "rotated-token", expires_in: 3600 });
+			},
+		});
+
+		await loadStarted.promise;
+		await clearXaiOAuthCredential(secrets);
+		loadResult.resolve(
+			JSON.stringify({
+				accessToken: "expired-token",
+				refreshToken: "refresh-token",
+				tokenEndpoint: "https://auth.x.ai/oauth2/token",
+				expiresAt: 1,
+			})
+		);
+
+		assert.strictEqual(await pending, "fresh-token");
+		assert.strictEqual(refreshCount, 1);
+		assert.strictEqual(stored, undefined);
+	});
+
+	test("a cancelled caller does not abort a shared refresh used by another caller", async () => {
+		let stored: string | undefined = JSON.stringify({
+			accessToken: "expired-token",
+			refreshToken: "refresh-token",
+			tokenEndpoint: "https://auth.x.ai/oauth2/token",
+			expiresAt: 1,
+		});
+		const secrets: SecretStorageLike = {
+			get: async () => stored,
+			store: async (_key, value) => {
+				stored = value;
+			},
+			delete: async () => {
+				stored = undefined;
+			},
+		};
+		const started = deferred<void>();
+		const response = deferred<Response>();
+		let refreshCount = 0;
+		const controller = new AbortController();
+		const cancelled = getXaiOAuthAccessToken(secrets, {
+			now: 10_000,
+			signal: controller.signal,
+			fetchImpl: async () => {
+				refreshCount += 1;
+				started.resolve();
+				return await response.promise;
+			},
+		});
+
+		await started.promise;
+		const survivor = getXaiOAuthAccessToken(secrets, {
+			now: 10_000,
+			fetchImpl: async () => {
+				throw new Error("the in-flight refresh should be reused");
+			},
+		});
+		controller.abort(new Error("first caller cancelled"));
+		response.resolve(jsonResponse({ access_token: "fresh-token", refresh_token: "rotated-token", expires_in: 3600 }));
+
+		await assert.rejects(cancelled, /first caller cancelled/u);
+		assert.strictEqual(await survivor, "fresh-token");
+		assert.strictEqual(refreshCount, 1);
+	});
+
+	test("rejects a request started with an already-aborted caller signal", async () => {
+		const controller = new AbortController();
+		controller.abort(new Error("caller stopped before start"));
+		let fetchCalls = 0;
+
+		await assert.rejects(
+			refreshXaiOAuthCredential(
+				{
+					accessToken: "expired-token",
+					refreshToken: "refresh-token",
+					tokenEndpoint: "https://auth.x.ai/oauth2/token",
+					expiresAt: 1,
+				},
+				{
+					signal: controller.signal,
+					fetchImpl: async (_input, init) => {
+						fetchCalls += 1;
+						if (init?.signal?.aborted) {
+							throw init.signal.reason;
+						}
+						return jsonResponse({ access_token: "unexpected-token", expires_in: 3600 });
+					},
+				}
+			),
+			/caller stopped before start/u
+		);
+		assert.strictEqual(fetchCalls, 1);
+	});
 });
+
+function deferred<T>() {
+	let resolve!: (value: T) => void;
+	const promise = new Promise<T>((done) => {
+		resolve = done;
+	});
+	return { promise, resolve };
+}
 
 function jsonResponse(value: Record<string, unknown>, status = 200): Response {
 	return new Response(JSON.stringify(value), {

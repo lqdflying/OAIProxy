@@ -24,6 +24,7 @@ import {
 } from "../utils";
 import { logCacheUsage } from "../promptCache";
 import { ResponseUsageAccumulator } from "../responseUsage";
+import { createProviderStreamError, extractProviderErrorMessage } from "../streamUtils";
 
 import type {
 	GeminiGenerateContentRequest,
@@ -679,7 +680,20 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 			}
 		}
 
-		return out;
+		// Gemini requires strictly alternating user/model turns. Image-bearing tool
+		// results are extracted by `prepareMessagesForApi` into a companion user
+		// message, which can leave two consecutive user turns. Merge them so the
+		// functionResponse and image parts share one turn.
+		const coalesced: GeminiChatMessage[] = [];
+		for (const message of out) {
+			const previous = coalesced[coalesced.length - 1];
+			if (previous && previous.role === message.role) {
+				previous.parts.push(...message.parts);
+			} else {
+				coalesced.push({ role: message.role, parts: [...message.parts] });
+			}
+		}
+		return coalesced;
 	}
 
 	prepareRequestBody(
@@ -781,11 +795,10 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 		const responseUsage = new ResponseUsageAccumulator("gemini");
 		let completed = false;
 		let sawProviderError = false;
+		let providerErrorMessage: string | undefined;
 
-		let textSoFar = "";
 		const toolCallKeyToId = new Map<string, string>();
 		let pendingThoughtSoFar = "";
-		let pendingThoughtSummarySoFar = "";
 		let pendingThoughtSignature = "";
 
 		try {
@@ -796,13 +809,9 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 
 				const { done, value } = await reader.read();
 				if (value?.byteLength) { this.observeStreamChunk(); }
-				if (done) {
-					break;
-				}
-
-				buffer += decoder.decode(value, { stream: true });
+				buffer += done ? decoder.decode() : decoder.decode(value, { stream: true });
 				const lines = buffer.split("\n");
-				buffer = lines.pop() || "";
+				buffer = done ? "" : lines.pop() || "";
 
 				for (const line of lines) {
 					if (!line.startsWith("data:")) {
@@ -833,12 +842,38 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 					this.observeResponseCompletion(payload);
 					if (payload.error !== undefined && payload.error !== null) {
 						sawProviderError = true;
+						providerErrorMessage = extractProviderErrorMessage(payload) ?? providerErrorMessage;
+					}
+					const promptFeedback =
+						payload.promptFeedback && typeof payload.promptFeedback === "object"
+							? (payload.promptFeedback as Record<string, unknown>)
+							: undefined;
+					if (typeof promptFeedback?.blockReason === "string" && promptFeedback.blockReason) {
+						sawProviderError = true;
+						providerErrorMessage = `prompt blocked: ${promptFeedback.blockReason}`;
 					}
 					logCacheUsage("gemini", modelId, payload);
 
 					const candidates = Array.isArray(payload.candidates) ? payload.candidates : [];
 					const cand = candidates.length > 0 ? candidates[0] : null;
 					const parts = Array.isArray(cand?.content?.parts) ? cand?.content?.parts : [];
+					const finishReason =
+						typeof cand?.finishReason === "string"
+							? cand.finishReason
+							: typeof cand?.finish_reason === "string"
+								? cand.finish_reason
+								: "";
+					const normalizedFinishReason = finishReason.toUpperCase();
+					if (
+						normalizedFinishReason &&
+						normalizedFinishReason !== "STOP" &&
+						normalizedFinishReason !== "MAX_TOKENS" &&
+						normalizedFinishReason !== "CONTINUATION" &&
+						normalizedFinishReason !== "FINISH_REASON_UNSPECIFIED"
+					) {
+						sawProviderError = true;
+						providerErrorMessage = `candidate finished with ${finishReason}`;
+					}
 
 					for (const p of parts) {
 						const fc = p?.functionCall;
@@ -857,35 +892,11 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 										? maybeThought.thought_signature
 										: "";
 							if (thoughtSummaryText) {
-								let delta = "";
-								if (thoughtSummaryText.startsWith(pendingThoughtSummarySoFar)) {
-									delta = thoughtSummaryText.slice(pendingThoughtSummarySoFar.length);
-									pendingThoughtSummarySoFar = thoughtSummaryText;
-								} else if (pendingThoughtSummarySoFar.startsWith(thoughtSummaryText)) {
-									delta = "";
-								} else {
-									delta = thoughtSummaryText;
-									pendingThoughtSummarySoFar += thoughtSummaryText;
-								}
-								if (delta) {
-									this.bufferThinkingContent(delta, progress);
-								}
+								this.bufferThinkingContent(thoughtSummaryText, progress);
 							}
 							if (thought) {
-								let delta = "";
-								if (thought.startsWith(pendingThoughtSoFar)) {
-									delta = thought.slice(pendingThoughtSoFar.length);
-									pendingThoughtSoFar = thought;
-								} else if (pendingThoughtSoFar.startsWith(thought)) {
-									delta = "";
-								} else {
-									delta = thought;
-									pendingThoughtSoFar += thought;
-								}
-
-								if (delta) {
-									this.bufferThinkingContent(delta, progress);
-								}
+								this.bufferThinkingContent(thought, progress);
+								pendingThoughtSoFar += thought;
 							}
 							if (thoughtSigRaw) {
 								pendingThoughtSignature = thoughtSigRaw;
@@ -918,20 +929,8 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 							pendingThoughtSoFar;
 
 						if (thoughtRaw) {
-							let delta = "";
-							if (thoughtRaw.startsWith(pendingThoughtSoFar)) {
-								delta = thoughtRaw.slice(pendingThoughtSoFar.length);
-								pendingThoughtSoFar = thoughtRaw;
-							} else if (pendingThoughtSoFar.startsWith(thoughtRaw)) {
-								delta = "";
-							} else {
-								delta = thoughtRaw;
-								pendingThoughtSoFar += thoughtRaw;
-							}
-
-							if (delta) {
-								this.bufferThinkingContent(delta, progress);
-							}
+							this.bufferThinkingContent(thoughtRaw, progress);
+							pendingThoughtSoFar += thoughtRaw;
 						}
 
 						let id = toolCallKeyToId.get(key);
@@ -966,7 +965,6 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 						if (isNew) {
 							this.reportEndThinking(progress);
 							pendingThoughtSoFar = "";
-							pendingThoughtSummarySoFar = "";
 							pendingThoughtSignature = "";
 							if (!this._emittedBeginToolCallsHint && this._hasEmittedAssistantText) {
 								progress.report(new vscode.LanguageModelTextPart(" "));
@@ -992,27 +990,20 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 						.join("");
 
 					if (textJoined) {
-						let delta = "";
-						if (textJoined.startsWith(textSoFar)) {
-							delta = textJoined.slice(textSoFar.length);
-							textSoFar = textJoined;
-						} else if (textSoFar.startsWith(textJoined)) {
-							delta = "";
-						} else {
-							delta = textJoined;
-							textSoFar += textJoined;
-						}
-
-						if (delta) {
-							this.reportEndThinking(progress);
-							pendingThoughtSoFar = "";
-							pendingThoughtSummarySoFar = "";
-							pendingThoughtSignature = "";
-							progress.report(new vscode.LanguageModelTextPart(delta));
-							this._hasEmittedAssistantText = true;
-						}
+						// Gemini native streaming sends text deltas per chunk, not cumulative text.
+						this.reportEndThinking(progress);
+						pendingThoughtSoFar = "";
+						pendingThoughtSignature = "";
+						progress.report(new vscode.LanguageModelTextPart(textJoined));
+						this._hasEmittedAssistantText = true;
 					}
 				}
+				if (done) {
+					break;
+				}
+			}
+			if (sawProviderError && !token.isCancellationRequested) {
+				throw createProviderStreamError("Gemini", providerErrorMessage);
 			}
 			completed = !token.isCancellationRequested && !sawProviderError;
 			logger.debug("gemini.stream.done", { modelId });
@@ -1037,7 +1028,8 @@ export class GeminiApi extends CommonApi<GeminiChatMessage, GeminiGenerateConten
 		_systemPrompt: string,
 		_messages: { role: string; content: string }[],
 		_baseUrl: string,
-		_apiKey: string
+		_apiKey: string,
+		_signal?: AbortSignal
 	): AsyncGenerator<{ type: "text"; text: string }> {
 		async function* notImplemented(): AsyncGenerator<{ type: "text"; text: string }> {
 			yield* [];
