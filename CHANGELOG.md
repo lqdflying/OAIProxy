@@ -1,5 +1,10 @@
 # Change Log
 
+## 0.1.53 (2026-10-23)
+
+- Fix GPT-6 Astra Fast Codex OAuth requests rejected with `Unsupported service_tier: fast` by translating the configured `fast` alias to the backend-compatible `priority` tier while preserving `fast` for public OpenAI API-key Responses requests.
+- Clarify the Fast mode transport mapping in the preset source note and README, and add regression coverage for both Codex OAuth and public Responses request shaping.
+
 ## 0.1.52 (2026-10-23)
 
 - Add an opt-in GPT-6 Astra Fast Codex OAuth Quick Setup card that sends `service_tier: "fast"` while retaining the Standard Astra card.
