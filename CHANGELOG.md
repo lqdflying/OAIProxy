@@ -1,5 +1,11 @@
 # Change Log
 
+## 0.1.52 (2026-10-23)
+
+- Add an opt-in GPT-6 Astra Fast Codex OAuth Quick Setup card that sends `service_tier: "fast"` while retaining the Standard Astra card.
+- Expose the selected OpenAI service tier in request-body diagnostics and document Fast mode usage, availability, and latency expectations.
+- Add regression coverage for the Fast preset and its Codex OAuth Responses request body.
+
 ## 0.1.51 (2026-10-20)
 
 - Harden configuration import and export: omit API keys by default, redact credential-bearing custom headers, restore matching redacted headers safely on import, validate the full payload before applying it, and roll back configuration, provider, and secret changes on failure.
