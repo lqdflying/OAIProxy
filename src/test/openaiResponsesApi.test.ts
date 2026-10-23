@@ -31,6 +31,19 @@ suite("openaiResponsesApi", () => {
 		assert.strictEqual(body.max_output_tokens, undefined);
 	});
 
+	test("sends Fast mode for GPT-6 Astra Codex OAuth", () => {
+		const preset = MODEL_PRESETS.find((item) => item.id === "openai-gpt-6-astra-fast-codex-oauth");
+		assert.ok(preset);
+		const api = new OpenaiResponsesApi(preset.model.id);
+		const body = api.prepareRequestBody({ model: preset.model.id, input: [], stream: true }, preset.model);
+
+		assert.strictEqual(body.model, "gpt-6-astra");
+		assert.strictEqual(body.service_tier, "fast");
+		assert.deepStrictEqual(body.reasoning, { effort: "max" });
+		assert.strictEqual(body.store, false);
+		assert.deepStrictEqual(body.include, ["reasoning.encrypted_content"]);
+	});
+
 	test("passes preserved thinking configuration through request body", () => {
 		const api = new OpenaiResponsesApi("glm-5.2");
 		const body = api.prepareRequestBody(

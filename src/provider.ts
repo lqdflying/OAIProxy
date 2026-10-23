@@ -1463,6 +1463,8 @@ function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
 		hasTopP: body.top_p !== undefined,
 		hasStore: body.store !== undefined,
 		store: typeof body.store === "boolean" ? body.store : undefined,
+		hasServiceTier: body.service_tier !== undefined,
+		serviceTier: typeof body.service_tier === "string" ? body.service_tier : undefined,
 	};
 }
 

@@ -18,12 +18,20 @@ suite("modelPresets", () => {
 		];
 		assert.deepStrictEqual(
 			MODEL_PRESETS.filter(
-				(preset) => preset.model.authMode === "oauth" && preset.model.owned_by === "openai-oauth"
+				(preset) =>
+					preset.model.authMode === "oauth" &&
+					preset.model.owned_by === "openai-oauth" &&
+					preset.model.configId === "openai-oauth"
 			).map((preset) => preset.model.id),
 			expectedModels
 		);
 		for (const modelId of expectedModels) {
-			const preset = MODEL_PRESETS.find((item) => item.model.id === modelId && item.model.authMode === "oauth");
+			const preset = MODEL_PRESETS.find(
+				(item) =>
+					item.model.id === modelId &&
+					item.model.authMode === "oauth" &&
+					item.model.configId === "openai-oauth"
+			);
 			assert.ok(preset);
 			assert.strictEqual(preset.providerPresetId, "openai-oauth");
 			assert.strictEqual(preset.model.configId, "openai-oauth");
@@ -84,6 +92,26 @@ suite("modelPresets", () => {
 			assert.strictEqual(preset.model.default_reasoning_effort, "xhigh");
 			assert.ok(preset.model._comment?.includes("https://developers.openai.com/api/docs/models/gpt-6.1-sol"));
 		}
+	});
+
+	test("adds an opt-in GPT-6 Astra Fast Codex OAuth card", () => {
+		const preset = MODEL_PRESETS.find((item) => item.id === "openai-gpt-6-astra-fast-codex-oauth");
+
+		assert.ok(preset);
+		assert.strictEqual(preset.label, "GPT-6 Astra Fast");
+		assert.strictEqual(preset.category, "fast");
+		assert.strictEqual(preset.providerPresetId, "openai-oauth");
+		assert.strictEqual(preset.model.id, "gpt-6-astra");
+		assert.strictEqual(preset.model.configId, "openai-oauth-fast");
+		assert.strictEqual(preset.model.displayName, "GPT-6 Astra Fast (OAuth)");
+		assert.strictEqual(preset.model.owned_by, "openai-oauth");
+		assert.strictEqual(preset.model.authMode, "oauth");
+		assert.strictEqual(preset.model.baseUrl, "https://chatgpt.com/backend-api/codex");
+		assert.strictEqual(preset.model.apiMode, "openai-responses");
+		assert.deepStrictEqual(preset.model.extra, { service_tier: "fast" });
+		assert.deepStrictEqual(preset.model.supported_reasoning_efforts, ["low", "medium", "high", "xhigh", "max"]);
+		assert.strictEqual(preset.model.reasoning_effort, "max");
+		assert.ok(preset.model._comment?.includes("https://learn.chatgpt.com/docs/agent-configuration/speed#fast-mode"));
 	});
 
 	test("contains Grok 4.7 and 4.6 OAuth quick setup cards", () => {

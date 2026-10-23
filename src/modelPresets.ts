@@ -19,6 +19,7 @@ const OPENAI_GPT_6_1_SOL_COMMENT =
 function createOpenAICodexOAuthPreset(options: {
 	id: string;
 	modelId: string;
+	configId?: string;
 	label: string;
 	category: ModelPreset["category"];
 	tags: string[];
@@ -26,6 +27,7 @@ function createOpenAICodexOAuthPreset(options: {
 	supportedReasoningEfforts: string[];
 	defaultReasoningEffort?: string;
 	sourceComment?: string;
+	serviceTier?: "fast";
 }): ModelPreset {
 	const defaultReasoningEffort = options.defaultReasoningEffort ?? options.supportedReasoningEfforts.at(-1);
 	return {
@@ -37,7 +39,7 @@ function createOpenAICodexOAuthPreset(options: {
 		description: options.description,
 		model: {
 			id: options.modelId,
-			configId: "openai-oauth",
+			configId: options.configId ?? "openai-oauth",
 			displayName: `${options.label} (OAuth)`,
 			_comment: options.sourceComment ?? OPENAI_CODEX_OAUTH_COMMENT,
 			owned_by: "openai-oauth",
@@ -52,6 +54,13 @@ function createOpenAICodexOAuthPreset(options: {
 			supported_reasoning_efforts: options.supportedReasoningEfforts,
 			default_reasoning_effort: defaultReasoningEffort,
 			toolCalling: true,
+			...(options.serviceTier
+				? {
+						extra: {
+							service_tier: options.serviceTier,
+						},
+					}
+				: {}),
 		},
 	};
 }
@@ -76,6 +85,19 @@ const OPENAI_CODEX_OAUTH_PRESETS: readonly ModelPreset[] = [
 		tags: ["OpenAI", "Codex", "OAuth", "Vision", "Reasoning", "Tools"],
 		description: "GPT-6 Astra through the ChatGPT/Codex OAuth Responses route.",
 		supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+	}),
+	createOpenAICodexOAuthPreset({
+		id: "openai-gpt-6-astra-fast-codex-oauth",
+		modelId: "gpt-6-astra",
+		configId: "openai-oauth-fast",
+		label: "GPT-6 Astra Fast",
+		category: "fast",
+		tags: ["OpenAI", "Codex", "OAuth", "Fast", "Vision", "Reasoning", "Tools"],
+		description: "GPT-6 Astra through ChatGPT/Codex OAuth with OpenAI Fast mode.",
+		supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+		sourceComment:
+			"Fast mode through ChatGPT/Codex uses service_tier \"fast\": https://learn.chatgpt.com/docs/agent-configuration/speed#fast-mode. Model details: https://developers.openai.com/api/docs/models/gpt-6-astra.",
+		serviceTier: "fast",
 	}),
 	createOpenAICodexOAuthPreset({
 		id: "openai-gpt-6-sol-codex-oauth",
