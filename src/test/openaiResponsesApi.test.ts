@@ -31,14 +31,14 @@ suite("openaiResponsesApi", () => {
 		assert.strictEqual(body.max_output_tokens, undefined);
 	});
 
-	test("sends Fast mode for GPT-6 Astra Codex OAuth", () => {
+	test("maps Fast mode to the Codex OAuth priority service tier", () => {
 		const preset = MODEL_PRESETS.find((item) => item.id === "openai-gpt-6-astra-fast-codex-oauth");
 		assert.ok(preset);
 		const api = new OpenaiResponsesApi(preset.model.id);
 		const body = api.prepareRequestBody({ model: preset.model.id, input: [], stream: true }, preset.model);
 
 		assert.strictEqual(body.model, "gpt-6-astra");
-		assert.strictEqual(body.service_tier, "fast");
+		assert.strictEqual(body.service_tier, "priority");
 		assert.deepStrictEqual(body.reasoning, { effort: "max" });
 		assert.strictEqual(body.store, false);
 		assert.deepStrictEqual(body.include, ["reasoning.encrypted_content"]);
@@ -184,6 +184,22 @@ suite("openaiResponsesApi", () => {
 		);
 
 		assert.strictEqual(body.store, undefined);
+	});
+
+	test("preserves the Fast alias for normal OpenAI API-key Responses", () => {
+		const api = new OpenaiResponsesApi("gpt-6-astra");
+		const body = api.prepareRequestBody(
+			{ model: "gpt-6-astra", input: [], stream: true },
+			model({
+				id: "gpt-6-astra",
+				owned_by: "openai",
+				baseUrl: "https://api.openai.com/v1",
+				apiMode: "openai-responses",
+				extra: { service_tier: "fast" },
+			})
+		);
+
+		assert.strictEqual(body.service_tier, "fast");
 	});
 
 	test("emits nested response usage after a completed stream", async () => {

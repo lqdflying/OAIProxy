@@ -363,6 +363,11 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 		// Keep direct OpenAI API-key Responses requests unchanged.
 		if (um?.authMode === "oauth" && isOpenAICodexOAuthProvider(um.owned_by, um.authMode, baseUrl)) {
 			rb.store = false;
+			// The ChatGPT/Codex backend still uses the pre-rename Fast tier name.
+			// Keep `fast` as the public/configured alias and translate it on the wire.
+			if (rb.service_tier === "fast") {
+				rb.service_tier = "priority";
+			}
 			const include = Array.isArray(rb.include)
 				? rb.include.filter((value): value is string => typeof value === "string")
 				: [];

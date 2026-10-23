@@ -96,7 +96,7 @@ const OPENAI_CODEX_OAUTH_PRESETS: readonly ModelPreset[] = [
 		description: "GPT-6 Astra through ChatGPT/Codex OAuth with OpenAI Fast mode.",
 		supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
 		sourceComment:
-			"Fast mode through ChatGPT/Codex uses service_tier \"fast\": https://learn.chatgpt.com/docs/agent-configuration/speed#fast-mode. Model details: https://developers.openai.com/api/docs/models/gpt-6-astra.",
+			"Fast mode through ChatGPT/Codex is requested with service_tier \"fast\"; the OAuth adapter sends the backend-compatible legacy alias \"priority\": https://developers.openai.com/api/docs/guides/fast-mode. Model details: https://developers.openai.com/api/docs/models/gpt-6-astra.",
 		serviceTier: "fast",
 	}),
 	createOpenAICodexOAuthPreset({

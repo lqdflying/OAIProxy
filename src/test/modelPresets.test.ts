@@ -111,7 +111,7 @@ suite("modelPresets", () => {
 		assert.deepStrictEqual(preset.model.extra, { service_tier: "fast" });
 		assert.deepStrictEqual(preset.model.supported_reasoning_efforts, ["low", "medium", "high", "xhigh", "max"]);
 		assert.strictEqual(preset.model.reasoning_effort, "max");
-		assert.ok(preset.model._comment?.includes("https://learn.chatgpt.com/docs/agent-configuration/speed#fast-mode"));
+		assert.ok(preset.model._comment?.includes("https://developers.openai.com/api/docs/guides/fast-mode"));
 	});
 
 	test("contains Grok 4.7 and 4.6 OAuth quick setup cards", () => {
