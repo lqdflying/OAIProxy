@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.1.54 (2026-10-25)
+
+- Preserve encrypted OpenAI Codex OAuth reasoning state across tool continuations, including full-history fallback, with conversation/account isolation and reasoning/tool ordering retained.
+- Keep Codex conversation affinity stable when instructions, tools, or tool choice change while preserving stricter checks for previous-response reuse.
+- Add safe replay diagnostics, exclude hidden continuation metadata from visible-thinking timing, and prevent malformed stream diagnostics from exposing raw payloads.
+- Expand continuation regression coverage and document verified replay/cache behavior and the limits of latency measurements.
+
 ## 0.1.53 (2026-10-23)
 
 - Fix GPT-6 Astra Fast Codex OAuth requests rejected with `Unsupported service_tier: fast` by translating the configured `fast` alias to the backend-compatible `priority` tier while preserving `fast` for public OpenAI API-key Responses requests.

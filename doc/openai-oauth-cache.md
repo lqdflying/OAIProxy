@@ -59,7 +59,7 @@ With `store:false`, [OpenAI documents replaying encrypted reasoning items](https
 
 Opaque state is scoped to the conversation affinity identity and is replayed even when `includeReasoningInRequest` is disabled. That setting controls optional human-readable reasoning replay; encrypted continuation state is protocol data. The encrypted content is neither displayed nor written to provider logs. Failed or cancelled streams, and streams ending without a terminal response, do not emit new replay metadata. Hosts that discard thinking metadata cannot preserve this state through history.
 
-This fixes lost state on tool continuations, not the wait on a fresh request. Reasoning effort, summary opt-in, Fast-tier mapping, and HTTP/SSE transport are unchanged. No live latency improvement or fresh warm-cache hit has been measured for this change.
+This fixes lost state on tool continuations, not the wait on a fresh request. Reasoning effort, summary opt-in, Fast-tier mapping, and HTTP/SSE transport are unchanged. Host verification has observed encrypted-reasoning replay and warm prompt-cache hits. These results do not establish a before-and-after latency improvement or guarantee a cache hit on every request.
 
 ## Why the cache can miss
 
