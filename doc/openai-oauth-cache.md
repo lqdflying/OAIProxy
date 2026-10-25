@@ -38,7 +38,9 @@ session_id: <stable conversation key>
 x-client-request-id: <the same stable conversation key>
 ```
 
-The value must come from OAIProxy's stable Responses conversation state key. It must not be generated randomly for each request. These headers are the cache-routing signal used by the Codex backend.
+OAIProxy hashes the host's `_conversationId` together with the endpoint, model, configuration, account, and request initiator. If the host supplies no conversation ID, the first input is a best-effort anchor; two chats with identical first inputs cannot be distinguished in that fallback. Credentials without an account ID use a token fingerprint, so refreshing such a credential can rotate affinity. No raw credentials or conversation IDs enter these headers.
+
+The affinity value stays stable when instructions, tools, or tool choice change. The stricter compatibility key for `previous_response_id` still checks those fields and the input prefix. Changing an account or conversation also isolates in-memory response state. Stable affinity supports cache routing; it does not guarantee a cache hit.
 
 The JSON body must follow the Codex Responses shape:
 
@@ -47,9 +49,17 @@ The JSON body must follow the Codex Responses shape:
 - Omit unsupported public Responses fields: `context_management`, `metadata`, `max_output_tokens`, `temperature`, `top_p`, and `prompt_cache_retention`.
 - Do not send `prompt_cache_key` in the Codex JSON body. Cache affinity is carried by `session_id` and `x-client-request-id`.
 - Use easy-input replay items for text: `{ role: "user", content: "..." }` and `{ role: "assistant", content: "..." }`.
-- For replayed reasoning, function-call, and function-call-output items, omit provider-generated `id` and `status` fields. Preserve the function `call_id` used to match tool results.
+- For reconstructed text, summary-only reasoning, function-call, and function-call-output items, omit fabricated `id` and `status` fields. Preserve the function `call_id` used to match tool results. An encrypted reasoning item is different: preserve its actual returned `id`, `encrypted_content`, and `summary`.
 
-OAIProxy keeps the `previous_response_id` optimization, but the Codex route can reject it. On a client error, send the full conversation history and remember that the base URL does not support the optimization. A fallback request can still receive a prompt-cache hit.
+OAIProxy keeps the `previous_response_id` optimization, but the Codex route can reject it. On a matching 400/404 error, send the full conversation history. Unsupported-parameter failures disable the optimization for that endpoint/configuration/account scope; an expired or missing response ID does not. A fallback request can still receive a prompt-cache hit.
+
+## Stateless reasoning continuation
+
+With `store:false`, [OpenAI documents replaying encrypted reasoning items](https://developers.openai.com/api/docs/guides/reasoning#preserve-reasoning-without-stored-responses) to continue reasoning without server-stored history. OAIProxy retains these items from item-done events or terminal response output in private VS Code thinking-part metadata. It restores their order around tool calls when history must be replayed. Tool arguments and visible text continue to come from the host's current history.
+
+Opaque state is scoped to the conversation affinity identity and is replayed even when `includeReasoningInRequest` is disabled. That setting controls optional human-readable reasoning replay; encrypted continuation state is protocol data. The encrypted content is neither displayed nor written to provider logs. Failed or cancelled streams, and streams ending without a terminal response, do not emit new replay metadata. Hosts that discard thinking metadata cannot preserve this state through history.
+
+This fixes lost state on tool continuations, not the wait on a fresh request. Reasoning effort, summary opt-in, Fast-tier mapping, and HTTP/SSE transport are unchanged. No live latency improvement or fresh warm-cache hit has been measured for this change.
 
 ## Why the cache can miss
 
@@ -80,10 +90,10 @@ rg -n 'responses.codex.affinity|request.body|cache.usage|request.error' \
 
 The expected sanitized summary contains:
 
-- `responses.codex.affinity`: `hasSessionId:true`, `hasClientRequestId:true`, and a stable `sessionIdLength`.
-- `request.body`: `store:false`, `hasPromptCacheKey:false`, and `hasMaxOutputTokens:false`.
+- `responses.codex.affinity`: `hasSessionId:true`, `hasClientRequestId:true`, and `hasConversationId:true` when the host supplied an ID. `sessionIdLength` reports length only, not proof that two keys match.
+- `request.body`: `store:false`, `hasPromptCacheKey:false`, and `hasMaxOutputTokens:false`. `encryptedReasoningItemCount` confirms opaque items are present in a full-history replay without exposing their content; a successful previous-response delta can legitimately have zero.
 - `cache.usage`: `cachedTokens > 0` and `status:"hit"` after warm-up.
 
 The `request.headers` log is emitted before the conversation key is added, so it is not sufficient to prove the two affinity headers. Use `responses.codex.affinity` for their presence. Logs contain sanitized summaries rather than the raw body; do not claim a hidden field was sent when the summary does not show it.
 
-Keep this behavior covered by the Codex-specific tests in `src/test/openaiOAuth.test.ts`, `src/test/openaiResponsesApi.test.ts`, and `src/test/promptCache.test.ts`. Changes must remain conditional on the OpenAI OAuth/Codex route so existing providers keep their current request and cache behavior.
+Keep this behavior covered by the Codex-specific tests in `src/test/openaiOAuth.test.ts`, `src/test/openaiResponsesApi.test.ts`, `src/test/openaiResponsesReplay.test.ts`, `src/test/openaiResponsesState.test.ts`, `src/test/providerOAuthContinuation.test.ts`, and `src/test/promptCache.test.ts`. Changes must remain conditional on the OpenAI OAuth/Codex route so existing providers keep their current request and cache behavior.

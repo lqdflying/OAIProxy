@@ -23,7 +23,7 @@ import {
 
 import { CommonApi } from "../commonApi";
 import { logger } from "../logger";
-import { getLanguageModelThinkingText, isLanguageModelThinkingPart } from "../vscodeCompat";
+import { createLanguageModelThinkingPart, getLanguageModelThinkingText, isLanguageModelThinkingPart } from "../vscodeCompat";
 import { logCacheUsage } from "../promptCache";
 import { ResponseUsageAccumulator } from "../responseUsage";
 import { createProviderStreamError, extractProviderErrorMessage } from "../streamUtils";
@@ -33,6 +33,8 @@ import {
 	isOpenAICodexOAuthBaseUrl,
 	isOpenAICodexOAuthProvider,
 } from "../openaiOAuth";
+import { createOpenAIResponsesConversationKey, type OpenAIResponsesStateIdentity } from "./openaiResponsesState";
+import { OPENAI_RESPONSES_REPLAY_METADATA, readResponsesReplayItem, restoreResponsesReplay, type ResponsesReplayItem } from "./openaiResponsesReplay";
 
 export interface ResponsesInputMessage {
 	role: "user" | "assistant" | "system";
@@ -70,6 +72,7 @@ export interface ResponsesReasoning {
 	type: "reasoning";
 	summary: ResponsesContentPart[];
 	id?: string;
+	encrypted_content?: string;
 	status?: "completed";
 }
 
@@ -111,9 +114,18 @@ function extractResponsesStreamErrorMessage(
 export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<string, unknown>> {
 	private _responseId: string | null = null;
 	private _sawOutputTextDelta = false;
+	private _conversationKey: string | undefined;
+	private readonly _replayOutput = new Map<number, ResponsesReplayItem>();
 
-	constructor(modelId: string) {
+	constructor(modelId: string, private readonly _replayIdentity?: OpenAIResponsesStateIdentity) {
 		super(modelId);
+		if (_replayIdentity) {
+			this._conversationKey = createOpenAIResponsesConversationKey(_replayIdentity, []);
+		}
+	}
+
+	get conversationKey(): string | undefined {
+		return this._conversationKey;
 	}
 
 	get responseId(): string | null {
@@ -131,6 +143,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 		const codexEasyInput = options?.codexEasyInput === true;
 
 		for (let messageIndex = 0; messageIndex < messages.length; messageIndex++) {
+			const outputStart = out.length;
 			const m = messages[messageIndex];
 			const role = mapRole(m);
 			const textParts: string[] = [];
@@ -208,6 +221,10 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 						...(codexEasyInput ? {} : { status: "completed" as const }),
 					});
 				}
+				const restored = restoreResponsesReplay(m.content ?? [], this._conversationKey, out.slice(outputStart));
+				if (restored) {
+					out.splice(outputStart, out.length - outputStart, ...restored);
+				}
 			}
 
 			// tool outputs
@@ -255,6 +272,9 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			// system message (used to build `instructions` in request body)
 			if (role === "system" && joinedText) {
 				this._systemContent = joinedText;
+			}
+			if (!this._conversationKey && this._replayIdentity && role === "user") {
+				this._conversationKey = createOpenAIResponsesConversationKey(this._replayIdentity, out);
 			}
 		}
 
@@ -395,6 +415,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 		token: CancellationToken
 	): Promise<void> {
 		this._responseId = null;
+		this._replayOutput.clear();
 		const modelId = this._modelId;
 		logger.debug("responses.stream.start", { modelId });
 		const reader = responseBody.getReader();
@@ -439,11 +460,13 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 				logCacheUsage("openai-responses", modelId, parsed);
 				await this.processEvent(parsed, progress);
 			} catch (e) {
-				console.error("[OpenAI-Responses Provider] Failed to parse SSE chunk:", e, "data:", data);
+				// A malformed payload can contain opaque reasoning. Never print the raw chunk
+				// or JSON.parse's error message (which can quote the offending content).
+				console.error("[OpenAI-Responses Provider] Failed to process SSE chunk");
 				logger.error("responses.stream.chunk.error", {
 					modelId,
-					error: e instanceof Error ? e.message : String(e),
-					data,
+					errorType: e instanceof Error ? e.name : "unknown",
+					rawLength: data.length,
 				});
 			}
 		};
@@ -489,11 +512,18 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			reader.releaseLock();
 			this.reportEndThinking(progress);
 			if (completed) {
+				const output = [...this._replayOutput.entries()].sort(([a], [b]) => a - b).map(([, item]) => item);
+				if (this._conversationKey && this._responseId && output.some((item) => item.type === "reasoning")) {
+					progress.report(createLanguageModelThinkingPart("", this._responseId, {
+						[OPENAI_RESPONSES_REPLAY_METADATA]: { version: 1, scope: this._conversationKey, output },
+					}));
+				}
 				const usagePart = responseUsage.toDataPart();
 				if (usagePart) {
 					progress.report(usagePart);
 				}
 			}
+			this._replayOutput.clear();
 		}
 	}
 
@@ -580,8 +610,7 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 
 		switch (eventType) {
 			case "error": {
-				const errorText = JSON.stringify(event);
-				console.error("[OAIProxy Model Provider] Responses API streaming process error:", errorText);
+				// The stream reader reports the provider error; do not print raw events.
 				return;
 			}
 
@@ -700,6 +729,9 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			case "response.output_item.added":
 			case "response.output_item.done": {
 				const item = event.item && typeof event.item === "object" ? (event.item as Record<string, unknown>) : null;
+				if (eventType === "response.output_item.done") {
+					this.captureReplayItem(item, event.output_index);
+				}
 				if (!item || item.type !== "function_call") {
 					return;
 				}
@@ -756,12 +788,31 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 			}
 
 			case "response.completed":
-			case "response.done": {
+			case "response.done":
+			case "response.incomplete": {
+				const response = event.response as { output?: unknown[] } | undefined;
+				if (this._conversationKey && Array.isArray(response?.output)) {
+					for (const [index, item] of response.output.entries()) {
+						// Some routes send output only in the terminal event. Reuse the normal
+						// item handler; completed tool indices prevent duplicate tool calls.
+						await this.processEvent({ type: "response.output_item.done", output_index: index, item }, progress);
+					}
+				}
 				// End of message - ensure thinking is ended and flush all tool calls
 				await this.flushToolCallBuffers(progress, false);
 				this.reportEndThinking(progress);
 				return;
 			}
+		}
+	}
+
+	private captureReplayItem(item: unknown, index: unknown): void {
+		if (!this._conversationKey || typeof index !== "number" || !Number.isSafeInteger(index) || index < 0) {
+			return;
+		}
+		const parsed = readResponsesReplayItem(item);
+		if (parsed) {
+			this._replayOutput.set(index, parsed);
 		}
 	}
 

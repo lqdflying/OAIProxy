@@ -10,6 +10,8 @@ export interface OpenAIResponsesStateIdentity {
 	readonly modelId: string;
 	readonly modelInfoId: string;
 	readonly configId?: string;
+	readonly accountId?: string;
+	readonly conversationId?: string;
 	readonly requestInitiator?: string;
 	readonly instructions?: unknown;
 	readonly tools?: unknown;
@@ -177,6 +179,29 @@ export function createOpenAIResponsesInputSignatures(
 	return input.map((item) => hashStableValue(normalizeResponsesInputItemForSignature(item)));
 }
 
+/** Conversation affinity must survive changes to instructions, tools and tool choice. */
+export function createOpenAIResponsesConversationKey(
+	identity: OpenAIResponsesStateIdentity,
+	input: readonly ResponsesInputItem[]
+): string | undefined {
+	const conversationId = identity.conversationId?.trim();
+	const anchor = conversationId || createOpenAIResponsesInputSignatures(input.slice(0, 1))[0];
+	if (!anchor) {
+		return undefined;
+	}
+	const hash = hashStableValue({
+		normalizedBaseUrl: identity.normalizedBaseUrl,
+		modelId: identity.modelId,
+		modelInfoId: identity.modelInfoId,
+		configId: identity.configId ?? "",
+		accountId: identity.accountId ?? "",
+		requestInitiator: identity.requestInitiator ?? "",
+		anchorKind: conversationId ? "conversationId" : "firstInput",
+		anchor,
+	});
+	return `oaiproxy-openai-oauth-${hash.slice(0, 42)}`;
+}
+
 function buildOpenAIResponsesStateKey(
 	identity: OpenAIResponsesStateIdentity,
 	inputSignatures: readonly string[]
@@ -186,6 +211,8 @@ function buildOpenAIResponsesStateKey(
 		modelId: identity.modelId,
 		modelInfoId: identity.modelInfoId,
 		configId: identity.configId ?? "",
+		accountId: identity.accountId ?? "",
+		conversationId: identity.conversationId ?? "",
 		requestInitiator: identity.requestInitiator ?? "",
 		instructions: hashStableValue(identity.instructions ?? null),
 		tools: hashStableValue(identity.tools ?? null),

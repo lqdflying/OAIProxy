@@ -3,7 +3,7 @@ import { summarizeNetworkError } from "./network";
 import { TokenCountWork } from "./tokenCountWork";
 import { ResponseThroughput } from "./responseThroughput";
 import { tokenizerManager } from "./tokenizer/tokenizerManager";
-import { randomUUID } from "crypto";
+import { createHash, randomUUID } from "crypto";
 import { prepareMessagesForApi } from "./messageContent";
 import { resolveTokenEstimationConfig, type EstimationContext, type TokenEstimationConfig } from "./tokenEstimationConfig";
 import { estimatePreparedRequest } from "./tokenEstimator";
@@ -355,7 +355,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				}
 				if (part instanceof vscode.LanguageModelTextPart && part.value.trim().length > 0) {
 					timing.once("firstText");
-				} else if (isLanguageModelThinkingPart(part)) {
+				} else if (isLanguageModelThinkingPart(part) && getLanguageModelThinkingText(part).trim().length > 0) {
 					timing.once("firstThinking");
 				} else if (part instanceof vscode.LanguageModelToolCallPart) {
 					timing.once("firstToolCall");
@@ -678,7 +678,6 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				calibrationEligible = calibrationEligible && anthropicApi.responseCompleted;
 			} else if (apiMode === "openai-responses") {
 				// OpenAI Responses API mode
-				const openaiResponsesApi = new OpenaiResponsesApi(model.id);
 				const normalizedBaseUrl = BASE_URL.replace(/\/+$/, "");
 				const statefulModelId = parsedModelId.baseId;
 				const responsesStateIdentity: OpenAIResponsesStatefulMarkerIdentity = {
@@ -686,8 +685,22 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					normalizedBaseUrl,
 					configId: parsedModelId.configId,
 					modelInfoId: model.id,
-					accountId: openAIOAuthCredential?.accountId,
+					// Older credentials may lack an account id. Fail closed across token
+					// changes in that case, without retaining a credential in history.
+					accountId: openAIOAuthCredential
+						? openAIOAuthCredential.accountId || `token-${createHash("sha256").update(openAIOAuthCredential.accessToken).digest("hex")}`
+						: undefined,
 				};
+				const conversationId = isOpenAICodexOAuth && typeof options.modelOptions?._conversationId === "string"
+					? options.modelOptions._conversationId.trim() || undefined
+					: undefined;
+				const conversationIdentity = {
+					...responsesStateIdentity,
+					conversationId,
+					requestInitiator: options.requestInitiator,
+				};
+				const openaiResponsesApi = new OpenaiResponsesApi(model.id,
+					isOpenAICodexOAuth && !executionOptions.diagnostic ? conversationIdentity : undefined);
 				// Unsupported-state detection is scoped to the endpoint, config and
 				// credential identity so one bad request cannot disable state for
 				// unrelated configurations sharing a base URL.
@@ -695,7 +708,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					normalizedBaseUrl,
 					parsedModelId.configId ?? "",
 					um?.authMode ?? "",
-					openAIOAuthCredential?.accountId ?? "",
+					responsesStateIdentity.accountId ?? "",
 				].join("\n");
 				const codexResponsesConversionOptions = isOpenAICodexOAuth
 					? { replayResponsesItemIds: false, codexEasyInput: true }
@@ -751,11 +764,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 						}
 					: this._openaiResponsesState.resolve({
 							identity: {
-								normalizedBaseUrl,
-								modelId: statefulModelId,
-								modelInfoId: model.id,
-								configId: parsedModelId.configId,
-								requestInitiator: options.requestInitiator,
+								...conversationIdentity,
 								instructions: preparedFullRequestBody.instructions,
 								tools: preparedFullRequestBody.tools,
 								toolChoice: preparedFullRequestBody.tool_choice,
@@ -807,7 +816,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					previousResponseIdUnsupported,
 				};
 				const codexPromptCacheKey = isOpenAICodexOAuth
-					? createCodexPromptCacheKey(memoryState.stateKey)
+					? openaiResponsesApi.conversationKey
 					: undefined;
 				if (isOpenAICodexOAuth) {
 					applyOpenAICodexSessionHeaders(requestHeaders, codexPromptCacheKey);
@@ -815,6 +824,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 						hasSessionId: typeof requestHeaders.session_id === "string",
 						hasClientRequestId: typeof requestHeaders["x-client-request-id"] === "string",
 						sessionIdLength: requestHeaders.session_id?.length,
+						hasConversationId: !!conversationId,
 					});
 				}
 
@@ -1424,6 +1434,9 @@ function summarizeRequestBody(requestBody: unknown): Record<string, unknown> {
 		messageCount: getArrayLength(body.messages),
 		...assistantSummary,
 		inputCount: getArrayLength(body.input),
+		encryptedReasoningItemCount: Array.isArray(body.input)
+			? body.input.filter((item) => isRecord(item) && item.type === "reasoning" && typeof item.encrypted_content === "string").length
+			: undefined,
 		contentCount: getArrayLength(body.contents),
 		toolCount: getArrayLength(body.tools),
 		hasToolChoice: body.tool_choice !== undefined || body.toolChoice !== undefined,
@@ -1663,14 +1676,6 @@ function createOpenAIResponsesStatefulMarkerPart(
 	});
 	const bytes = new TextEncoder().encode(payload);
 	return new vscode.LanguageModelDataPart(bytes, HuggingFaceChatModelProvider.OPENAI_RESPONSES_STATEFUL_MARKER_MIME);
-}
-
-function createCodexPromptCacheKey(stateKey: string): string | undefined {
-	const normalized = stateKey.trim();
-	if (!normalized) {
-		return undefined;
-	}
-	return `oaiproxy-openai-oauth-${normalized.slice(0, 42)}`;
 }
 
 function parseOpenAIResponsesStatefulMarkerPart(

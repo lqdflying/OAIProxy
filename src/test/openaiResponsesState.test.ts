@@ -1,9 +1,50 @@
 import * as assert from "assert";
 
 import type { ResponsesInputItem } from "../openai/openaiResponsesApi";
-import { OpenAIResponsesStateStore } from "../openai/openaiResponsesState";
+import { createOpenAIResponsesConversationKey, OpenAIResponsesStateStore } from "../openai/openaiResponsesState";
 
 suite("openaiResponsesState", () => {
+	test("keeps affinity stable across request changes while refusing incompatible previous-response reuse", () => {
+		const store = new OpenAIResponsesStateStore();
+		const originalIdentity = { ...identity(), conversationId: "chat-1", accountId: "account-1" };
+		const fullInput = [user("first")];
+		const first = store.resolve({ identity: originalIdentity, fullInput });
+		store.update({ stateKey: first.stateKey, responseId: "resp_1", inputSignatures: first.inputSignatures });
+		const affinity = createOpenAIResponsesConversationKey(originalIdentity, fullInput);
+		assert.ok(affinity);
+		assert.ok(!affinity.includes("chat-1"));
+		for (const change of [{ instructions: "new instructions" }, { tools: [] }, { toolChoice: "required" }]) {
+			const changedIdentity = { ...originalIdentity, ...change };
+			assert.strictEqual(createOpenAIResponsesConversationKey(changedIdentity, fullInput), affinity);
+			const second = store.resolve({ identity: changedIdentity, fullInput: [...fullInput, assistant("answer"), user("second")] });
+			assert.notStrictEqual(second.stateKey, first.stateKey);
+			assert.strictEqual(second.responseId, undefined);
+		}
+		// Compaction replaces the first input but must not rotate an explicit conversation's affinity.
+		assert.strictEqual(createOpenAIResponsesConversationKey(originalIdentity, [user("summary")]), affinity);
+	});
+
+	test("isolates affinity and previous-response memory by conversation, account, model and configuration", () => {
+		const originalIdentity = { ...identity(), conversationId: "chat-1", accountId: "account-1" };
+		const fullInput = [user("same first prompt")];
+		const store = new OpenAIResponsesStateStore();
+		const first = store.resolve({ identity: originalIdentity, fullInput });
+		store.update({ stateKey: first.stateKey, responseId: "resp_1", inputSignatures: first.inputSignatures });
+		for (const key of ["conversationId", "accountId", "normalizedBaseUrl", "modelId", "modelInfoId", "configId", "requestInitiator"] as const) {
+			const changedIdentity = { ...originalIdentity, [key]: "different" };
+			assert.notStrictEqual(createOpenAIResponsesConversationKey(changedIdentity, fullInput), createOpenAIResponsesConversationKey(originalIdentity, fullInput), key);
+			assert.strictEqual(store.resolve({ identity: changedIdentity, fullInput: [...fullInput, user("next")] }).memoryStateFound, false, key);
+		}
+	});
+
+	test("uses a stable first-input fallback when conversation identity is unavailable", () => {
+		const key = createOpenAIResponsesConversationKey(identity(), [user("first")]);
+		assert.ok(key);
+		assert.strictEqual(createOpenAIResponsesConversationKey({ ...identity(), toolChoice: "required" }, [user("first"), user("next")]), key);
+		assert.notStrictEqual(createOpenAIResponsesConversationKey(identity(), [user("different")]), key);
+		assert.strictEqual(createOpenAIResponsesConversationKey(identity(), []), undefined);
+	});
+
 	test("uses memory state for appended user input and skips the previous assistant response", () => {
 		const store = new OpenAIResponsesStateStore({ ttlMs: 1000, maxEntries: 10 });
 		const first = store.resolve({
