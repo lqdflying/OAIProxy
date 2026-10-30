@@ -211,6 +211,99 @@ suite("modelPresets", () => {
 		}
 	});
 
+	test("ships the current Gemini cards and drops the shut-down previews", () => {
+		const presets = MODEL_PRESETS.filter((preset) => preset.model.owned_by === "google");
+		assert.deepStrictEqual(
+			presets.map((preset) => preset.model.id),
+			["gemini-4-argon", "gemini-3.8-flash", "gemini-3.5-flash-lite"]
+		);
+
+		for (const expected of [
+			{ id: "gemini-4-argon", modelId: "gemini-4-argon", label: "Gemini 4 Argon", category: "latest" },
+			{ id: "gemini-3-8-flash", modelId: "gemini-3.8-flash", label: "Gemini 3.8 Flash", category: "recommended" },
+			{
+				id: "gemini-3-5-flash-lite",
+				modelId: "gemini-3.5-flash-lite",
+				label: "Gemini 3.5 Flash-Lite",
+				category: "fast",
+			},
+		] as const) {
+			const preset = MODEL_PRESETS.find((item) => item.id === expected.id);
+			assert.ok(preset);
+			assert.strictEqual(preset.providerPresetId, "gemini");
+			assert.strictEqual(preset.label, expected.label);
+			assert.strictEqual(preset.category, expected.category);
+			assert.strictEqual(preset.model.id, expected.modelId);
+			assert.strictEqual(preset.model.displayName, expected.label);
+			assert.strictEqual(preset.model.owned_by, "google");
+			assert.strictEqual(preset.model.apiMode, "gemini");
+			assert.strictEqual(preset.model.baseUrl, "https://generativelanguage.googleapis.com");
+			assert.strictEqual(preset.model.context_length, 1048576);
+			assert.strictEqual(preset.model.max_completion_tokens, 65536);
+			assert.strictEqual(preset.model.max_tokens, undefined);
+			assert.strictEqual(preset.model.vision, true);
+			assert.strictEqual(preset.model.toolCalling, true);
+			assert.ok(preset.model._comment?.includes("https://ai.google.dev/gemini-api/docs/models"));
+		}
+
+		for (const removedModelId of ["gemini-3-pro-preview", "gemini-3-flash-preview", "gemini-2.5-flash"]) {
+			assert.strictEqual(
+				MODEL_PRESETS.some((preset) => preset.model.id === removedModelId),
+				false,
+				`${removedModelId} should be removed`
+			);
+		}
+	});
+
+	test("ships the current Claude cards and drops the superseded ones", () => {
+		const presets = MODEL_PRESETS.filter((preset) => preset.model.owned_by === "anthropic");
+		assert.deepStrictEqual(
+			presets.map((preset) => preset.model.id),
+			["claude-opus-5-5", "claude-sonnet-5-5"]
+		);
+
+		for (const expected of [
+			{ id: "anthropic-claude-opus-5-5", modelId: "claude-opus-5-5", label: "Claude Opus 5.5", category: "latest" },
+			{
+				id: "anthropic-claude-sonnet-5-5",
+				modelId: "claude-sonnet-5-5",
+				label: "Claude Sonnet 5.5",
+				category: "recommended",
+			},
+		] as const) {
+			const preset = MODEL_PRESETS.find((item) => item.id === expected.id);
+			assert.ok(preset);
+			assert.strictEqual(preset.providerPresetId, "anthropic");
+			assert.strictEqual(preset.label, expected.label);
+			assert.strictEqual(preset.category, expected.category);
+			assert.strictEqual(preset.model.id, expected.modelId);
+			assert.strictEqual(preset.model.displayName, expected.label);
+			assert.strictEqual(preset.model.owned_by, "anthropic");
+			assert.strictEqual(preset.model.apiMode, "anthropic");
+			assert.strictEqual(preset.model.baseUrl, "https://api.anthropic.com");
+			assert.strictEqual(preset.model.context_length, 1000000);
+			assert.strictEqual(preset.model.max_tokens, 128000);
+			assert.strictEqual(preset.model.max_completion_tokens, undefined);
+			assert.strictEqual(preset.model.vision, true);
+			assert.strictEqual(preset.model.toolCalling, true);
+			assert.strictEqual(preset.model.supports_reasoning_effort, true);
+			assert.deepStrictEqual(preset.model.supported_reasoning_efforts, ["low", "medium", "high", "xhigh", "max"]);
+			assert.strictEqual(preset.model.default_reasoning_effort, "high");
+			assert.strictEqual(preset.model.reasoning_effort, "high");
+			assert.strictEqual(preset.model.thinking?.type, "adaptive");
+			assert.strictEqual(preset.model.prompt_cache?.anthropic?.enabled, true);
+			assert.ok(preset.model._comment?.includes("https://platform.claude.com/docs/en/models/"));
+		}
+
+		for (const retiredCardId of ["anthropic-claude-opus-4-7", "anthropic-claude-sonnet-4-6"]) {
+			assert.strictEqual(
+				MODEL_PRESETS.some((preset) => preset.id === retiredCardId),
+				false,
+				`${retiredCardId} should be removed`
+			);
+		}
+	});
+
 	test("sets max reasoning as the direct DeepSeek Quick Setup default", () => {
 		for (const presetId of ["deepseek-v4-pro", "deepseek-flash"]) {
 			const preset = MODEL_PRESETS.find((item) => item.id === presetId);

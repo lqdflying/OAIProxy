@@ -102,7 +102,7 @@
 
 ```json
 {
-  "id": "gemini-3-flash-preview",
+  "id": "gemini-3.8-flash",
   "owned_by": "gemini",
   "baseUrl": "https://generativelanguage.googleapis.com",
   "apiMode": "gemini",

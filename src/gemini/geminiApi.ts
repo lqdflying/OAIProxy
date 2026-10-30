@@ -143,7 +143,7 @@ function normalizeGeminiModelIdForListing(name?: string, displayName?: string): 
 function normalizeGeminiModelPath(modelId: string): string {
 	const raw = (modelId || "").trim();
 	if (!raw) {
-		return "models/gemini-3-pro-preview";
+		return "models/gemini-4-argon";
 	}
 
 	const last = raw.includes("/") ? raw.split("/").filter(Boolean).pop() || raw : raw;
