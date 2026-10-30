@@ -10,6 +10,7 @@ import {
 	getProviderUsageSecretKey,
 	getProviderUsageUnsupportedReason,
 	isAzureFoundryProvider,
+	isOpenAICompatibleProvider,
 	isTokenRouterProvider,
 	parseAnthropicCostReport,
 	parseDeepSeekBalance,
@@ -764,6 +765,22 @@ suite("providerUsage", () => {
 				apiKey: "test",
 			}),
 			/Azure Foundry usage checks are unavailable/
+		);
+	});
+
+	test("reports OpenAI Compatible usage as unsupported without inheriting host adapters", async () => {
+		assert.strictEqual(isOpenAICompatibleProvider("openai-compatible"), true);
+		assert.strictEqual(isOpenAICompatibleProvider("custom"), false);
+		assert.strictEqual(getProviderUsageAdapter("openai-compatible", "https://gateway.example.com/v1"), undefined);
+		assert.strictEqual(getProviderUsageAdapter("openai-compatible", "https://api.openai.com/v1"), undefined);
+		assert.strictEqual(getProviderUsageAdapter("openai-compatible", "https://api.deepseek.com"), undefined);
+		assert.match(
+			getProviderUsageUnsupportedReason("openai-compatible", "https://gateway.example.com/v1") ?? "",
+			/OpenAI Compatible usage checks are unavailable/
+		);
+		await assert.rejects(
+			checkProviderUsage({ provider: "openai-compatible", baseUrl: "https://gateway.example.com/v1", apiKey: "test" }),
+			/OpenAI Compatible usage checks are unavailable/
 		);
 	});
 

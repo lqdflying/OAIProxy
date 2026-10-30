@@ -36,6 +36,18 @@ suite("providerPresets", () => {
 		assert.strictEqual(oauthPreset.baseUrl, "https://chatgpt.com/backend-api/codex");
 	});
 
+	test("includes the generic OpenAI Compatible gateway preset", () => {
+		const preset = PROVIDER_PRESETS.find((item) => item.id === "openai-compatible");
+
+		assert.ok(preset);
+		assert.strictEqual(preset.label, "OpenAI Compatible");
+		assert.strictEqual(preset.provider, "openai-compatible");
+		assert.strictEqual(preset.baseUrl, "https://YOUR-GATEWAY.example.com/v1");
+		assert.strictEqual(preset.apiMode, "openai-compatible");
+		assert.strictEqual(preset.authMode, undefined);
+		assert.strictEqual(preset.sortOrder, -88);
+	});
+
 	test("includes MiniMax OpenAI-compatible preset", () => {
 		const preset = PROVIDER_PRESETS.find((item) => item.id === "minimax");
 

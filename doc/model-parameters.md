@@ -35,7 +35,7 @@ All parameters support individual configuration for different models, providing 
 | `extra` | no | `object` | — | Extra request body parameters |
 | `extra_body` | no | `object` | — | LiteLLM provider/proxy-specific request body parameters |
 | `include_reasoning_in_request` | no | `boolean` | — | Include `reasoning_content` in assistant messages |
-| `apiMode` | no | `string` | `openai` | API protocol: `azure-foundry`, `openai`, `litellm`, `openai-responses`, `ollama`, `anthropic`, `gemini` |
+| `apiMode` | no | `string` | `openai` | API protocol: `azure-foundry`, `openai`, `openai-compatible`, `litellm`, `openai-responses`, `ollama`, `anthropic`, `gemini` |
 | `delay` | no | `number` | global `oaicopilot.delay` | Per-model delay (ms) between consecutive requests |
 | `useForCommitGeneration` | no | `boolean` | — | Use this model for Git commit message generation (not supported for `gemini`) |
 

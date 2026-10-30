@@ -112,10 +112,11 @@ export interface HFModelItem {
 	include_reasoning_in_request?: boolean;
 
 	/**
-	 * API mode: "openai" for OpenAI Chat Completions, "azure-foundry" for Azure Foundry
-	 * OpenAI-compatible Chat Completions with api-key authentication, "litellm" for LiteLLM Proxy Chat Completions,
-	 * "openai-responses" for OpenAI Responses, "ollama" for Ollama native API,
-	 * "anthropic" for Anthropic Messages, "gemini" for Gemini native API.
+	 * API mode: "openai" for OpenAI Chat Completions, "openai-compatible" for generic
+	 * OpenAI-compatible gateways with chathub-compatible request shaping, "azure-foundry" for
+	 * Azure Foundry OpenAI-compatible Chat Completions with api-key authentication, "litellm"
+	 * for LiteLLM Proxy Chat Completions, "openai-responses" for OpenAI Responses, "ollama" for
+	 * Ollama native API, "anthropic" for Anthropic Messages, "gemini" for Gemini native API.
 	 * Default is "openai".
 	 */
 	apiMode?: HFApiMode;
@@ -210,6 +211,7 @@ export interface RetryConfig {
 /** Supports API mode. */
 export type HFApiMode =
 	| "openai"
+	| "openai-compatible"
 	| "azure-foundry"
 	| "litellm"
 	| "openai-responses"

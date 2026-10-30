@@ -46,6 +46,14 @@ export const PROVIDER_PRESETS: readonly ProviderPreset[] = [
 		sortOrder: -89,
 	},
 	{
+		id: "openai-compatible",
+		label: "OpenAI Compatible",
+		provider: "openai-compatible",
+		baseUrl: "https://YOUR-GATEWAY.example.com/v1",
+		apiMode: "openai-compatible",
+		sortOrder: -88,
+	},
+	{
 		id: "tokenrouter",
 		label: "TokenRouter",
 		provider: "tokenrouter",

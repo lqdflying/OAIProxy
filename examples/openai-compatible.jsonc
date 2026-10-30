@@ -1,0 +1,23 @@
+{
+    "oaicopilot.models": [
+        {
+            "id": "gpt-6-astra",
+            "configId": "openai-compatible",
+            "displayName": "GPT-6 Astra (Compatible)",
+            "owned_by": "openai-compatible",
+            "baseUrl": "https://YOUR-GATEWAY.example.com/v1",
+            "apiMode": "openai-compatible",
+            "family": "gpt-6-astra",
+            "vision": true,
+            "context_length": 258000,
+            "max_tokens": 128000,
+            "reasoning_effort": "xhigh",
+            "supported_reasoning_efforts": ["low", "medium", "high", "xhigh", "max"],
+            "default_reasoning_effort": "xhigh",
+            "prompt_cache": {
+                "enabled": true,
+            },
+            "toolCalling": true,
+        },
+    ],
+}

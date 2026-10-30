@@ -294,6 +294,7 @@ function providerConfigToModel(config: ProviderConfigItem): HFModelItem {
 function isApiMode(value: unknown): value is HFApiMode {
 	return (
 		value === "openai" ||
+		value === "openai-compatible" ||
 		value === "azure-foundry" ||
 		value === "litellm" ||
 		value === "openai-responses" ||

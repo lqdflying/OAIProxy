@@ -488,6 +488,7 @@
 								"type": "string",
 								"enum": [
 									"openai",
+									"openai-compatible",
 									"azure-foundry",
 									"litellm",
 									"openai-responses",
@@ -496,7 +497,7 @@
 									"gemini"
 								],
 								"default": "openai",
-								"description": "API mode: 'openai' (Default) for OpenAI Chat Completions (/chat/completions; Kimi, DeepSeek, MiMo, MiniMax, etc.), 'azure-foundry' for Azure Foundry Chat Completions (/chat/completions with api-key authentication), 'litellm' for LiteLLM Proxy Chat Completions (/chat/completions with extra_body support), 'openai-responses' for OpenAI Responses (/responses), 'ollama' for Ollama (/api/chat), 'anthropic' for Anthropic (/v1/messages), 'gemini' for Gemini (*/v1beta/models/{model}:streamGenerateContent?alt=sse)."
+								"description": "API mode: 'openai' (Default) for OpenAI Chat Completions (/chat/completions; Kimi, DeepSeek, MiMo, MiniMax, etc.), 'openai-compatible' for generic OpenAI-compatible gateways with chathub-compatible request shaping (/chat/completions; forwards max_tokens and top-level reasoning_effort, prunes sampling controls for GPT-6 Astra and GPT-6.1 Sol), 'azure-foundry' for Azure Foundry Chat Completions (/chat/completions with api-key authentication), 'litellm' for LiteLLM Proxy Chat Completions (/chat/completions with extra_body support), 'openai-responses' for OpenAI Responses (/responses), 'ollama' for Ollama (/api/chat), 'anthropic' for Anthropic (/v1/messages), 'gemini' for Gemini (*/v1beta/models/{model}:streamGenerateContent?alt=sse)."
 							},
 							"useForCommitGeneration": {
 								"type": "boolean",

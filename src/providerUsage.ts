@@ -82,6 +82,8 @@ const ZAI_USAGE_UNSUPPORTED_REASON =
 	"Z.AI usage checks are unavailable because Z.AI currently documents API keys and console billing/usage pages, but not a public API-key usage or balance endpoint.";
 const AZURE_FOUNDRY_USAGE_UNSUPPORTED_REASON =
 	"Azure Foundry usage checks are unavailable with an inference API key; use Azure Monitor or Cost Management with Azure RBAC.";
+const OPENAI_COMPATIBLE_USAGE_UNSUPPORTED_REASON =
+	"OpenAI Compatible usage checks are unavailable because a generic gateway has no fixed public usage, balance, or cost endpoint; check the gateway's own dashboard or billing API.";
 export const TOKENROUTER_DASHBOARD_URL = "https://www.tokenrouter.com/console";
 
 function parseHttpsUrl(value: string | undefined): URL | undefined {
@@ -159,6 +161,11 @@ export function isZaiProvider(provider: string, baseUrl?: string): boolean {
 	);
 }
 
+export function isOpenAICompatibleProvider(provider: string): boolean {
+	const normalizedProvider = provider.trim().toLowerCase();
+	return normalizedProvider === "openai-compatible" || normalizedProvider === "openai-compatible-gateway";
+}
+
 export function isTokenRouterProvider(provider: string, baseUrl?: string): boolean {
 	const normalizedProvider = provider.trim().toLowerCase();
 	return normalizedProvider === "tokenrouter" || hasHostname(baseUrl, "api.tokenrouter.com");
@@ -179,11 +186,19 @@ export function getProviderUsageUnsupportedReason(provider: string, baseUrl?: st
 	if (isZaiProvider(provider, baseUrl)) {
 		return ZAI_USAGE_UNSUPPORTED_REASON;
 	}
+	if (isOpenAICompatibleProvider(provider)) {
+		return OPENAI_COMPATIBLE_USAGE_UNSUPPORTED_REASON;
+	}
 	return undefined;
 }
 
 export function getProviderUsageAdapter(provider: string, baseUrl?: string): ProviderUsageAdapter | undefined {
 	const normalizedProvider = provider.trim().toLowerCase();
+	if (isOpenAICompatibleProvider(provider)) {
+		// A generic gateway must not inherit another provider's usage adapter just because it
+		// happens to proxy the same upstream host.
+		return undefined;
+	}
 	if (normalizedProvider === "xai" && isXaiGrokOAuthBaseUrl(baseUrl)) {
 		return "xai";
 	}

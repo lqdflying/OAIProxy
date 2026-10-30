@@ -35,7 +35,7 @@
 | `extra` | 否 | `object` | — | 额外请求体参数 |
 | `extra_body` | 否 | `object` | — | LiteLLM 供应商/代理专用请求体参数 |
 | `include_reasoning_in_request` | 否 | `boolean` | — | 在 assistant 消息中包含 `reasoning_content` |
-| `apiMode` | 否 | `string` | `openai` | API 协议：`azure-foundry`、`openai`、`litellm`、`openai-responses`、`ollama`、`anthropic`、`gemini` |
+| `apiMode` | 否 | `string` | `openai` | API 协议：`azure-foundry`、`openai`、`openai-compatible`、`litellm`、`openai-responses`、`ollama`、`anthropic`、`gemini` |
 | `delay` | 否 | `number` | 全局 `oaicopilot.delay` | 连续请求之间的模型专属延迟（毫秒） |
 | `useForCommitGeneration` | 否 | `boolean` | — | 是否用于 Git 提交信息生成（不支持 `gemini`） |
 

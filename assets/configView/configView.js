@@ -328,9 +328,17 @@ function isAzureFoundryProvider(provider, baseUrl) {
 	return normalizedProvider === "azure-foundry" || normalizedBaseUrl.includes(".services.ai.azure.com");
 }
 
+function isOpenAICompatibleProvider(provider) {
+	const normalizedProvider = (provider || "").trim().toLowerCase();
+	return normalizedProvider === "openai-compatible" || normalizedProvider === "openai-compatible-gateway";
+}
+
 function getProviderUsageUnsupportedReason(provider, baseUrl) {
 	if (isAzureFoundryProvider(provider, baseUrl)) {
 		return "Azure Foundry usage checks are unavailable with an inference API key; use Azure Monitor or Cost Management with Azure RBAC.";
+	}
+	if (isOpenAICompatibleProvider(provider)) {
+		return "OpenAI Compatible usage checks are unavailable because a generic gateway has no fixed public usage, balance, or cost endpoint; check the gateway's own dashboard or billing API.";
 	}
 	if (isMimoProvider(provider, baseUrl)) {
 		return "Xiaomi MiMo usage checks are unavailable because Xiaomi only exposes balance/usage through web Console endpoints; no public API-key usage endpoint is documented.";
@@ -1412,6 +1420,7 @@ document.getElementById("addProvider").addEventListener("click", () => {
 		<td>
 			<select class="provider-input" data-field="apiMode">
 				<option value="openai">OpenAI</option>
+				<option value="openai-compatible">OpenAI Compatible</option>
 				<option value="azure-foundry">Azure Foundry</option>
 				<option value="litellm">LiteLLM</option>
 				<option value="openai-responses">OpenAI Responses</option>
@@ -1846,6 +1855,7 @@ function renderProviders() {
 					<td class="provider-mode-cell">
 						<select class="provider-input" data-field="apiMode">
 							<option value="openai" ${apiMode === "openai" ? "selected" : ""}>OpenAI</option>
+							<option value="openai-compatible" ${apiMode === "openai-compatible" ? "selected" : ""}>OpenAI Compatible</option>
 							<option value="azure-foundry" ${apiMode === "azure-foundry" ? "selected" : ""}>Azure Foundry</option>
 							<option value="litellm" ${apiMode === "litellm" ? "selected" : ""}>LiteLLM</option>
 							<option value="openai-responses" ${apiMode === "openai-responses" ? "selected" : ""}>OpenAI Responses</option>

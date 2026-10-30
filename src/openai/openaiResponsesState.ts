@@ -1,4 +1,4 @@
-import { createHash } from "crypto";
+import { hashStableValue } from "../stableHash";
 
 import type { ResponsesInputItem } from "./openaiResponsesApi";
 
@@ -282,25 +282,4 @@ function normalizeResponsesInputItemForSignature(value: unknown): unknown {
 		out[key] = normalizeResponsesInputItemForSignature(item);
 	}
 	return out;
-}
-
-function hashStableValue(value: unknown): string {
-	return createHash("sha256").update(stableStringify(value)).digest("hex");
-}
-
-function stableStringify(value: unknown): string {
-	if (value === null || value === undefined) {
-		return JSON.stringify(value);
-	}
-	if (Array.isArray(value)) {
-		return `[${value.map((item) => stableStringify(item)).join(",")}]`;
-	}
-	if (typeof value === "object") {
-		const obj = value as Record<string, unknown>;
-		return `{${Object.keys(obj)
-			.sort()
-			.map((key) => `${JSON.stringify(key)}:${stableStringify(obj[key])}`)
-			.join(",")}}`;
-	}
-	return JSON.stringify(value);
 }

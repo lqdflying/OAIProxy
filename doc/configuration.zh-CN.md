@@ -83,27 +83,32 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
    - 请求头：`Authorization: Bearer <apiKey>`
    - 适用：大多数 OpenAI 兼容供应商（Kimi、DeepSeek、Z.AI GLM、小米 MiMo、MiniMax、ModelScope、SiliconFlow 等）
 
-3. **`litellm`** - LiteLLM Proxy Chat Completions API
+3. **`openai-compatible`** - 通用 OpenAI 兼容网关（按 chathub 规则整形请求）
+   - 端点：`/chat/completions`
+   - 请求头：`Authorization: Bearer <apiKey>`
+   - 适用：需要 chathub 请求整形规则的 OpenAI 兼容网关。只转发 `model`、`messages`、`stream`、`stream_options`、`max_tokens`、`reasoning_effort`、`stop`、`tools`、`tool_choice` 和采样字段；其他网关专属字段可以通过 `extra` 添加。对 `gpt-6-astra*` 与 `gpt-6.1-sol*` 去掉 `temperature`、`top_p`、`frequency_penalty` 和 `presence_penalty`。`max_completion_tokens` 以 `max_tokens` 发送，`prompt_cache` 会派生会话稳定的 `prompt_cache_key`。
+
+4. **`litellm`** - LiteLLM Proxy Chat Completions API
    - 端点：`/chat/completions`
    - 请求头：`Authorization: Bearer <apiKey>`
    - 适用：需要通过字面量 `extra_body` 传递供应商/代理参数的 LiteLLM 代理端点
 
-4. **`openai-responses`** - OpenAI Responses API
+5. **`openai-responses`** - OpenAI Responses API
    - 端点：`/responses`
    - 请求头：`Authorization: Bearer <apiKey>`
    - 适用：OpenAI 官方 Responses API（及兼容网关如 rsp4copilot）
 
-5. **`ollama`** - Ollama 原生 API
+6. **`ollama`** - Ollama 原生 API
    - 端点：`/api/chat`
    - 请求头：`Authorization: Bearer <apiKey>`（当存储的 API Key 恰好为 `ollama` 时省略）
    - 适用：本地 Ollama 实例
 
-6. **`anthropic`** - Anthropic Claude API
+7. **`anthropic`** - Anthropic Claude API
    - 端点：`/v1/messages`
    - 请求头：`x-api-key: <apiKey>`
    - 适用：Anthropic Claude 模型
 
-7. **`gemini`** - Gemini 原生 API
+8. **`gemini`** - Gemini 原生 API
    - 端点：`/v1beta/models/{model}:streamGenerateContent?alt=sse`
    - 请求头：`x-goog-api-key: <apiKey>`
    - 适用：Google Gemini 模型（及兼容网关如 rsp4copilot）
@@ -158,11 +163,12 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 
 ### 供应商预设
 
-配置界面可以为 OpenAI、TokenRouter、LiteLLM、Anthropic、Fireworks、Kimi、DeepSeek、Z.AI GLM、小米 MiMo 和 MiniMax 预填供应商设置。预设只填入供应商 ID、Base URL 和 API 模式；具体模型 ID 请另行按需添加。
+配置界面可以为 OpenAI、OpenAI Compatible、TokenRouter、LiteLLM、Anthropic、Fireworks、Kimi、DeepSeek、Z.AI GLM、小米 MiMo 和 MiniMax 预填供应商设置。预设只填入供应商 ID、Base URL 和 API 模式；具体模型 ID 请另行按需添加。
 
 | 供应商 | 供应商 ID | Base URL | API 模式 |
 |---|---|---|---|
 | OpenAI | `openai` | `https://api.openai.com/v1` | `openai` |
+| OpenAI Compatible | `openai-compatible` | `https://YOUR-GATEWAY.example.com/v1` | `openai-compatible` |
 | TokenRouter | `tokenrouter` | `https://api.tokenrouter.com/v1` | `openai` |
 | Anthropic | `anthropic` | `https://api.anthropic.com` | `anthropic` |
 | Kimi (Moonshot AI) | `kimi` | `https://api.moonshot.ai/v1` | `openai` |
@@ -173,7 +179,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 | MiniMax (OpenAI) | `minimax` | `https://api.minimax.io/v1` | `openai` |
 | MiniMax (Anthropic) | `minimax-anthropic` | `https://api.minimax.io/anthropic` | `anthropic` |
 
-配置示例见 `examples/openai-responses.jsonc`、`examples/openai-chat-completions.jsonc`、`examples/tokenrouter.jsonc`、`examples/anthropic.jsonc`、`examples/fireworks.jsonc`、`examples/zai-glm.jsonc`、`examples/mimo.jsonc`、`examples/minimax-openai.jsonc` 和 `examples/minimax-anthropic.jsonc`。TokenRouter 使用 `https://api.tokenrouter.com/v1`，供应商 key 保存为 `oaicopilot.apiKey.tokenrouter`，Quick Setup 提供四个精确的网关模型 ID。Fireworks 用量检查复用普通供应商 key，并报告可访问账户的当月无服务器 token。OpenAI 和 Anthropic 的用量/费用检查需要单独的 admin key，请在配置界面的 `Usage Key` 字段中填写，不要写入 `settings.json`。TokenRouter 的余额检查需要在 `Usage Key` 字段填写单独的 Management Key，并通过 Management API self-wallet 端点报告账户余额。Z.AI 和小米 MiMo 用量检查会显示为不可用，因为当前公开文档未提供 API key 用量或余额端点。
+配置示例见 `examples/openai-responses.jsonc`、`examples/openai-chat-completions.jsonc`、`examples/openai-compatible.jsonc`、`examples/tokenrouter.jsonc`、`examples/anthropic.jsonc`、`examples/fireworks.jsonc`、`examples/zai-glm.jsonc`、`examples/mimo.jsonc`、`examples/minimax-openai.jsonc` 和 `examples/minimax-anthropic.jsonc`。TokenRouter 使用 `https://api.tokenrouter.com/v1`，供应商 key 保存为 `oaicopilot.apiKey.tokenrouter`，Quick Setup 提供四个精确的网关模型 ID。Fireworks 用量检查复用普通供应商 key，并报告可访问账户的当月无服务器 token。OpenAI 和 Anthropic 的用量/费用检查需要单独的 admin key，请在配置界面的 `Usage Key` 字段中填写，不要写入 `settings.json`。TokenRouter 的余额检查需要在 `Usage Key` 字段填写单独的 Management Key，并通过 Management API self-wallet 端点报告账户余额。Z.AI 和小米 MiMo 用量检查会显示为不可用，因为当前公开文档未提供 API key 用量或余额端点。OpenAI Compatible 用量检查同样显示为不可用，因为通用网关没有固定的公开用量、余额或费用端点。
 
 ### OpenAI GPT-6.1 Sol
 
@@ -182,6 +188,20 @@ Quick Setup 提供独立的 **GPT-6.1 Sol** API key 卡片和 **GPT-6.1 Sol (OAu
 API key 卡片使用供应商 `openai` 和 `https://api.openai.com/v1`，并请求详细推理摘要。OAuth 卡片使用供应商及 `configId` `openai-oauth`、`authMode: "oauth"` 和 `https://chatgpt.com/backend-api/codex`，因此两份配置可以同时保留。[OAuth 访问](https://learn.chatgpt.com/docs/models#gpt-6.1-sol)取决于账户、推出进度和工作区设置。在供应商管理中，使用 **OpenAI OAuth (Codex)** 行的 **Sign in** 或命令 **OAIProxy: Sign in to OpenAI / Codex with OAuth** 完成设备码登录；凭据保存在 VS Code SecretStorage 中，并在请求前刷新。
 
 公共 API 将输出额度发送为 `max_output_tokens`；OAuth 路由省略该字段，并遵循现有的 [Codex 请求要求](openai-oauth-cache.md)。
+
+### OpenAI Compatible
+
+`openai-compatible` 面向只提供 OpenAI Chat Completions 的通用网关。把占位 Base URL 换成网关地址（网关需要时包含 `/v1`），并把密钥保存为 `oaicopilot.apiKey.openai-compatible`。认证方式为 `Authorization: Bearer`，与 chathub 的兼容供应商一致。
+
+请求整形遵循 chathub 的 `openaicompatible` 供应商：
+
+- 请求体白名单为 `model`、`messages`、`stream`、`stream_options.include_usage`、`max_tokens`、`reasoning_effort`、`stop`、`tools`、`tool_choice`，以及模型支持时的 `temperature`、`top_p`、`frequency_penalty`、`presence_penalty`。供应商专属开关（`thinking`、`enable_thinking`、OpenRouter 风格的 `reasoning`、`top_k`、`min_p`、`repetition_penalty`）不会发送，除非通过 `extra` 显式添加。
+- 对 `gpt-6-astra*` 和 `gpt-6.1-sol*` 去掉 `temperature`、`top_p`、`frequency_penalty`、`presence_penalty`，与 chathub 对这些模型族的裁剪规则一致。
+- 已保存行中的 `max_completion_tokens` 会以 `max_tokens` 发送。
+- `reasoning_effort` 始终以顶层字段发送。若某行只保存了 `reasoning.effort`，则使用该值，并且永远不会转发 OpenRouter 风格的 `reasoning` 对象。
+- 启用 `prompt_cache.enabled: true` 或显式配置 `prompt_cache.retention` 时，OAIProxy 会根据模型、思考强度、工具选择与工具定义、所有 system/developer 消息和首条 user 消息派生会话稳定的 `prompt_cache_key`。显式 `prompt_cache.key` 优先；`prompt_cache.enabled: false` 则完全不发送该字段。配置了保留窗口时，会随密钥一起发送 `prompt_cache_retention`。
+
+Quick Setup 提供一张卡片 **GPT-6 Astra**，使用 chathub 的兼容预算 `context_length: 258000` 和 `max_tokens: 128000`，默认 `xhigh`，可选 `low`/`medium`/`high`/`xhigh`/`max`。网关提供的其他模型请通过 Manual Setup 添加。该模式未实现 Responses 路由、`Session_id` 请求头、图像生成和视频透传。
 
 ### Fireworks AI
 

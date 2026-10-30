@@ -87,6 +87,8 @@ Quick Setup 提供使用 OpenAI API key 的 **GPT-6.1 Sol** 和使用 ChatGPT/Co
 
 OAuth 卡片使用独立供应商 `openai-oauth` 和 `https://chatgpt.com/backend-api/codex`。在 **OpenAI OAuth (Codex)** 供应商行的 **Actions** 中选择 **Sign in**，完成设备码登录后添加卡片；凭据保存在 VS Code SecretStorage 中，并在请求前刷新。
 
+**OpenAI Compatible**（`apiMode: "openai-compatible"`）用于只提供 OpenAI Chat Completions 的通用网关。把占位 base URL `https://YOUR-GATEWAY.example.com/v1` 换成你的网关地址（需要时包含 `/v1`）并保存密钥；OAIProxy 将其保存为 `oaicopilot.apiKey.openai-compatible`，并使用 `Authorization: Bearer` 认证。请求整形与 chathub 的 OpenAI 兼容供应商一致：只转发 `model`、`messages`、`stream`、`stream_options`、`max_tokens`、`reasoning_effort`、`stop`、`tools`、`tool_choice` 以及采样字段；网关需要其他字段时可以通过 `extra` 添加，`extra` 会合并进请求体。对 `gpt-6-astra*` 和 `gpt-6.1-sol*` 去掉 `temperature`、`top_p`、`frequency_penalty` 和 `presence_penalty`，与 chathub 对这些模型族的裁剪规则一致。`max_completion_tokens` 会以 `max_tokens` 发送，`reasoning_effort` 始终为顶层字段。启用 `prompt_cache` 时，OAIProxy 会根据模型、思考强度、工具选择与工具定义、所有 system/developer 消息以及首条 user 消息派生会话稳定的 `prompt_cache_key`。Quick Setup 提供一张卡片：**GPT-6 Astra**（默认 `xhigh` 推理），声明 258,000 token 的兼容上下文预算和 128,000 token 的输出额度。网关提供的其他模型可以通过 Manual Setup 添加，上面的请求整形规则同样适用于这些行。2026 年 10 月 30 日对一个 Codex 兼容网关的验证显示，该网关已不再提供 `gpt-5.5`（已于 2026 年 10 月 14 日从 ChatGPT 登录通道下线），因此不再提供 GPT-5.5 卡片。该供应商没有公开的用量/余额端点，因此用量检查会显示不可用原因。Responses 路由、`Session_id` 请求头、图像生成和视频透传不属于该供应商；Responses-only 网关请使用 `apiMode: "openai-responses"`。参见 `examples/openai-compatible.jsonc`。
+
 Model Management 提供每个模型的 `Test` 操作和并行的 `Test all` 操作。每次测试都会通过模型保存的供应商、API 模式、自定义请求头和高级参数发送一条小型真实推理请求，因此可能产生少量供应商用量。
 
 独立的 Provider Usage Check 表格会动态列出已配置且支持用量检查的供应商，并按余额、token、token 套餐或费用用量展示结果。Fireworks 账户发现和当月无服务器 token 检查复用普通 Fireworks API key。OpenAI 和 Anthropic 的用量/admin key 会与聊天 API key 分开保存。TokenRouter 使用单独的 Management Key，并通过 Management API self-wallet 端点显示账户余额。Z.AI 和小米 MiMo 条目会显示不可用原因，因为当前公开文档未提供 API key 用量或余额端点。
@@ -95,7 +97,7 @@ Model Management 提供每个模型的 `Test` 操作和并行的 `Test all` 操�
 
 ## 多 API 模式
 
-支持七种 API 协议：`azure-foundry`（使用 `api-key` 的 Azure Foundry 直连 Chat Completions）、`openai`、`litellm`、`openai-responses`、`ollama`、`anthropic` 和 `gemini`。通过 `apiMode` 参数为每个模型指定。
+支持八种 API 协议：`azure-foundry`（使用 `api-key` 的 Azure Foundry 直连 Chat Completions）、`openai`、`openai-compatible`（通用 OpenAI 兼容网关，按 chathub 的请求整形规则发送）、`litellm`、`openai-responses`、`ollama`、`anthropic` 和 `gemini`。通过 `apiMode` 参数为每个模型指定。
 
 TokenRouter、Fireworks、Kimi、DeepSeek、Z.AI GLM 和小米 MiMo 使用现有 `openai` 模式，因为它们的托管 API 与 OpenAI 格式兼容。MiniMax 同时支持 `openai` 和 `anthropic` 模式；MiniMax 推荐在 M3 思维链和交错思维工作流中使用 Anthropic 兼容端点。
 

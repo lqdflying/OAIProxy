@@ -2,6 +2,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { getGitDiff } from "./gitUtils";
 import { OpenaiApi } from "../openai/openaiApi";
+import { OpenaiCompatibleApi } from "../openai/openaiCompatibleApi";
 import { OpenaiResponsesApi } from "../openai/openaiResponsesApi";
 import { AnthropicApi } from "../anthropic/anthropicApi";
 import { OllamaApi } from "../ollama/ollamaApi";
@@ -181,6 +182,38 @@ async function generateCommitMsgForRepository(
 	);
 }
 
+/** The commit generator only needs the streaming text contract shared by every adapter. */
+export interface CommitMessageApi {
+	createMessage(
+		model: HFModelItem,
+		systemPrompt: string,
+		messages: { role: string; content: string }[],
+		baseUrl: string,
+		apiKey: string,
+		signal?: AbortSignal
+	): AsyncGenerator<{ type: "text"; text: string }>;
+}
+
+/**
+ * Commit generation runs outside the chat request path, so it must select the same adapter the
+ * model's apiMode would use. Falling through to `OpenaiApi` for every unrecognized mode would
+ * silently drop the OpenAI Compatible request shaping.
+ */
+export function createCommitMessageApi(apiMode: string, modelId: string): CommitMessageApi {
+	switch (apiMode) {
+		case "anthropic":
+			return new AnthropicApi(modelId);
+		case "ollama":
+			return new OllamaApi(modelId);
+		case "openai-responses":
+			return new OpenaiResponsesApi(modelId);
+		case "openai-compatible":
+			return new OpenaiCompatibleApi(modelId);
+		default:
+			return new OpenaiApi(modelId);
+	}
+}
+
 async function performCommitMsgGeneration(
 	secrets: vscode.SecretStorage,
 	globalState: vscode.Memento,
@@ -261,19 +294,8 @@ async function performCommitMsgGeneration(
 		const messages = [{ role: "user", content: prompt }];
 
 		// Create API instance based on model's API mode
-		let apiInstance;
 		const apiMode = selectedModel.apiMode ?? "openai";
-
-		if (apiMode === "anthropic") {
-			apiInstance = new AnthropicApi(modelId);
-		} else if (apiMode === "ollama") {
-			apiInstance = new OllamaApi(modelId);
-		} else if (apiMode === "openai-responses") {
-			apiInstance = new OpenaiResponsesApi(modelId);
-		} else {
-			// Default to OpenAI-compatible API
-			apiInstance = new OpenaiApi(modelId);
-		}
+		const apiInstance = createCommitMessageApi(apiMode, modelId);
 
 		commitGenerationAbortController = new AbortController();
 		const cancellationListener = cancellationToken.onCancellationRequested(() => {

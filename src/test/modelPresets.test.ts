@@ -172,6 +172,45 @@ suite("modelPresets", () => {
 		}
 	});
 
+	test("ships a single GPT-6 Astra card for the OpenAI Compatible provider", () => {
+		const presets = MODEL_PRESETS.filter((preset) => preset.model.owned_by === "openai-compatible");
+		assert.deepStrictEqual(
+			presets.map((preset) => preset.model.id),
+			["gpt-6-astra"]
+		);
+
+		for (const expected of [
+			{
+				id: "openai-compatible-gpt-6-astra",
+				modelId: "gpt-6-astra",
+				displayName: "GPT-6 Astra (Compatible)",
+				effort: "xhigh",
+				supported: ["low", "medium", "high", "xhigh", "max"],
+			},
+		]) {
+			const preset = MODEL_PRESETS.find((item) => item.id === expected.id);
+			assert.ok(preset);
+			assert.strictEqual(preset.providerPresetId, "openai-compatible");
+			assert.strictEqual(preset.model.id, expected.modelId);
+			assert.strictEqual(preset.model.configId, "openai-compatible");
+			assert.strictEqual(preset.model.displayName, expected.displayName);
+			assert.strictEqual(preset.model.owned_by, "openai-compatible");
+			assert.strictEqual(preset.model.baseUrl, "https://YOUR-GATEWAY.example.com/v1");
+			assert.strictEqual(preset.model.apiMode, "openai-compatible");
+			assert.strictEqual(preset.model.family, expected.modelId);
+			assert.strictEqual(preset.model.context_length, 258000);
+			assert.strictEqual(preset.model.max_tokens, 128000);
+			assert.strictEqual(preset.model.max_completion_tokens, undefined);
+			assert.strictEqual(preset.model.vision, true);
+			assert.strictEqual(preset.model.toolCalling, true);
+			assert.strictEqual(preset.model.prompt_cache?.enabled, true);
+			assert.strictEqual(preset.model.reasoning_effort, expected.effort);
+			assert.strictEqual(preset.model.default_reasoning_effort, expected.effort);
+			assert.deepStrictEqual(preset.model.supported_reasoning_efforts, expected.supported);
+			assert.ok(preset.model._comment?.includes("https://developers.openai.com/api/docs/models/"));
+		}
+	});
+
 	test("sets max reasoning as the direct DeepSeek Quick Setup default", () => {
 		for (const presetId of ["deepseek-v4-pro", "deepseek-flash"]) {
 			const preset = MODEL_PRESETS.find((item) => item.id === presetId);

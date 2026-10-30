@@ -45,6 +45,7 @@ import { countMessageTokens } from "./provideToken";
 import { beginStatusBarRequest, endStatusBarRequests, updateContextStatusBar, updateStatusBarThroughput } from "./statusBar";
 import { OllamaApi } from "./ollama/ollamaApi";
 import { OpenaiApi } from "./openai/openaiApi";
+import { OpenaiCompatibleApi } from "./openai/openaiCompatibleApi";
 import { OpenaiResponsesApi } from "./openai/openaiResponsesApi";
 import { createOpenAIResponsesInputSignatures, OpenAIResponsesStateStore } from "./openai/openaiResponsesState";
 import { LiteLLMApi } from "./litellm/litellmApi";
@@ -1057,7 +1058,9 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				// OpenAI compatible API mode (default)
 				const openaiApi = apiMode === "litellm"
 					? new LiteLLMApi(model.id)
-					: new OpenaiApi(model.id, apiMode === "azure-foundry" ? "azure-foundry" : "openai");
+					: apiMode === "openai-compatible"
+						? new OpenaiCompatibleApi(model.id)
+						: new OpenaiApi(model.id, apiMode === "azure-foundry" ? "azure-foundry" : "openai");
 				const openaiMessages = openaiApi.convertMessages(workingMessages, modelConfig, um, options);
 
 				// requestBody
@@ -1068,11 +1071,15 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					stream_options: { include_usage: true },
 				};
 				requestBody = openaiApi.prepareRequestBody(requestBody, um, options);
-				applyOpenAIPromptCache(requestBody, {
-					model: um,
-					baseUrl: BASE_URL,
-					modelId: parsedModelId.baseId,
-				});
+				if (apiMode !== "openai-compatible") {
+					// The compatible adapter owns prompt-cache selection for its mode: caching is
+					// opt-in there, while the generic helper auto-enables for OpenAI/Fireworks hosts.
+					applyOpenAIPromptCache(requestBody, {
+						model: um,
+						baseUrl: BASE_URL,
+						modelId: parsedModelId.baseId,
+					});
+				}
 
 				// send chat request with retry
 				const url = `${BASE_URL.replace(/\/+$/, "")}/chat/completions`;
