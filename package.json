@@ -41,7 +41,7 @@
 		"type": "git",
 		"url": "https://github.com/lqdflying/OAIProxy"
 	},
-	"version": "0.1.54",
+	"version": "0.1.55",
 	"engines": {
 		"vscode": "^1.120.0"
 	},
@@ -207,7 +207,10 @@
 							},
 							"authMode": {
 								"type": "string",
-								"enum": ["api-key", "oauth"],
+								"enum": [
+									"api-key",
+									"oauth"
+								],
 								"description": "Credential flow for this model. OAuth uses OAIProxy's refreshable xAI/Grok or OpenAI/Codex credential; api-key uses the provider API key."
 							},
 							"provider": {

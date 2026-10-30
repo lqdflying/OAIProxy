@@ -1,5 +1,14 @@
 # Change Log
 
+## 0.1.55 (2026-10-30)
+
+- Add a first-class `openai-compatible` provider for generic OpenAI Chat Completions gateways with chathub-compatible request shaping: an explicit field allowlist, sampling pruning for GPT-6 Astra and GPT-6.1 Sol, `max_tokens` output limits, top-level `reasoning_effort` including the nested `reasoning.effort` fallback, an opt-in conversation-stable `prompt_cache_key`, and a single GPT-6 Astra Quick Setup card.
+- Route commit generation through the compatible adapter, keep compatible prompt-cache selection inside the adapter, and report usage checks as unsupported instead of inheriting another provider's adapter.
+- Refresh the Anthropic Quick Setup cards to Claude Opus 5.5 and Claude Sonnet 5.5 with 1M context, 128K output, adaptive thinking, and `low` through `max` effort.
+- Refresh the Gemini Quick Setup cards to Gemini 4 Argon, Gemini 3.8 Flash, and Gemini 3.5 Flash-Lite; the previous Gemini 3 Pro Preview card pointed at a model shut down on March 9, 2026. Point the Gemini empty-model fallback at `models/gemini-4-argon`.
+- Read Anthropic cost from the Usage and Cost Analytics API and fall back to the legacy cost report when the export has no rows; the legacy window now includes the current UTC day.
+- Update English and Chinese documentation and examples for the new provider, model cards, and usage behavior.
+
 ## 0.1.54 (2026-10-25)
 
 - Preserve encrypted OpenAI Codex OAuth reasoning state across tool continuations, including full-history fallback, with conversation/account isolation and reasoning/tool ordering retained.
