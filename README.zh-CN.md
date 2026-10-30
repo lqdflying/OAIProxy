@@ -91,7 +91,7 @@ OAuth 卡片使用独立供应商 `openai-oauth` 和 `https://chatgpt.com/backen
 
 Model Management 提供每个模型的 `Test` 操作和并行的 `Test all` 操作。每次测试都会通过模型保存的供应商、API 模式、自定义请求头和高级参数发送一条小型真实推理请求，因此可能产生少量供应商用量。
 
-独立的 Provider Usage Check 表格会动态列出已配置且支持用量检查的供应商，并按余额、token、token 套餐或费用用量展示结果。Fireworks 账户发现和当月无服务器 token 检查复用普通 Fireworks API key。OpenAI 和 Anthropic 的用量/admin key 会与聊天 API key 分开保存。TokenRouter 使用单独的 Management Key，并通过 Management API self-wallet 端点显示账户余额。Z.AI 和小米 MiMo 条目会显示不可用原因，因为当前公开文档未提供 API key 用量或余额端点。
+独立的 Provider Usage Check 表格会动态列出已配置且支持用量检查的供应商，并按余额、token、token 套餐或费用用量展示结果。Fireworks 账户发现和当月无服务器 token 检查复用普通 Fireworks API key。OpenAI 和 Anthropic 的用量/admin key 会与聊天 API key 分开保存。Anthropic 费用使用 Usage and Cost Analytics API（`/v1/organizations/analytics/cost`），当该导出尚无数据时回退到旧版 cost report；分析数据大约每 4 小时刷新一次，因此最近几小时的支出由回退路径显示。TokenRouter 使用单独的 Management Key，并通过 Management API self-wallet 端点显示账户余额。Z.AI 和小米 MiMo 条目会显示不可用原因，因为当前公开文档未提供 API key 用量或余额端点。
 
 → [完整配置指南](doc/configuration.zh-CN.md)
 

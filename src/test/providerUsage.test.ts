@@ -1,6 +1,8 @@
 import * as assert from "assert";
 import {
 	checkProviderUsage,
+	buildAnthropicAnalyticsCostEndpoint,
+	buildAnthropicCostReportEndpoint,
 	buildFireworksBillingUsageEndpoint,
 	buildKimiBalanceEndpoint,
 	buildLiteLLMKeyInfoEndpoint,
@@ -12,6 +14,7 @@ import {
 	isAzureFoundryProvider,
 	isOpenAICompatibleProvider,
 	isTokenRouterProvider,
+	parseAnthropicAnalyticsCost,
 	parseAnthropicCostReport,
 	parseDeepSeekBalance,
 	parseFireworksAccounts,
@@ -782,6 +785,178 @@ suite("providerUsage", () => {
 			checkProviderUsage({ provider: "openai-compatible", baseUrl: "https://gateway.example.com/v1", apiKey: "test" }),
 			/OpenAI Compatible usage checks are unavailable/
 		);
+	});
+
+	test("requests the Anthropic cost report through the end of the current UTC day", () => {
+		const url = new URL(buildAnthropicCostReportEndpoint(new Date("2026-10-30T15:40:00Z")));
+
+		assert.strictEqual(url.origin + url.pathname, "https://api.anthropic.com/v1/organizations/cost_report");
+		assert.strictEqual(url.searchParams.get("starting_at"), "2026-10-01T00:00:00Z");
+		assert.strictEqual(url.searchParams.get("ending_at"), "2026-10-31T00:00:01Z");
+		assert.strictEqual(url.searchParams.get("bucket_width"), "1d");
+		assert.strictEqual(url.searchParams.get("limit"), "31");
+		assert.deepStrictEqual(url.searchParams.getAll("group_by[]"), ["description"]);
+	});
+
+	test("parses Anthropic cost report buckets with minor-unit string amounts", () => {
+		const result = parseAnthropicCostReport({
+			data: [
+				{
+					starting_at: "2026-10-29T00:00:00Z",
+					ending_at: "2026-10-30T00:00:00Z",
+					results: [
+						{
+							amount: "123.45",
+							currency: "USD",
+							description: "Claude Opus 5.5 Usage - Input Tokens",
+						},
+						{
+							amount: "10",
+							currency: "USD",
+							description: "Claude Opus 5.5 Usage - Output Tokens",
+						},
+					],
+				},
+				{ starting_at: "2026-10-30T00:00:00Z", ending_at: "2026-10-31T00:00:00Z", results: [] },
+			],
+			has_more: false,
+			next_page: null,
+		});
+
+		assert.match(result.summary, /USD 1\.3345 spent in reported period/);
+		assert.ok(result.details.includes("Source: Anthropic cost report API."));
+		assert.ok(
+			result.details.includes("Claude Opus 5.5 Usage - Input Tokens: USD 1.2345"),
+			result.details.join("\n")
+		);
+	});
+
+	test("requests the Anthropic analytics cost report for month-to-date model totals", () => {
+		const url = new URL(buildAnthropicAnalyticsCostEndpoint(new Date("2026-10-30T15:40:00Z")));
+
+		assert.strictEqual(
+			url.origin + url.pathname,
+			"https://api.anthropic.com/v1/organizations/analytics/cost"
+		);
+		assert.strictEqual(url.searchParams.get("starting_at"), "2026-10-01T00:00:00Z");
+		assert.strictEqual(url.searchParams.get("limit"), "1000");
+		assert.deepStrictEqual(url.searchParams.getAll("group_by[]"), ["model"]);
+		assert.strictEqual(url.searchParams.get("time_bucket_width"), null);
+		assert.strictEqual(url.searchParams.get("ending_at"), null);
+	});
+
+	test("parses Anthropic analytics cost rows and the refresh watermark", () => {
+		const result = parseAnthropicAnalyticsCost({
+			data: [
+				{
+					cost: { amount: "41280.000000", currency: "USD", list_amount: "51600.000000", requests: 128 },
+					ending_at: "2026-10-30T15:00:00Z",
+					starting_at: "2026-10-01T00:00:00Z",
+					group: { model: "claude-opus-5-5" },
+				},
+				{
+					cost: { amount: "1000.000000", currency: "USD", list_amount: "1000.000000", requests: 3 },
+					ending_at: "2026-10-30T15:00:00Z",
+					starting_at: "2026-10-01T00:00:00Z",
+					group: { model: "claude-sonnet-5-5" },
+				},
+			],
+			data_refreshed_at: "2026-10-30T12:00:00Z",
+			has_more: false,
+			next_page: null,
+		});
+
+		assert.match(result.summary, /USD 422\.8 spent in reported period/);
+		assert.ok(result.details.includes("Source: Anthropic Usage and Cost Analytics API."));
+		assert.ok(result.details.includes("Data refreshed at 2026-10-30T12:00:00Z."));
+		assert.ok(result.details.includes("claude-opus-5-5: USD 412.8"));
+		assert.ok(result.details.includes("claude-sonnet-5-5: USD 10"));
+	});
+
+	test("falls back to the legacy Anthropic cost report when analytics has no rows", async () => {
+		const originalFetch = globalThis.fetch;
+		const requests: { url: string; headers: Record<string, string> }[] = [];
+		globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+			const url = String(input);
+			requests.push({ url, headers: (init?.headers ?? {}) as Record<string, string> });
+			if (url.includes("/analytics/cost")) {
+				return new Response(
+					JSON.stringify({ data: [], data_refreshed_at: null, has_more: false, next_page: null }),
+					{ status: 200 }
+				);
+			}
+			return new Response(
+				JSON.stringify({
+					data: [
+						{
+							starting_at: "2026-10-29T00:00:00Z",
+							ending_at: "2026-10-30T00:00:00Z",
+							results: [{ amount: "50", currency: "USD", description: "Legacy" }],
+						},
+					],
+					has_more: false,
+					next_page: null,
+				}),
+				{ status: 200 }
+			);
+		}) as typeof fetch;
+
+		try {
+			const result = await checkProviderUsage({
+				provider: "anthropic",
+				baseUrl: "https://api.anthropic.com",
+				apiKey: "admin-test",
+			});
+
+			assert.strictEqual(requests.length, 2);
+			assert.ok(requests[0].url.includes("https://api.anthropic.com/v1/organizations/analytics/cost"));
+			assert.strictEqual(requests[0].headers["anthropic-beta"], "analytics-usage-cost-2026-08-24");
+			assert.strictEqual(requests[0].headers["x-api-key"], "admin-test");
+			assert.ok(requests[1].url.includes("https://api.anthropic.com/v1/organizations/cost_report"));
+			assert.strictEqual(requests[1].headers["anthropic-beta"], undefined);
+			assert.match(result.summary, /USD 0\.5 spent in reported period/);
+			assert.match(result.details[0], /Analytics export returned no cost rows yet; using the legacy cost report\./);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
+	});
+
+	test("uses the Anthropic analytics report without the legacy request when it has rows", async () => {
+		const originalFetch = globalThis.fetch;
+		const urls: string[] = [];
+		globalThis.fetch = (async (input: RequestInfo | URL) => {
+			urls.push(String(input));
+			return new Response(
+				JSON.stringify({
+					data: [
+						{
+							cost: { amount: "250.000000", currency: "USD", list_amount: "300.000000", requests: 1 },
+							ending_at: "2026-10-30T12:00:00Z",
+							starting_at: "2026-10-01T00:00:00Z",
+							group: { model: "claude-opus-5-5" },
+						},
+					],
+					data_refreshed_at: "2026-10-30T12:00:00Z",
+					has_more: false,
+					next_page: null,
+				}),
+				{ status: 200 }
+			);
+		}) as typeof fetch;
+
+		try {
+			const result = await checkProviderUsage({
+				provider: "anthropic",
+				baseUrl: "https://api.anthropic.com",
+				apiKey: "admin-test",
+			});
+
+			assert.strictEqual(urls.length, 1);
+			assert.ok(urls[0].includes("/v1/organizations/analytics/cost"));
+			assert.match(result.summary, /USD 2\.5 spent in reported period/);
+		} finally {
+			globalThis.fetch = originalFetch;
+		}
 	});
 
 	test("checks TokenRouter wallet with a management key", async () => {
