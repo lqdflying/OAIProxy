@@ -87,7 +87,7 @@ The extension supports multiple API protocols to work with various model provide
 3. **`openai-compatible`** - Generic OpenAI-compatible gateway (chathub-compatible request shaping)
    - Endpoint: `/chat/completions`
    - Header: `Authorization: Bearer <apiKey>`
-   - Use for: Gateways that proxy OpenAI models and need chathub's shaping rules. Only `model`, `messages`, `stream`, `stream_options`, `max_tokens`, `reasoning_effort`, `stop`, `tools`, `tool_choice` and the sampling fields are forwarded; other gateway-specific fields can be added through `extra`. `temperature`, `top_p`, `frequency_penalty` and `presence_penalty` are pruned for `gpt-6-astra*` and `gpt-6.1-sol*`. `max_completion_tokens` is sent as `max_tokens`, and `prompt_cache` derives a per-conversation `prompt_cache_key`.
+   - Use for: Gateways that proxy OpenAI models and need chathub's shaping rules. Only `model`, `messages`, `stream`, `stream_options`, `max_tokens`, `reasoning_effort`, `stop`, `tools`, `tool_choice` and the sampling fields are forwarded; other gateway-specific fields can be added through `extra`. `temperature`, `top_p`, `frequency_penalty` and `presence_penalty` are pruned for `gpt-6-astra*`, `gpt-6.2-astra*` and `gpt-6.1-sol*`. `max_completion_tokens` is sent as `max_tokens`, and `prompt_cache` derives a per-conversation `prompt_cache_key`.
 
 4. **`litellm`** - LiteLLM Proxy Chat Completions API
    - Endpoint: `/chat/completions`
@@ -196,12 +196,12 @@ The API-key card uses provider `openai` at `https://api.openai.com/v1` and reque
 Request shaping follows chathub's `openaicompatible` provider:
 
 - The body allowlist is `model`, `messages`, `stream`, `stream_options.include_usage`, `max_tokens`, `reasoning_effort`, `stop`, `tools`, `tool_choice`, plus `temperature`, `top_p`, `frequency_penalty`, and `presence_penalty` when the model accepts them. Provider-specific controls (`thinking`, `enable_thinking`, OpenRouter-style `reasoning`, `top_k`, `min_p`, `repetition_penalty`) are not sent unless you add them through `extra`.
-- `temperature`, `top_p`, `frequency_penalty`, and `presence_penalty` are dropped for `gpt-6-astra*` and `gpt-6.1-sol*`, matching chathub's pruning for those families.
+- `temperature`, `top_p`, `frequency_penalty`, and `presence_penalty` are dropped for `gpt-6-astra*`, `gpt-6.2-astra*` and `gpt-6.1-sol*`: chathub prunes the GPT-6 Astra and GPT-6.1 Sol families, and OpenAI's GPT-6.2 migration guide says to omit `temperature` and `top_p`.
 - `max_completion_tokens` on a saved row is sent as `max_tokens`.
 - `reasoning_effort` is always sent top-level. When a row stores only `reasoning.effort`, that value is used instead, and the OpenRouter-style `reasoning` object is never forwarded.
 - With `prompt_cache.enabled: true` or an explicit `prompt_cache.retention`, OAIProxy derives a conversation-stable `prompt_cache_key` from the model, reasoning effort, tool selection and tools, every system/developer message, and the first user message. An explicit `prompt_cache.key` wins; `prompt_cache.enabled: false` suppresses the hint. A configured retention window is forwarded as `prompt_cache_retention` alongside the key.
 
-Quick Setup ships one card, **GPT-6 Astra**, with `context_length: 258000` and `max_tokens: 128000` (chathub's compatible budget); it defaults to `xhigh` with `low`/`medium`/`high`/`xhigh`/`max` available. Add any other gateway model through Manual Setup. Responses routing, the `Session_id` header, image generation, and video pass-through are not implemented for this mode.
+Quick Setup ships one card, **GPT-6.2 Astra**, with `context_length: 1050000` and `max_tokens: 128000` (OpenAI's own limits; lower `context_length` when your gateway enforces a smaller budget); it defaults to `xhigh` with `low`/`medium`/`high`/`xhigh`/`max` available. Add any other gateway model through Manual Setup. Responses routing, the `Session_id` header, image generation, and video pass-through are not implemented for this mode.
 
 ### OpenAI/Codex OAuth
 

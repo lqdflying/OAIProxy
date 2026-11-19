@@ -9,6 +9,9 @@ import { OpenaiApi } from "./openaiApi";
 /** Official GPT-6 Astra plus dated snapshots (`gpt-6-astra-…`). */
 const GPT6_ASTRA_MODEL_PATTERN = /^gpt-6-astra(?:-|$)/;
 
+/** Official GPT-6.2 Astra plus dated snapshots (`gpt-6.2-astra-…`). */
+const GPT62_ASTRA_MODEL_PATTERN = /^gpt-6\.2-astra(?:-|$)/;
+
 /** Official GPT-6.1 Sol plus dated snapshots (`gpt-6.1-sol-…`). */
 const GPT61_SOL_MODEL_PATTERN = /^gpt-6\.1-sol(?:-|$)/;
 
@@ -16,10 +19,16 @@ const GPT61_SOL_MODEL_PATTERN = /^gpt-6\.1-sol(?:-|$)/;
  * Mirrors chathub's `providers/openaicompatible` adapter, which conservatively drops sampling
  * controls for GPT-6 Astra and GPT-6.1 Sol rather than assuming every gateway accepts them.
  * This is compatibility parity, not a demonstrated requirement of every compatible gateway.
+ * GPT-6.2 Astra is pruned the same way because OpenAI's migration guide says to omit
+ * `temperature` and `top_p`: https://developers.openai.com/api/docs/guides/latest-model
  */
 export function shouldPruneOpenAICompatibleSampling(modelId: string): boolean {
 	const normalized = modelId.trim();
-	return GPT6_ASTRA_MODEL_PATTERN.test(normalized) || GPT61_SOL_MODEL_PATTERN.test(normalized);
+	return (
+		GPT6_ASTRA_MODEL_PATTERN.test(normalized) ||
+		GPT62_ASTRA_MODEL_PATTERN.test(normalized) ||
+		GPT61_SOL_MODEL_PATTERN.test(normalized)
+	);
 }
 
 /**

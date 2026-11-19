@@ -86,7 +86,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 3. **`openai-compatible`** - 通用 OpenAI 兼容网关（按 chathub 规则整形请求）
    - 端点：`/chat/completions`
    - 请求头：`Authorization: Bearer <apiKey>`
-   - 适用：需要 chathub 请求整形规则的 OpenAI 兼容网关。只转发 `model`、`messages`、`stream`、`stream_options`、`max_tokens`、`reasoning_effort`、`stop`、`tools`、`tool_choice` 和采样字段；其他网关专属字段可以通过 `extra` 添加。对 `gpt-6-astra*` 与 `gpt-6.1-sol*` 去掉 `temperature`、`top_p`、`frequency_penalty` 和 `presence_penalty`。`max_completion_tokens` 以 `max_tokens` 发送，`prompt_cache` 会派生会话稳定的 `prompt_cache_key`。
+   - 适用：需要 chathub 请求整形规则的 OpenAI 兼容网关。只转发 `model`、`messages`、`stream`、`stream_options`、`max_tokens`、`reasoning_effort`、`stop`、`tools`、`tool_choice` 和采样字段；其他网关专属字段可以通过 `extra` 添加。对 `gpt-6-astra*`、`gpt-6.2-astra*` 与 `gpt-6.1-sol*` 去掉 `temperature`、`top_p`、`frequency_penalty` 和 `presence_penalty`。`max_completion_tokens` 以 `max_tokens` 发送，`prompt_cache` 会派生会话稳定的 `prompt_cache_key`。
 
 4. **`litellm`** - LiteLLM Proxy Chat Completions API
    - 端点：`/chat/completions`
@@ -196,12 +196,12 @@ API key 卡片使用供应商 `openai` 和 `https://api.openai.com/v1`，并请�
 请求整形遵循 chathub 的 `openaicompatible` 供应商：
 
 - 请求体白名单为 `model`、`messages`、`stream`、`stream_options.include_usage`、`max_tokens`、`reasoning_effort`、`stop`、`tools`、`tool_choice`，以及模型支持时的 `temperature`、`top_p`、`frequency_penalty`、`presence_penalty`。供应商专属开关（`thinking`、`enable_thinking`、OpenRouter 风格的 `reasoning`、`top_k`、`min_p`、`repetition_penalty`）不会发送，除非通过 `extra` 显式添加。
-- 对 `gpt-6-astra*` 和 `gpt-6.1-sol*` 去掉 `temperature`、`top_p`、`frequency_penalty`、`presence_penalty`，与 chathub 对这些模型族的裁剪规则一致。
+- 对 `gpt-6-astra*`、`gpt-6.2-astra*` 和 `gpt-6.1-sol*` 去掉 `temperature`、`top_p`、`frequency_penalty`、`presence_penalty`：chathub 对 GPT-6 Astra 与 GPT-6.1 Sol 模型族做同样裁剪，OpenAI 的 GPT-6.2 迁移指南要求省略 `temperature` 和 `top_p`。
 - 已保存行中的 `max_completion_tokens` 会以 `max_tokens` 发送。
 - `reasoning_effort` 始终以顶层字段发送。若某行只保存了 `reasoning.effort`，则使用该值，并且永远不会转发 OpenRouter 风格的 `reasoning` 对象。
 - 启用 `prompt_cache.enabled: true` 或显式配置 `prompt_cache.retention` 时，OAIProxy 会根据模型、思考强度、工具选择与工具定义、所有 system/developer 消息和首条 user 消息派生会话稳定的 `prompt_cache_key`。显式 `prompt_cache.key` 优先；`prompt_cache.enabled: false` 则完全不发送该字段。配置了保留窗口时，会随密钥一起发送 `prompt_cache_retention`。
 
-Quick Setup 提供一张卡片 **GPT-6 Astra**，使用 chathub 的兼容预算 `context_length: 258000` 和 `max_tokens: 128000`，默认 `xhigh`，可选 `low`/`medium`/`high`/`xhigh`/`max`。网关提供的其他模型请通过 Manual Setup 添加。该模式未实现 Responses 路由、`Session_id` 请求头、图像生成和视频透传。
+Quick Setup 提供一张卡片 **GPT-6.2 Astra**，使用 OpenAI 官方上限 `context_length: 1050000` 和 `max_tokens: 128000`（网关预算更小时请调低 `context_length`），默认 `xhigh`，可选 `low`/`medium`/`high`/`xhigh`/`max`。网关提供的其他模型请通过 Manual Setup 添加。该模式未实现 Responses 路由、`Session_id` 请求头、图像生成和视频透传。
 
 ### Fireworks AI
 

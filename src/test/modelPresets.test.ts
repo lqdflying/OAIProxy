@@ -172,18 +172,18 @@ suite("modelPresets", () => {
 		}
 	});
 
-	test("ships a single GPT-6 Astra card for the OpenAI Compatible provider", () => {
+	test("ships a single GPT-6.2 Astra card for the OpenAI Compatible provider", () => {
 		const presets = MODEL_PRESETS.filter((preset) => preset.model.owned_by === "openai-compatible");
 		assert.deepStrictEqual(
 			presets.map((preset) => preset.model.id),
-			["gpt-6-astra"]
+			["gpt-6.2-astra"]
 		);
 
 		for (const expected of [
 			{
-				id: "openai-compatible-gpt-6-astra",
-				modelId: "gpt-6-astra",
-				displayName: "GPT-6 Astra (Compatible)",
+				id: "openai-compatible-gpt-6-2-astra",
+				modelId: "gpt-6.2-astra",
+				displayName: "GPT-6.2 Astra (Compatible)",
 				effort: "xhigh",
 				supported: ["low", "medium", "high", "xhigh", "max"],
 			},
@@ -198,7 +198,7 @@ suite("modelPresets", () => {
 			assert.strictEqual(preset.model.baseUrl, "https://YOUR-GATEWAY.example.com/v1");
 			assert.strictEqual(preset.model.apiMode, "openai-compatible");
 			assert.strictEqual(preset.model.family, expected.modelId);
-			assert.strictEqual(preset.model.context_length, 258000);
+			assert.strictEqual(preset.model.context_length, 1050000);
 			assert.strictEqual(preset.model.max_tokens, 128000);
 			assert.strictEqual(preset.model.max_completion_tokens, undefined);
 			assert.strictEqual(preset.model.vision, true);

@@ -42,8 +42,14 @@ function prepare(
 }
 
 suite("openaiCompatibleApi", () => {
-	test("prunes sampling controls for GPT-6 Astra and GPT-6.1 Sol only", () => {
-		for (const modelId of ["gpt-6-astra", "gpt-6-astra-2026-09-03", "gpt-6.1-sol", "gpt-6.1-sol-2026-09-29"]) {
+	test("prunes sampling controls for GPT-6 Astra, GPT-6.2 Astra and GPT-6.1 Sol only", () => {
+		for (const modelId of [
+			"gpt-6-astra",
+			"gpt-6-astra-2026-09-03",
+			"gpt-6.2-astra",
+			"gpt-6.1-sol",
+			"gpt-6.1-sol-2026-09-29",
+		]) {
 			assert.strictEqual(shouldPruneOpenAICompatibleSampling(modelId), true, modelId);
 		}
 		for (const modelId of ["gpt-5.5", "gpt-5.6-sol", "gpt-6-sol", "gpt-6-luna", "gpt-5.5-pro"]) {
@@ -56,6 +62,12 @@ suite("openaiCompatibleApi", () => {
 		assert.strictEqual(astra.top_p, undefined);
 		assert.strictEqual(astra.frequency_penalty, undefined);
 		assert.strictEqual(astra.presence_penalty, undefined);
+
+		const astra62 = prepare(model({ id: "gpt-6.2-astra", ...sampling }));
+		assert.strictEqual(astra62.temperature, undefined);
+		assert.strictEqual(astra62.top_p, undefined);
+		assert.strictEqual(astra62.frequency_penalty, undefined);
+		assert.strictEqual(astra62.presence_penalty, undefined);
 
 		const sol = prepare(model({ id: "gpt-6.1-sol", ...sampling }));
 		assert.strictEqual(sol.temperature, undefined);
@@ -181,7 +193,7 @@ suite("openaiCompatibleApi", () => {
 
 	test("ships a single OpenAI Compatible Quick Setup card", () => {
 		const presets = MODEL_PRESETS.filter((preset) => preset.model.owned_by === "openai-compatible");
-		assert.deepStrictEqual(presets.map((preset) => preset.id), ["openai-compatible-gpt-6-astra"]);
+		assert.deepStrictEqual(presets.map((preset) => preset.id), ["openai-compatible-gpt-6-2-astra"]);
 
 		for (const preset of presets) {
 			const body = prepare(preset.model);
