@@ -86,7 +86,7 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 3. **`openai-compatible`** - 通用 OpenAI 兼容网关（按 chathub 规则整形请求）
    - 端点：`/chat/completions`
    - 请求头：`Authorization: Bearer <apiKey>`
-   - 适用：需要 chathub 请求整形规则的 OpenAI 兼容网关。只转发 `model`、`messages`、`stream`、`stream_options`、`max_tokens`、`reasoning_effort`、`stop`、`tools`、`tool_choice` 和采样字段；其他网关专属字段可以通过 `extra` 添加。对 `gpt-6-astra*`、`gpt-6.2-astra*` 与 `gpt-6.1-sol*` 去掉 `temperature`、`top_p`、`frequency_penalty` 和 `presence_penalty`。`max_completion_tokens` 以 `max_tokens` 发送，`prompt_cache` 会派生会话稳定的 `prompt_cache_key`。
+   - 适用：需要 chathub 请求整形规则的 OpenAI 兼容网关。只转发 `model`、`messages`、`stream`、`stream_options`、`max_tokens`、`reasoning_effort`、`stop`、`tools`、`tool_choice` 和采样字段；其他网关专属字段可以通过 `extra` 添加。对 `gpt-6-astra*`、`gpt-6.2-astra*` 与 `gpt-6.1-sol*` 去掉 `temperature`、`top_p`、`frequency_penalty` 和 `presence_penalty`。`max_completion_tokens` 以 `max_tokens` 发送，`prompt_cache` 派生的 `prompt_cache_key` 由系统提示相同的会话共享。
 
 4. **`litellm`** - LiteLLM Proxy Chat Completions API
    - 端点：`/chat/completions`
@@ -181,6 +181,15 @@ VS Code Copilot 针对特定模型优化了系统提示词。[详细介绍](http
 
 配置示例见 `examples/openai-responses.jsonc`、`examples/openai-chat-completions.jsonc`、`examples/openai-compatible.jsonc`、`examples/tokenrouter.jsonc`、`examples/anthropic.jsonc`、`examples/fireworks.jsonc`、`examples/zai-glm.jsonc`、`examples/mimo.jsonc`、`examples/minimax-openai.jsonc` 和 `examples/minimax-anthropic.jsonc`。TokenRouter 使用 `https://api.tokenrouter.com/v1`，供应商 key 保存为 `oaicopilot.apiKey.tokenrouter`，Quick Setup 提供四个精确的网关模型 ID。Fireworks 用量检查复用普通供应商 key，并报告可访问账户的当月无服务器 token。OpenAI 和 Anthropic 的用量/费用检查需要单独的 admin key，请在配置界面的 `Usage Key` 字段中填写，不要写入 `settings.json`。Anthropic 费用读取 Usage and Cost Analytics API（`/v1/organizations/analytics/cost`，beta 请求头 `analytics-usage-cost-2026-08-24`，按模型分组），当该导出尚无数据时回退到旧版 `/v1/organizations/cost_report`；只有回退路径能显示最近几小时的支出，因为分析导出的刷新间隔约为 4 小时。TokenRouter 的余额检查需要在 `Usage Key` 字段填写单独的 Management Key，并通过 Management API self-wallet 端点报告账户余额。Z.AI 和小米 MiMo 用量检查会显示为不可用，因为当前公开文档未提供 API key 用量或余额端点。OpenAI Compatible 用量检查同样显示为不可用，因为通用网关没有固定的公开用量、余额或费用端点。
 
+### OpenAI GPT-6.2 Astra
+
+Quick Setup 提供独立的 **GPT-6.2 Astra** API key 卡片和 **GPT-6.2 Astra (OAuth)** 卡片，供应商、Base URL 和 `configId` 的布局与下文 GPT-6.1 Sol 卡片相同。两者使用 `gpt-6.2-astra` 和 `openai-responses` 模式，启用视觉与工具调用，并将 `reasoning_effort` 和 `default_reasoning_effort` 设为 `xhigh`，可选 `low`、`medium`、`high`、`xhigh`、`max`；该模型不接受 `none`。预设按照[官方模型规格](https://developers.openai.com/api/docs/models/gpt-6.2-astra)保存 `context_length: 1050000` 和 `max_tokens: 128000`。OpenAI 的[迁移指南](https://developers.openai.com/api/docs/guides/latest-model)建议从 `medium` 开始，OAIProxy 为这两张卡片选择 `xhigh`。[Codex 可用性](https://learn.chatgpt.com/docs/models)取决于套餐和客户端。
+
+对 Responses 路由上的所有 `gpt-6.2-*` 模型（包括 Manual Setup 添加的行）：
+
+- 系统提示作为 `input` 的第一项、以 `developer` 角色发送，不再使用顶层 `instructions`。GPT-6.2 会把 `instructions` 放在 `input` 之后、所有缓存断点之外，因此每次请求都按未缓存计费；放在开头的 `developer` 消息可以被缓存（[prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)）。Codex 客户端也以同样方式发送基础指令。API key 路由使用带 `input_text` 内容的 `message` 项；OAuth 路由使用 easy-input 形式 `{ role: "developer", content: "..." }`。
+- 不使用 `previous_response_id`。已存储的响应链会保留开始时的 developer 消息，修改后的系统提示无法生效，因此 OAIProxy 每次请求都重放完整会话。稳定的前缀仍可命中缓存。
+
 ### OpenAI GPT-6.1 Sol
 
 Quick Setup 提供独立的 **GPT-6.1 Sol** API key 卡片和 **GPT-6.1 Sol (OAuth)** 卡片。两者使用 `gpt-6.1-sol` 和 `openai-responses` 模式，启用视觉与工具调用，并将 `reasoning_effort` 和 `default_reasoning_effort` 设为 `xhigh`。可选推理值为 `low`、`medium`、`high`、`xhigh`、`max`，不支持 `none` 或 `minimal`。预设按照[官方模型规格](https://developers.openai.com/api/docs/models/gpt-6.1-sol)保存 `context_length: 1050000` 和 `max_tokens: 128000`。OpenAI 上游默认为 `medium`，OAIProxy 为这两张卡片明确选择 `xhigh`。
@@ -199,7 +208,8 @@ API key 卡片使用供应商 `openai` 和 `https://api.openai.com/v1`，并请�
 - 对 `gpt-6-astra*`、`gpt-6.2-astra*` 和 `gpt-6.1-sol*` 去掉 `temperature`、`top_p`、`frequency_penalty`、`presence_penalty`：chathub 对 GPT-6 Astra 与 GPT-6.1 Sol 模型族做同样裁剪，OpenAI 的 GPT-6.2 迁移指南要求省略 `temperature` 和 `top_p`。
 - 已保存行中的 `max_completion_tokens` 会以 `max_tokens` 发送。
 - `reasoning_effort` 始终以顶层字段发送。若某行只保存了 `reasoning.effort`，则使用该值，并且永远不会转发 OpenRouter 风格的 `reasoning` 对象。
-- 启用 `prompt_cache.enabled: true` 或显式配置 `prompt_cache.retention` 时，OAIProxy 会根据模型、思考强度、工具选择与工具定义、所有 system/developer 消息和首条 user 消息派生会话稳定的 `prompt_cache_key`。显式 `prompt_cache.key` 优先；`prompt_cache.enabled: false` 则完全不发送该字段。配置了保留窗口时，会随密钥一起发送 `prompt_cache_retention`。
+- 对 `gpt-6.2-astra*`，系统提示以 `developer` 角色而非 `system` 发送。GPT-6.2 会把 Responses `instructions` 放在会话之后、所有缓存断点之外，而把 Chat Completions 转换为 Responses 的网关会把 `system` 消息映射到那里；`developer` 消息保持在输入开头，可以被缓存。来源：[prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching) 与 [Chat Completions 参考](https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create)。
+- 启用 `prompt_cache.enabled: true` 或显式配置 `prompt_cache.retention` 时，OAIProxy 会根据模型、思考强度、工具选择与工具定义以及所有 system/developer 消息派生 `prompt_cache_key`。首条 user 消息不参与派生，因此系统提示相同的会话共享同一个密钥，新会话可以复用已缓存的工具与系统提示。显式 `prompt_cache.key` 优先；`prompt_cache.enabled: false` 则完全不发送该字段。配置了保留窗口时，会随密钥一起发送 `prompt_cache_retention`。
 
 Quick Setup 提供一张卡片 **GPT-6.2 Astra**，使用 OpenAI 官方上限 `context_length: 1050000` 和 `max_tokens: 128000`（网关预算更小时请调低 `context_length`），默认 `xhigh`，可选 `low`/`medium`/`high`/`xhigh`/`max`。网关提供的其他模型请通过 Manual Setup 添加。该模式未实现 Responses 路由、`Session_id` 请求头、图像生成和视频透传。
 

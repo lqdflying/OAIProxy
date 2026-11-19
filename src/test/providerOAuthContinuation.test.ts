@@ -52,6 +52,14 @@ suite("OAuth provider continuation", () => {
 					reasoning_effort: "xhigh",
 					extra: { service_tier: "fast" },
 				},
+				{
+					id: "gpt-6.2-astra",
+					owned_by: "openai-oauth",
+					authMode: "oauth",
+					baseUrl: OPENAI_CODEX_RESPONSES_BASE_URL,
+					apiMode: "openai-responses",
+					reasoning_effort: "xhigh",
+				},
 			],
 			"oaicopilot.retry": { enabled: false },
 		};
@@ -98,12 +106,17 @@ suite("OAuth provider continuation", () => {
 		vscode.workspace.getConfiguration = originalConfig;
 		logger.debug = originalDebug;
 	});
-	async function run(messages: vscode.LanguageModelChatRequestMessage[], conversationId = "chat-a", required = false) {
+	async function run(
+		messages: vscode.LanguageModelChatRequestMessage[],
+		conversationId = "chat-a",
+		required = false,
+		chatModel = model
+	) {
 		const cancellation = new vscode.CancellationTokenSource();
 		const parts: vscode.LanguageModelResponsePart2[] = [];
 		try {
 			await provider.provideLanguageModelChatResponse(
-				model,
+				chatModel,
 				messages,
 				{
 					requestInitiator: "test",
@@ -177,6 +190,34 @@ suite("OAuth provider continuation", () => {
 		assert.notDeepStrictEqual(requests[0].body.tool_choice, requests[1].body.tool_choice);
 		assert.strictEqual(requests[1].headers.get("session_id"), requests[0].headers.get("session_id"));
 		assert.notStrictEqual(requests[2].headers.get("session_id"), requests[0].headers.get("session_id"));
+	});
+
+	test("replays the full input with a leading developer message for GPT-6.2 instead of chaining", async () => {
+		const system = {
+			role: 3 as vscode.LanguageModelChatMessageRole,
+			name: undefined,
+			content: [new vscode.LanguageModelTextPart("You are a coding agent.")],
+		};
+		const astra62 = { ...model, id: "gpt-6.2-astra", name: "Astra 6.2" } as vscode.LanguageModelChatInformation;
+		const parts = await run([system, user] as vscode.LanguageModelChatRequestMessage[], "chat-a", false, astra62);
+		await run([system, ...continuation(parts)] as vscode.LanguageModelChatRequestMessage[], "chat-a", false, astra62);
+
+		assert.strictEqual(requests.length, 2);
+		for (const request of requests) {
+			assert.strictEqual(request.body.model, "gpt-6.2-astra");
+			assert.strictEqual(request.body.instructions, undefined);
+			assert.strictEqual(request.body.previous_response_id, undefined);
+			assert.deepStrictEqual((request.body.input as unknown[])[0], {
+				role: "developer",
+				content: "You are a coding agent.",
+			});
+			assert.strictEqual(request.body.store, false);
+		}
+		assert.deepStrictEqual((requests[1].body.input as unknown[]).slice(1, 3), [
+			{ role: "user", content: "look up the answer" },
+			reasoning,
+		]);
+		assert.strictEqual(requests[1].headers.get("session_id"), requests[0].headers.get("session_id"));
 	});
 
 	for (const missingAccount of [false, true]) {

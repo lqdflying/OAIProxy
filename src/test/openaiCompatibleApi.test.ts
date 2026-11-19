@@ -2,7 +2,11 @@ import * as assert from "assert";
 import * as vscode from "vscode";
 
 import { MODEL_PRESETS } from "../modelPresets";
-import { OpenaiCompatibleApi, shouldPruneOpenAICompatibleSampling } from "../openai/openaiCompatibleApi";
+import {
+	OpenaiCompatibleApi,
+	shouldPruneOpenAICompatibleSampling,
+	shouldSendOpenAICompatibleDeveloperRole,
+} from "../openai/openaiCompatibleApi";
 import type { HFModelItem } from "../types";
 
 const BASE_URL = "https://gateway.example.com/v1";
@@ -158,23 +162,55 @@ suite("openaiCompatibleApi", () => {
 		assert.deepStrictEqual(body.tool_choice, { type: "function", function: { name: "echo" } });
 	});
 
-	test("derives a conversation-stable prompt cache key", () => {
+	test("derives one prompt cache key for conversations that share a system prompt", () => {
 		const first = prepare(model({ id: "gpt-5.5", reasoning_effort: "max" }));
-		const second = prepare(model({ id: "gpt-5.5", reasoning_effort: "max" }), undefined, [
+		const laterTurn = prepare(model({ id: "gpt-5.5", reasoning_effort: "max" }), undefined, [
 			{ role: "system", content: "You are a coding agent." },
 			{ role: "user", content: "Explain the failing test." },
 			{ role: "assistant", content: "The assertion is stale." },
 			{ role: "user", content: "Fix it." },
 		]);
+		const otherConversation = prepare(model({ id: "gpt-5.5", reasoning_effort: "max" }), undefined, [
+			{ role: "system", content: "You are a coding agent." },
+			{ role: "user", content: "Rename the helper." },
+		]);
 
 		assert.strictEqual(typeof first.prompt_cache_key, "string");
 		assert.ok((first.prompt_cache_key as string).startsWith("oaiproxy-cc-"));
-		assert.strictEqual(first.prompt_cache_key, second.prompt_cache_key);
+		assert.strictEqual(first.prompt_cache_key, laterTurn.prompt_cache_key);
+		assert.strictEqual(first.prompt_cache_key, otherConversation.prompt_cache_key);
 
 		const otherModel = prepare(model({ id: "gpt-6-astra", reasoning_effort: "max" }));
 		const otherEffort = prepare(model({ id: "gpt-5.5", reasoning_effort: "xhigh" }));
+		const otherSystem = prepare(model({ id: "gpt-5.5", reasoning_effort: "max" }), undefined, [
+			{ role: "system", content: "You are a reviewer." },
+			{ role: "user", content: "Explain the failing test." },
+		]);
 		assert.notStrictEqual(first.prompt_cache_key, otherModel.prompt_cache_key);
 		assert.notStrictEqual(first.prompt_cache_key, otherEffort.prompt_cache_key);
+		assert.notStrictEqual(first.prompt_cache_key, otherSystem.prompt_cache_key);
+	});
+
+	test("sends the system prompt as a developer message for GPT-6.2 Astra only", () => {
+		assert.strictEqual(shouldSendOpenAICompatibleDeveloperRole("gpt-6.2-astra"), true);
+		assert.strictEqual(shouldSendOpenAICompatibleDeveloperRole(" gpt-6.2-astra-2026-11-03 "), true);
+		assert.strictEqual(shouldSendOpenAICompatibleDeveloperRole("gpt-6.2-astral"), false);
+		assert.strictEqual(shouldSendOpenAICompatibleDeveloperRole("gpt-6-astra"), false);
+		assert.strictEqual(shouldSendOpenAICompatibleDeveloperRole("gpt-6.1-sol"), false);
+
+		const source = [
+			{ role: "system", content: "You are a coding agent." },
+			{ role: "user", content: "Read the file." },
+			{ role: "assistant", tool_calls: [{ id: "call_1", type: "function", function: { name: "read", arguments: "{}" } }] },
+			{ role: "tool", tool_call_id: "call_1", content: "file text" },
+		];
+		const astra62 = prepare(model({ id: "gpt-6.2-astra" }), undefined, source);
+		assert.deepStrictEqual(astra62.messages, [{ role: "developer", content: "You are a coding agent." }, ...source.slice(1)]);
+		assert.strictEqual(source[0].role, "system", "the caller's messages must not be mutated");
+
+		for (const id of ["gpt-6-astra", "gpt-6.1-sol", "gpt-5.5", "vendor/custom-model"]) {
+			assert.deepStrictEqual(prepare(model({ id }), undefined, source).messages, source, id);
+		}
 	});
 
 	test("honours explicit and disabled prompt cache configuration", () => {

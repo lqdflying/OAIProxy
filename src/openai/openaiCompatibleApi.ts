@@ -32,6 +32,29 @@ export function shouldPruneOpenAICompatibleSampling(modelId: string): boolean {
 }
 
 /**
+ * GPT-6.2 renders Responses `instructions` after the conversation, outside every cache boundary,
+ * and a gateway that translates Chat Completions to Responses maps `system` messages there. A
+ * `developer` message stays at the start of the input, so the system prompt remains cacheable:
+ * https://developers.openai.com/api/docs/guides/prompt-caching
+ * Chat Completions accepts `developer` in place of `system` for o1 and newer:
+ * https://developers.openai.com/api/reference/resources/chat/subresources/completions/methods/create
+ */
+export function shouldSendOpenAICompatibleDeveloperRole(modelId: string): boolean {
+	return GPT62_ASTRA_MODEL_PATTERN.test(modelId.trim());
+}
+
+function withDeveloperRole(messages: unknown): unknown {
+	if (!Array.isArray(messages)) {
+		return messages;
+	}
+	return messages.map((message) =>
+		message && typeof message === "object" && (message as { role?: unknown }).role === "system"
+			? { ...message, role: "developer" }
+			: message
+	);
+}
+
+/**
  * Chat Completions adapter for a generic OpenAI-compatible gateway.
  *
  * The request body is rebuilt from an explicit allowlist instead of extending the OpenAI body:
@@ -54,7 +77,7 @@ export class OpenaiCompatibleApi extends OpenaiApi {
 
 		const body: Record<string, unknown> = {
 			model: modelId,
-			messages: rb.messages,
+			messages: shouldSendOpenAICompatibleDeveloperRole(modelId) ? withDeveloperRole(rb.messages) : rb.messages,
 			stream: rb.stream ?? true,
 		};
 		if (rb.stream_options !== undefined) {

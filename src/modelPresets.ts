@@ -15,6 +15,8 @@ const OPENAI_CODEX_OAUTH_COMMENT =
 	"Quick Setup defaults based on the official OpenAI model catalog and Responses API documentation: https://developers.openai.com/api/docs/models and https://developers.openai.com/api/docs, plus the OpenClaw Codex OAuth catalog: https://github.com/openclaw/openclaw/blob/main/extensions/openai/openclaw.plugin.json";
 const OPENAI_GPT_6_1_SOL_COMMENT =
 	"Quick Setup defaults based on official OpenAI GPT-6.1 Sol model docs: https://developers.openai.com/api/docs/models/gpt-6.1-sol. OAIProxy defaults to xhigh reasoning effort instead of the upstream medium default; tool calling requires the Responses API.";
+const OPENAI_GPT_6_2_ASTRA_COMMENT =
+	"Quick Setup defaults based on official OpenAI GPT-6.2 Astra model docs and migration guide: https://developers.openai.com/api/docs/models/gpt-6.2-astra and https://developers.openai.com/api/docs/guides/latest-model. OAIProxy defaults to xhigh reasoning effort; the model rejects none, and tool calling requires the Responses API. The system prompt is sent as a leading developer message instead of instructions, because GPT-6.2 places instructions after the input where they are never cached: https://developers.openai.com/api/docs/guides/prompt-caching";
 
 function createOpenAICodexOAuthPreset(options: {
 	id: string;
@@ -66,6 +68,17 @@ function createOpenAICodexOAuthPreset(options: {
 }
 
 const OPENAI_CODEX_OAUTH_PRESETS: readonly ModelPreset[] = [
+	createOpenAICodexOAuthPreset({
+		id: "openai-gpt-6-2-astra-codex-oauth",
+		modelId: "gpt-6.2-astra",
+		label: "GPT-6.2 Astra",
+		category: "latest",
+		tags: ["OpenAI", "Codex", "OAuth", "Vision", "Reasoning", "Tools"],
+		description: "GPT-6.2 Astra through the ChatGPT/Codex OAuth Responses route with xhigh reasoning.",
+		supportedReasoningEfforts: ["low", "medium", "high", "xhigh", "max"],
+		defaultReasoningEffort: "xhigh",
+		sourceComment: `${OPENAI_GPT_6_2_ASTRA_COMMENT} Codex account availability: https://learn.chatgpt.com/docs/models`,
+	}),
 	createOpenAICodexOAuthPreset({
 		id: "openai-gpt-6-1-sol-codex-oauth",
 		modelId: "gpt-6.1-sol",
@@ -254,6 +267,35 @@ export const MODEL_PRESETS: readonly ModelPreset[] = [
 			default_reasoning_effort: "max",
 			toolCalling: true,
 			include_reasoning_in_request: true,
+		},
+	},
+	{
+		id: "openai-gpt-6-2-astra-responses",
+		label: "GPT-6.2 Astra",
+		providerPresetId: "openai",
+		category: "latest",
+		tags: ["OpenAI", "Responses", "Vision", "Reasoning", "Tools"],
+		description: "OpenAI GPT-6.2 Astra for the most demanding coding and professional work with xhigh reasoning.",
+		model: {
+			id: "gpt-6.2-astra",
+			_comment: OPENAI_GPT_6_2_ASTRA_COMMENT,
+			displayName: "GPT-6.2 Astra",
+			owned_by: "openai",
+			baseUrl: "https://api.openai.com/v1",
+			apiMode: "openai-responses",
+			family: "gpt-6.2-astra",
+			vision: true,
+			context_length: 1050000,
+			max_tokens: 128000,
+			reasoning_effort: "xhigh",
+			supported_reasoning_efforts: ["low", "medium", "high", "xhigh", "max"],
+			default_reasoning_effort: "xhigh",
+			toolCalling: true,
+			extra: {
+				reasoning: {
+					summary: "detailed",
+				},
+			},
 		},
 	},
 	{

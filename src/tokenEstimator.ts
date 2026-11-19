@@ -481,7 +481,7 @@ export async function estimatePreparedRequest(body: unknown, context: Estimation
 				messageIndex = index;
 				partIndex = 0;
 				textCategory =
-					message?.role === "system"
+					message?.role === "system" || message?.role === "developer"
 						? "systemContext"
 						: index === lastUserIndex
 							? "currentPrompt"

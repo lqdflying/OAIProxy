@@ -49,9 +49,10 @@ The JSON body must follow the Codex Responses shape:
 - Omit unsupported public Responses fields: `context_management`, `metadata`, `max_output_tokens`, `temperature`, `top_p`, and `prompt_cache_retention`.
 - Do not send `prompt_cache_key` in the Codex JSON body. Cache affinity is carried by `session_id` and `x-client-request-id`.
 - Use easy-input replay items for text: `{ role: "user", content: "..." }` and `{ role: "assistant", content: "..." }`.
+- For `gpt-6.2-*` models, send the system prompt as a leading `{ role: "developer", content: "..." }` item instead of `instructions`. GPT-6.2 places `instructions` after the input, where they are never cached ([prompt caching](https://developers.openai.com/api/docs/guides/prompt-caching)).
 - For reconstructed text, summary-only reasoning, function-call, and function-call-output items, omit fabricated `id` and `status` fields. Preserve the function `call_id` used to match tool results. An encrypted reasoning item is different: preserve its actual returned `id`, `encrypted_content`, and `summary`.
 
-OAIProxy keeps the `previous_response_id` optimization, but the Codex route can reject it. On a matching 400/404 error, send the full conversation history. Unsupported-parameter failures disable the optimization for that endpoint/configuration/account scope; an expired or missing response ID does not. A fallback request can still receive a prompt-cache hit.
+OAIProxy keeps the `previous_response_id` optimization, except for `gpt-6.2-*` models, whose developer message a stored chain would freeze; those requests always send the full conversation. The Codex route can also reject it. On a matching 400/404 error, send the full conversation history. Unsupported-parameter failures disable the optimization for that endpoint/configuration/account scope; an expired or missing response ID does not. A fallback request can still receive a prompt-cache hit.
 
 ## Stateless reasoning continuation
 

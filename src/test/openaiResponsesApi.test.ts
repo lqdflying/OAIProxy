@@ -1,9 +1,12 @@
 import * as assert from "assert";
 import * as vscode from "vscode";
-import { OpenaiResponsesApi } from "../openai/openaiResponsesApi";
+import { OpenaiResponsesApi, shouldSendOpenAIResponsesDeveloperSystem } from "../openai/openaiResponsesApi";
 import { MODEL_PRESETS } from "../modelPresets";
 import { COPILOT_USAGE_MIME } from "../responseUsage";
 import type { HFModelItem } from "../types";
+
+/** `LanguageModelChatMessageRole.System` from the proposed chat provider API. */
+const SYSTEM_ROLE = 3 as vscode.LanguageModelChatMessageRole;
 
 suite("openaiResponsesApi", () => {
 	test("sends GPT-6.1 Sol API-key xhigh effort with detailed summaries and the output cap", () => {
@@ -29,6 +32,70 @@ suite("openaiResponsesApi", () => {
 		assert.strictEqual(body.store, false);
 		assert.deepStrictEqual(body.include, ["reasoning.encrypted_content"]);
 		assert.strictEqual(body.max_output_tokens, undefined);
+	});
+
+	test("sends the GPT-6.2 system prompt as a leading developer message instead of instructions", () => {
+		assert.strictEqual(shouldSendOpenAIResponsesDeveloperSystem("gpt-6.2-astra"), true);
+		assert.strictEqual(shouldSendOpenAIResponsesDeveloperSystem(" gpt-6.2-sol-2026-11-03 "), true);
+		assert.strictEqual(shouldSendOpenAIResponsesDeveloperSystem("gpt-6.20"), false);
+		assert.strictEqual(shouldSendOpenAIResponsesDeveloperSystem("gpt-6.1-sol"), false);
+		assert.strictEqual(shouldSendOpenAIResponsesDeveloperSystem("gpt-6-astra"), false);
+
+		const messages = [
+			{
+				role: SYSTEM_ROLE,
+				name: undefined,
+				content: [new vscode.LanguageModelTextPart("You are a coding agent.")],
+			},
+			{
+				role: vscode.LanguageModelChatMessageRole.User,
+				name: undefined,
+				content: [new vscode.LanguageModelTextPart("Explain the failing test.")],
+			},
+		] as unknown as vscode.LanguageModelChatRequestMessage[];
+		const prepare = (presetId: string, codexEasyInput: boolean) => {
+			const preset = MODEL_PRESETS.find((item) => item.id === presetId);
+			assert.ok(preset, presetId);
+			const api = new OpenaiResponsesApi(preset.model.id);
+			const input = api.convertMessages(
+				messages,
+				{ includeReasoningInRequest: false },
+				codexEasyInput ? { replayResponsesItemIds: false, codexEasyInput: true } : undefined
+			);
+			return {
+				input,
+				body: api.prepareRequestBody({ model: preset.model.id, input, stream: true }, preset.model, undefined, preset.model.baseUrl),
+			};
+		};
+
+		const key = prepare("openai-gpt-6-2-astra-responses", false);
+		assert.strictEqual(key.body.instructions, undefined);
+		assert.deepStrictEqual(key.body.input, [
+			{
+				role: "developer",
+				content: [{ type: "input_text", text: "You are a coding agent." }],
+				type: "message",
+				status: "completed",
+			},
+			...key.input,
+		]);
+		assert.strictEqual(key.input.length, 1, "the converted conversation must not be mutated");
+
+		const oauth = prepare("openai-gpt-6-2-astra-codex-oauth", true);
+		assert.strictEqual(oauth.body.instructions, undefined);
+		assert.deepStrictEqual(oauth.body.input, [
+			{ role: "developer", content: "You are a coding agent." },
+			{ role: "user", content: "Explain the failing test." },
+		]);
+
+		for (const [presetId, codexEasyInput] of [
+			["openai-gpt-6-1-sol-responses", false],
+			["openai-gpt-6-1-sol-codex-oauth", true],
+		] as const) {
+			const other = prepare(presetId, codexEasyInput);
+			assert.strictEqual(other.body.instructions, "You are a coding agent.", presetId);
+			assert.deepStrictEqual(other.body.input, other.input, presetId);
+		}
 	});
 
 	test("maps Fast mode to the Codex OAuth priority service tier", () => {

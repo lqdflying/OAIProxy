@@ -46,7 +46,7 @@ import { beginStatusBarRequest, endStatusBarRequests, updateContextStatusBar, up
 import { OllamaApi } from "./ollama/ollamaApi";
 import { OpenaiApi } from "./openai/openaiApi";
 import { OpenaiCompatibleApi } from "./openai/openaiCompatibleApi";
-import { OpenaiResponsesApi } from "./openai/openaiResponsesApi";
+import { OpenaiResponsesApi, shouldSendOpenAIResponsesDeveloperSystem } from "./openai/openaiResponsesApi";
 import { createOpenAIResponsesInputSignatures, OpenAIResponsesStateStore } from "./openai/openaiResponsesState";
 import { LiteLLMApi } from "./litellm/litellmApi";
 import { AnthropicApi } from "./anthropic/anthropicApi";
@@ -750,9 +750,20 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					BASE_URL
 				);
 
+				// A leading developer message is part of the stored conversation, so a continued chain
+				// keeps the system prompt it started with (or none, for a chain started with
+				// `instructions`). Replay the full input for those models instead.
+				const developerSystem = shouldSendOpenAIResponsesDeveloperSystem(parsedModelId.baseId);
 				const previousResponseIdUnsupported =
+					developerSystem ||
 					this._openaiResponsesPreviousResponseIdUnsupportedScopes.has(responsesStateScopeKey);
 				const explicitPreviousResponseId = preparedFullRequestBody.previous_response_id !== undefined;
+				// The prepared input carries the developer system message; `fullInput` stays the
+				// conversation-only view used for state signatures and affinity.
+				const fullRequestInput: unknown[] =
+					developerSystem && Array.isArray(preparedFullRequestBody.input)
+						? preparedFullRequestBody.input
+						: fullInput;
 				const memoryState = executionOptions.diagnostic
 					? {
 							stateKey: "",
@@ -789,7 +800,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 					!explicitPreviousResponseId && (canUseMarkerPreviousResponseId || canUseMemoryPreviousResponseId);
 				let stateSource: "marker" | "memory" | "none" = "none";
 				let previousResponseId: string | undefined;
-				let input: unknown[] = fullInput;
+				let input: unknown[] = fullRequestInput;
 				if (!explicitPreviousResponseId && canUseMarkerPreviousResponseId) {
 					stateSource = "marker";
 					previousResponseId = marker!.marker;
@@ -850,7 +861,7 @@ export class HuggingFaceChatModelProvider implements LanguageModelChatProvider, 
 				// If the user explicitly set `previous_response_id` via `extra`, don't apply stateful slicing.
 				let addedPreviousResponseId = false;
 				if (requestBody.previous_response_id !== undefined) {
-					requestBody.input = fullInput;
+					requestBody.input = fullRequestInput;
 				} else if (previousResponseId) {
 					requestBody.previous_response_id = previousResponseId;
 					addedPreviousResponseId = true;

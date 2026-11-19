@@ -148,6 +148,20 @@ suite("binary tool results and token estimator", () => {
 		assert.ok(getTokenBudgetErrorMessage(report)!.includes("Largest parts:"));
 	});
 
+	test("prepared accounting treats developer messages as system context", async () => {
+		const conversation = [{ role: "user", content: "Explain the failing test." }];
+		const asSystem = await estimatePreparedRequest(
+			{ messages: [{ role: "system", content: "You are a coding agent." }, ...conversation] },
+			context
+		);
+		const asDeveloper = await estimatePreparedRequest(
+			{ messages: [{ role: "developer", content: "You are a coding agent." }, ...conversation] },
+			context
+		);
+		assert.ok(asSystem.textCategories.systemContext > 0);
+		assert.deepStrictEqual(asDeveloper.textCategories, asSystem.textCategories);
+	});
+
 	test("three valid page screenshots no longer trigger the incident budget", async () => {
 		const input = [0, 1, 2].map((i) => imageResult(String(i), png(744, 1053, 150000)));
 		const body = { input: new OpenaiResponsesApi("gpt-6-astra").convertMessages(input, context) };

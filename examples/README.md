@@ -36,7 +36,15 @@ Bounded probes on October 30, 2026 against one Codex-backed compatible gateway (
 
 - `gpt-6-astra` with `reasoning_effort: "xhigh"` streamed text, a `stop` finish reason and streamed usage; the same request with `temperature`/`top_p` was also accepted, so OAIProxy's sampling pruning for this family is conservative rather than required by this gateway.
 - `gpt-6.1-sol` returned streamed usage with `prompt_tokens_details.cached_tokens`, confirming automatic caching.
-- A repeated long prefix with an explicit `prompt_cache_key` reported cached tokens on the second call, confirming the gateway honors the routing hint OAIProxy derives per conversation.
+- A repeated long prefix with an explicit `prompt_cache_key` reported cached tokens on the second call, confirming the gateway honors the routing hint OAIProxy derives.
 - `gpt-5.5` returned HTTP 404 `model_not_found`: "Model gpt-5.5 targets GPT-5.5, which retired from Codex with ChatGPT sign-in on October 14, 2026." No GPT-5.5 Quick Setup card is shipped for this reason; on a Codex-backed gateway, add GPT-6.1 Sol or GPT-6 Luna through Manual Setup instead.
+
+Bounded cache probes on November 19, 2026 against the same kind of gateway with `gpt-6.2-astra`, using the body OAIProxy's adapter produces (`reasoning_effort: "xhigh"`, `max_tokens: 128000`, streamed usage, 9,000–22,000-token prompts, no maximum-capacity testing):
+
+- Stream chunk IDs start with `resp_`, so the gateway translates Chat Completions to the Responses API. Identical bodies returned `prompt_tokens` that differed by 0, about 4,380, or about 5,410 tokens: the gateway rotates upstream channels and some add their own instructions. A cache miss omits `prompt_tokens_details`.
+- On the channels that add instructions, a `system` message stayed uncached on every request of a growing conversation: the uncached remainder was the added instructions plus the whole system prompt (9,079–9,191 tokens with a 3,160-token system prompt). The same prompt sent as `developer` left only the added instructions uncached (4,501–4,661 and 5,531–5,691 tokens). On a channel without added instructions a `system` prompt cached fully (119–199 tokens uncached).
+- A new conversation's first request reused the cached tools and system prompt in 3 of 4 runs when it shared a `prompt_cache_key` with an earlier conversation. With a key that also covered the first user message, the first request reused the tools at most (0–34% cached).
+- Appending one tool to an otherwise unchanged request produced one fully uncached request with the same key. The next request hit again, and returning to the earlier tool list reused its cache.
+- 15 of 92 requests that repeated or extended an already cached prefix found none of that conversation's cache, with no change in the request.
 
 Streaming usage and cache fields vary by gateway, so treat these results as one gateway's behavior rather than a contract.

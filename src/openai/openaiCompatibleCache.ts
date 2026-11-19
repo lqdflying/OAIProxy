@@ -6,11 +6,11 @@ import type { HFModelItem } from "../types";
 /**
  * Derive a stable prompt-cache routing key for an OpenAI-compatible gateway.
  *
- * Mirrors chathub's `deriveCompatPromptCacheKey`
- * (packages/model-runtime/src/core/openaiCompatibleFactory/openaicompatCache.ts): the seed covers
- * the model, reasoning effort, tool selection and the conversation's stable prefix (system /
- * developer messages plus the first user message) so the key survives later turns while staying
- * distinct between conversations.
+ * The seed covers the model, reasoning effort, tool selection and the system / developer
+ * messages: the prefix that conversations share. chathub's `deriveCompatPromptCacheKey`
+ * (packages/model-runtime/src/core/openaiCompatibleFactory/openaicompatCache.ts) also seeds the
+ * first user message. That is left out here because a gateway uses the key as upstream affinity,
+ * and a per-conversation key starts each new conversation on a cold cache for the shared prefix.
  */
 export function deriveOpenAICompatiblePromptCacheKey(options: {
 	modelId: string;
@@ -74,7 +74,6 @@ function buildSeedParts(modelId: string, body: Record<string, unknown>): string[
 		parts.push(`tools=${stableStringify(body.tools)}`);
 	}
 
-	let firstUserCaptured = false;
 	const messages = body.messages;
 	if (Array.isArray(messages)) {
 		for (const message of messages) {
@@ -85,9 +84,6 @@ function buildSeedParts(modelId: string, body: Record<string, unknown>): string[
 			const role = typeof entry.role === "string" ? entry.role.trim() : "";
 			if (role === "system" || role === "developer") {
 				parts.push(`${role}=${stableStringify(entry.content)}`);
-			} else if (role === "user" && !firstUserCaptured) {
-				parts.push(`first_user=${stableStringify(entry.content)}`);
-				firstUserCaptured = true;
 			}
 		}
 	}

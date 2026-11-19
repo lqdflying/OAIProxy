@@ -37,7 +37,7 @@ import { createOpenAIResponsesConversationKey, type OpenAIResponsesStateIdentity
 import { OPENAI_RESPONSES_REPLAY_METADATA, readResponsesReplayItem, restoreResponsesReplay, type ResponsesReplayItem } from "./openaiResponsesReplay";
 
 export interface ResponsesInputMessage {
-	role: "user" | "assistant" | "system";
+	role: "user" | "assistant" | "system" | "developer";
 	content: ResponsesContentPart[] | string;
 	type?: "message";
 	id?: string;
@@ -109,6 +109,20 @@ function extractResponsesStreamErrorMessage(
 		});
 	}
 	return undefined;
+}
+
+/** Official GPT-6.2 models and their dated snapshots (`gpt-6.2-astra`, `gpt-6.2-sol-…`). */
+const GPT62_MODEL_PATTERN = /^gpt-6\.2-/;
+
+/**
+ * Models starting with GPT-6.2 render top-level `instructions` after `input`, outside every cache
+ * boundary, and bill them uncached on each request. A `developer` message that leads `input`
+ * stays cacheable: https://developers.openai.com/api/docs/guides/prompt-caching
+ * The Codex client sends its base instructions the same way and its request has no `instructions`
+ * field: https://github.com/openai/codex/blob/main/codex-rs/core/src/client.rs
+ */
+export function shouldSendOpenAIResponsesDeveloperSystem(modelId: string): boolean {
+	return GPT62_MODEL_PATTERN.test(modelId.trim());
 }
 
 export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<string, unknown>> {
@@ -302,7 +316,21 @@ export class OpenaiResponsesApi extends CommonApi<ResponsesInputItem, Record<str
 
 		// Add system content if we extracted it
 		if (this._systemContent) {
-			rb.instructions = this._systemContent;
+			const modelId = typeof rb.model === "string" ? rb.model : this._modelId;
+			if (shouldSendOpenAIResponsesDeveloperSystem(modelId) && Array.isArray(rb.input)) {
+				const developerMessage: ResponsesInputMessage =
+					um?.authMode === "oauth" && isOpenAICodexOAuthProvider(um.owned_by, um.authMode, baseUrl)
+						? { role: "developer", content: this._systemContent }
+						: {
+								role: "developer",
+								content: [{ type: "input_text", text: this._systemContent }],
+								type: "message",
+								status: "completed",
+							};
+				rb.input = [developerMessage, ...rb.input];
+			} else {
+				rb.instructions = this._systemContent;
+			}
 		}
 
 		// temperature
