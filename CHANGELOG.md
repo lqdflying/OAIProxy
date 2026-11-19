@@ -1,5 +1,14 @@
 # Change Log
 
+## 0.1.57 (2026-11-20)
+
+- Add GPT-6.2 Astra (`gpt-6.2-astra`) Quick Setup cards for the OpenAI API-key and OpenAI OAuth (Codex) providers, with `xhigh` reasoning (`low` through `max`; the model rejects `none`), a 1,050,000-token context window, and 128,000 max output tokens.
+- Keep GPT-6.2 system prompts cacheable on the Responses route: every `gpt-6.2-*` model now receives the system prompt as a leading `developer` input item instead of top-level `instructions`, which GPT-6.2 places after the input where it is billed uncached on every request. These models no longer chain `previous_response_id`, because a stored chain keeps the developer message it started with; OAIProxy replays the full conversation instead.
+- Send the system prompt of `gpt-6.2-astra*` with the `developer` role in the `openai-compatible` adapter. Gateway probes showed the `system` role left the system prompt uncached on every request of a growing conversation.
+- Derive the OpenAI Compatible `prompt_cache_key` without the first user message, so new conversations that share a system prompt reuse the cached tools and system prompt.
+- Count `developer` messages as system context in prepared-request token accounting.
+- Update the English and Chinese documentation, the Codex OAuth cache notes, and the OpenAI Compatible probe notes.
+
 ## 0.1.56 (2026-11-19)
 
 - Move the OpenAI Compatible Quick Setup card from GPT-6 Astra to GPT-6.2 Astra (`gpt-6.2-astra`). The card uses OpenAI's own limits, a 1,050,000-token context window and 128,000 max output tokens, instead of the 258,000-token compatible budget; lower `context_length` when a gateway enforces a smaller budget.
