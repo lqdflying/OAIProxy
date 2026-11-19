@@ -1,5 +1,12 @@
 # Change Log
 
+## 0.1.56 (2026-11-19)
+
+- Move the OpenAI Compatible Quick Setup card from GPT-6 Astra to GPT-6.2 Astra (`gpt-6.2-astra`). The card uses OpenAI's own limits, a 1,050,000-token context window and 128,000 max output tokens, instead of the 258,000-token compatible budget; lower `context_length` when a gateway enforces a smaller budget.
+- Prune `temperature`, `top_p`, `frequency_penalty`, and `presence_penalty` for `gpt-6.2-astra*` in the `openai-compatible` adapter, following OpenAI's GPT-6.2 migration guide.
+- Update the English and Chinese documentation and the `examples/openai-compatible.jsonc` example for the new card.
+- A row saved from the previous card keeps its `gpt-6-astra` id and 258,000-token context; add the new card from Quick Setup or edit the row to switch.
+
 ## 0.1.55 (2026-10-30)
 
 - Add a first-class `openai-compatible` provider for generic OpenAI Chat Completions gateways with chathub-compatible request shaping: an explicit field allowlist, sampling pruning for GPT-6 Astra and GPT-6.1 Sol, `max_tokens` output limits, top-level `reasoning_effort` including the nested `reasoning.effort` fallback, an opt-in conversation-stable `prompt_cache_key`, and a single GPT-6 Astra Quick Setup card.
